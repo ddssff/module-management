@@ -10,7 +10,7 @@ Build-type:         Simple
 Cabal-version:      >=1.6
 
 Library
-  ghc-Options:      -Wall -O2
-  Exposed-Modules:  Language.Haskell.Imports
-  Build-Depends:    base, directory, haskell-src-exts
+  ghc-Options:      -Wall -O2 -ddump-minimal-imports
+  Exposed-Modules:  Language.Haskell.Imports.Clean
+  Build-Depends:    applicative-extras, base, Cabal, directory, haskell-src-exts, pretty
 
