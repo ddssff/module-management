@@ -2,7 +2,8 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Imports.Clean
     ( cleanImports
-    , cleanDumpedImports
+    , moveImports
+    , cleanBuildImports
     ) where
 
 import Control.Applicative ((<$>), (<*>))
@@ -16,7 +17,7 @@ import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr)
 import Language.Haskell.Exts.Annotated.Syntax ()
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Syntax (Module(..), ImportDecl(..), ImportSpec(..), ModuleName(ModuleName), Name(Ident, Symbol))
-import Language.Haskell.Exts.Parser (ParseMode(..))
+import Language.Haskell.Exts.Parser (ParseMode(..), parseModule)
 import Language.Haskell.Exts.Pretty (prettyPrintWithMode, defaultMode, PPHsMode(..), PPLayout(..))
 import Language.Haskell.Exts (ParseResult(..), parseFile, parseFileWithMode, defaultParseMode)
 import System.Directory (getDirectoryContents, removeFile, doesFileExist, renameFile)
@@ -28,22 +29,50 @@ import System.Process (readProcessWithExitCode)
 type FQID = String -- ^ Fully qualified identifier - e.g. Language.Haskell.Imports.Clean.cleanImports
 
 -- | Clean up the imports of a source file.
-cleanImports :: [(FQID, FQID)] -> FilePath -> IO ()
-cleanImports moves sourcePath =
+cleanImports :: FilePath -> IO ()
+cleanImports sourcePath =
     (dump >> replace >> cleanup) `catch` (\ (e :: SomeException) -> hPutStrLn stderr (show e))
     where
       importsPath = (sourcePathToImportsPath sourcePath)
-      cmd = "ghc"
-      args = ["-S", "-ddump-minimal-imports", sourcePath]
-      dump :: IO ()
-      dump = readProcessWithExitCode cmd args "" >>= \ (code, _out, _err) ->
+
+      dump = readProcessWithExitCode "ghc" ["-S", "-ddump-minimal-imports", sourcePath] "" >>= \ (code, _out, _err) ->
              case code of
                ExitSuccess -> return ()
                ExitFailure _ -> error (sourcePath ++ ": compile failed")
-      replace :: IO ()
-      replace = checkImports moves importsPath sourcePath
-      cleanup :: IO ()
-      cleanup = removeFile importsPath
+
+      replace = checkImports importsPath sourcePath
+
+      cleanup = removeFile (dropSuffix ".hs" sourcePath <> ".s") >>
+                removeFile (dropSuffix ".hs" sourcePath <> ".hi") >>
+                removeFile importsPath
+
+moveImports :: [(FQID, FQID)] -> FilePath -> IO ()
+moveImports moves sourcePath =
+    do source <- try ((,) <$> parseFile sourcePath <*> readFile sourcePath)
+       case source of
+         Left (e :: SomeException) -> error (sourcePath ++ ": " ++ show e)
+         Right (ParseOk (Module _ _ _ _ _ oldImports _), sourceText) ->
+             replaceChangedImports oldImports (doMoves moves oldImports) sourceText sourcePath
+         Right _ -> error (sourcePath ++ ": could not parse")
+
+doMoves :: [(FQID, FQID)] -> [ImportDecl] -> [ImportDecl]
+doMoves moves imports =
+    map (\ i -> foldr moveImport i moves) imports
+    where
+      moveImport :: (FQID, FQID) -> ImportDecl -> ImportDecl
+      moveImport _ decl@(ImportDecl {importSpecs = Nothing}) = decl
+      moveImport move decl@(ImportDecl {importModule = m, importSpecs = Just (flag, specs)}) =
+          decl {importSpecs = Just (flag, map (moveSpec move m) specs)}
+      -- If we see the src, remove it and return dst.  If we are in
+      -- the dst module add the dst.
+      moveSpec :: (FQID, FQID) -> ModuleName -> ImportSpec -> ImportSpec
+      moveSpec (src, dst) (ModuleName m) x@(IVar (Ident n)) =
+          if m ++ "." ++ n == src then IVar (Ident (dropPrefix (m ++ ".") dst)) else x
+      moveSpec (src, dst) (ModuleName m) x@(IVar (Symbol n)) =
+          if m ++ "." ++ n == src then IVar (Ident (dropPrefix (m ++ ".") dst)) else x
+      moveSpec move m x@(IAbs _n) = trace ("moveSpec " ++ show move ++ " " ++ show m ++ " " ++ show x) x
+      moveSpec move m x@(IThingAll _n) = trace ("moveSpec " ++ show move ++ " " ++ show m ++ " " ++ show x) x
+      moveSpec move m x@(IThingWith _n _cn) = trace ("moveSpec " ++ show move ++ " " ++ show m ++ " " ++ show x) x
 
 -- | To use this function you must first make sure...
 --    1. There are up-to-date .imports files in the top directory, generated when
@@ -64,61 +93,39 @@ cleanImports moves sourcePath =
 --       file or move the backup file (suffix ~) back to where the
 --       original was.
 -- Bug: it removes declarations like "import Prelude hiding (last)"
-cleanDumpedImports :: LocalBuildInfo -> IO ()
-cleanDumpedImports lbi = cleanDumpedImports' (map modulePath (executables (localPkgDescr lbi)))
+cleanBuildImports :: LocalBuildInfo -> IO ()
+cleanBuildImports lbi = cleanDumpedImports (map modulePath (executables (localPkgDescr lbi)))
 
-cleanDumpedImports' :: [FilePath] -> IO ()
-cleanDumpedImports' exePaths =
+cleanDumpedImports :: [FilePath] -> IO ()
+cleanDumpedImports exePaths =
     getDirectoryContents "." >>= mapM_ doImports
     where
       doImports importsPath | not (isSuffixOf ".imports" importsPath) = return ()
       doImports importsPath =
-          do result <- findSourcePath exePaths (importsPathToSourcePath importsPath)
+          do let sourcePath = importsPathToSourcePath importsPath
+             result <- doesFileExist sourcePath >>= return . findSourcePath exePaths sourcePath
              case result of
                Failure messages -> putStrLn (intercalate ", " messages)
-               Success sourcePath -> checkImports [] importsPath sourcePath
+               Success sourcePath' -> checkImports importsPath sourcePath'
 
 -- | Parse the import list generated by GHC, parse the original source
 -- file, and if all goes well insert the new imports into the old
 -- source file.
-checkImports :: [(FQID, FQID)] -> FilePath -> FilePath -> IO ()
-checkImports moves importsPath sourcePath =
+checkImports :: FilePath -> FilePath -> IO ()
+checkImports importsPath sourcePath =
     do result <- parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath
        case result of
          ParseOk newImports ->
              do source <- try ((,) <$> parseFile sourcePath <*> readFile sourcePath)
-                either (\ (e :: SomeException) -> error (sourcePath ++ ": " ++ show e)) (uncurry (updateSource (doMoves moves newImports) sourcePath)) source
+                either (\ (e :: SomeException) -> error (sourcePath ++ ": " ++ show e))
+                       (uncurry (updateSource newImports sourcePath)) source
          _ -> error ("Parse of imports failed: " ++ show result)
-
-doMoves :: [(FQID, FQID)] -> Module -> Module
-doMoves moves (Module loc name pragmas warn exports imports decls) =
-    (Module loc name pragmas warn exports (map doMoves' imports) decls)
-    where
-      doMoves' :: ImportDecl -> ImportDecl
-      doMoves' imp = foldr moveImport imp moves
-      moveImport :: (FQID, FQID) -> ImportDecl -> ImportDecl
-      moveImport _ decl@(ImportDecl {importSpecs = Nothing}) = decl
-      moveImport move decl@(ImportDecl {importModule = m, importSpecs = Just (flag, specs)}) =
-          decl {importSpecs = Just (flag, map (moveSpec move m) specs)}
-      -- If we see the src, remove it and return dst.  If we are in
-      -- the dst module add the dst.
-      moveSpec :: (FQID, FQID) -> ModuleName -> ImportSpec -> ImportSpec
-      moveSpec (src, dst) (ModuleName m) x@(IVar (Ident n)) =
-          if m ++ "." ++ n == src then IVar (Ident (dropPrefix (m ++ ".") dst)) else x
-      moveSpec (src, dst) (ModuleName m) x@(IVar (Symbol n)) =
-          if m ++ "." ++ n == src then IVar (Ident (dropPrefix (m ++ ".") dst)) else x
-      moveSpec move m x@(IAbs _n) = trace ("moveSpec " ++ show move ++ " " ++ show m ++ " " ++ show x) x
-      moveSpec move m x@(IThingAll _n) = trace ("moveSpec " ++ show move ++ " " ++ show m ++ " " ++ show x) x
-      moveSpec move m x@(IThingWith _n _cn) = trace ("moveSpec " ++ show move ++ " " ++ show m ++ " " ++ show x) x
 
 importsPathToSourcePath :: String -> FilePath
 importsPathToSourcePath name = map (\ c -> if c == '.' then '/' else c) (dropSuffix ".imports" name) <> ".hs"
 
 sourcePathToImportsPath :: FilePath -> FilePath
 sourcePathToImportsPath sourcePath = map (\ c -> if c == '/' then '.' else c) (dropSuffix ".hs" sourcePath) <> ".imports"
-
-findSourcePath :: [FilePath] -> FilePath -> IO (Failing FilePath)
-findSourcePath exePaths path = doesFileExist path >>= return . findSourcePath' exePaths path
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
@@ -127,24 +134,31 @@ updateSource _ sourcePath (ParseOk (Module _ _ _ _ Nothing _ _)) _ =
     error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no explicit export list")
 updateSource _ sourcePath (ParseOk (Module _ _ _ _ _ _ [])) _ =
     error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no declarations")
-updateSource newImports@(Module a b c d e _ f) sourcePath (ParseOk (Module _ _ _ _ _ oldImports' _)) sourceText =
-    if oldPretty /= newPretty -- the ImportDecls won't match because they have different SrcLoc values
-    then hPutStrLn stderr (sourcePath ++ ": replacing imports -\n" ++ oldPretty ++ "\n ->\n" ++ newPretty) >> replaceImports newImports sourceText sourcePath
-    else putStrLn (sourcePath ++ ": no changes")
-    where
-      oldPretty = pretty (Module a b c d e oldImports' f)
-      newPretty = pretty newImports
+updateSource (Module _ _ _ _ _ newImports _) sourcePath (ParseOk (Module _ _ _ _ _ oldImports _)) sourceText =
+    replaceChangedImports oldImports newImports sourceText sourcePath
 updateSource _ sourcePath (ParseFailed _ _) _ = error (sourcePath ++ ": could not parse")
 
-pretty :: Module -> String
-pretty = prettyPrintWithMode (defaultMode {layout = PPInLine})
-
-replaceImports :: Module -> String -> FilePath -> IO ()
-replaceImports imports sourceText sourcePath =
-    maybe (return ()) (\ text -> replaceFile (++ "~") sourcePath text) newSourceText
+replaceChangedImports :: [ImportDecl] -> [ImportDecl] -> String -> FilePath -> IO ()
+replaceChangedImports oldImports newImports sourceText sourcePath =
+    if newPretty /= oldPretty -- the ImportDecls won't match because they have different SrcLoc values
+    then hPutStrLn stderr (sourcePath ++ ": replacing imports -\n" ++ oldPretty ++ "\n ->\n" ++ newPretty) >>
+         replaceImports newImports sourceText sourcePath
+    else putStrLn (sourcePath ++ ": no changes")
     where
-      newSourceText = replaceImports' sourceText importsText
-      importsText = munge $ pretty imports
+      oldPretty = prettyImports oldImports
+      newPretty = prettyImports newImports
+
+replaceImports :: [ImportDecl] -> String -> FilePath -> IO ()
+replaceImports newImports sourceText sourcePath =
+    maybe (return ())
+          (\ text -> replaceFile (++ "~") sourcePath text)
+          (replaceImports' sourceText (prettyImports newImports))
+
+prettyImports :: [ImportDecl] -> String
+prettyImports imports =
+    munge . prettyPrintWithMode (defaultMode {layout = PPInLine}) $ Module a b c d e imports f
+    where
+      ParseOk (Module a b c d e _ f) = parseModule ""
       -- Strip of the module declaration line, the leading spaces, and the terminating semicolons
       munge = unlines . map (init . tail . tail) . tail . lines
 
@@ -157,8 +171,8 @@ replaceFile backup path text =
       rename = renameFile path (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       write = writeFile path text
 
-findSourcePath' :: [FilePath] -> FilePath -> Bool -> Failing FilePath
-findSourcePath' exePaths path exists =
+findSourcePath :: [FilePath] -> FilePath -> Bool -> Failing FilePath
+findSourcePath exePaths path exists =
     case (exists, matches) of
       (True, []) -> Success path
       (True, _) -> Success path -- dubious
