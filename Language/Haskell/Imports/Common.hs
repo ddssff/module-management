@@ -2,11 +2,11 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Imports.Common
     ( HasSrcLoc(srcLoc)
-    , cutSrcSpan
     , importsSpan
     , renameSpec
     , specName
     , replaceImports
+    , replaceFile
     ) where
 
 import Control.Exception (catch, throw)
@@ -17,7 +17,6 @@ import Language.Haskell.Exts.Parser (parseModule)
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(..), PPLayout(..), prettyPrintWithMode)
 import Language.Haskell.Exts (ParseResult(ParseOk))
 import System.Directory (removeFile, renameFile)
-import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
 import Data.List (intercalate)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, srcSpanStart)
@@ -108,18 +107,8 @@ specName = foldSpec (foldName id id) (foldName id id) (foldName id id) (\ n _ ->
 
 -- | Compare the old and new import sets and if they differ clip out
 -- the imports from the sourceText and insert the new ones.
-replaceImports :: Bool -> [ImportDecl] -> [ImportDecl] -> String -> FilePath -> SrcSpan -> IO ()
-replaceImports dryRun oldImports newImports sourceText sourcePath importsSpan =
-    maybe (putStrLn (sourcePath ++ ": no changes"))
-          (\ text ->
-               hPutStrLn stderr (sourcePath ++ ": replacing imports") >>
-               replaceFile dryRun (++ "~") sourcePath text)
-          (replaceImports'  oldImports newImports sourceText importsSpan)
-
--- | Compare the old and new import sets and if they differ clip out
--- the imports from the sourceText and insert the new ones.
-replaceImports' :: [ImportDecl] -> [ImportDecl] -> String -> SrcSpan -> Maybe String
-replaceImports' oldImports newImports sourceText importsSpan =
+replaceImports :: [ImportDecl] -> [ImportDecl] -> String -> SrcSpan -> Maybe String
+replaceImports oldImports newImports sourceText importsSpan =
     if newPretty /= oldPretty -- the ImportDecls won't match because they have different SrcLoc values
     then let (hd, tl) = cutSrcSpan importsSpan sourceText
              -- Instead of inserting this newline we should figure out what was

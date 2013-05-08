@@ -11,7 +11,7 @@ import Data.List (findIndex, tails)
 import Data.Maybe (fromJust)
 import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..))
 import Language.Haskell.Exts (parseFile, ParseResult(ParseOk))
-import Language.Haskell.Imports.Common (importsSpan, renameSpec, replaceImports)
+import Language.Haskell.Imports.Common (importsSpan, renameSpec, replaceFile, replaceImports)
 
 type FQID = String -- ^ Fully qualified identifier - e.g. Language.Haskell.Imports.Clean.cleanImports
 
@@ -29,7 +29,11 @@ moveImports dryRun moves sourcePath =
        case source of
          Left (e :: SomeException) -> error (sourcePath ++ ": " ++ show e)
          Right (ParseOk m@(Module _ _ _ _ _ oldImports _), sourceText) ->
-             replaceImports dryRun oldImports (doMoves moves oldImports) sourceText sourcePath (importsSpan m)
+             maybe (putStrLn (sourcePath ++ ": no changes"))
+                   (\ text ->
+                        putStrLn (sourcePath ++ ": replacing imports") >>
+                        replaceFile dryRun (++ "~") sourcePath text)
+                   (replaceImports oldImports (doMoves moves oldImports) sourceText (importsSpan m))
          Right _ -> error (sourcePath ++ ": could not parse")
 
 doMoves :: [(FQID, FQID)] -> [ImportDecl] -> [ImportDecl]
