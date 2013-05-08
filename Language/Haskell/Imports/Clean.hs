@@ -16,10 +16,11 @@ import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import Distribution.PackageDescription (Executable(modulePath), PackageDescription(executables))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr)
+import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Syntax (ImportDecl(importSpecs), ImportSpec, Module(..))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
-import Language.Haskell.Exts (defaultParseMode, parseFile, parseFileWithMode, ParseResult(..))
+import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
 import Language.Haskell.Imports.Common (importsSpan, replaceFile, replaceImports, specName)
 import System.Directory (doesFileExist, getDirectoryContents, removeFile)
 import System.Exit (ExitCode(..))
@@ -93,7 +94,7 @@ checkImports dryRun importsPath sourcePath =
     do result <- parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath
        case result of
          ParseOk newImports ->
-             do source <- try ((,) <$> parseFile sourcePath <*> readFile sourcePath)
+             do source <- try ((,) <$> parseFileWithComments defaultParseMode sourcePath <*> readFile sourcePath)
                 either (\ (e :: SomeException) -> error (sourcePath ++ ": " ++ show e))
                        (uncurry (updateSource dryRun newImports sourcePath)) source
          _ -> error ("Parse of imports failed: " ++ show result)
@@ -106,17 +107,17 @@ sourcePathToImportsPath sourcePath = map (\ c -> if c == '/' then '.' else c) (d
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: Bool -> Module -> FilePath -> ParseResult Module -> String -> IO ()
-updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ Nothing _ _)) _ =
+updateSource :: Bool -> Module -> FilePath -> (ParseResult (Module, [Comment])) -> String -> IO ()
+updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ Nothing _ _, _)) _ =
     error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no explicit export list")
-updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ _ _ [])) _ =
+updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ _ _ [], _)) _ =
     error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no declarations")
-updateSource dryRun (Module _ _ _ _ _ newImports _) sourcePath (ParseOk m@(Module _ _ _ _ _ oldImports _)) sourceText =
+updateSource dryRun (Module _ _ _ _ _ newImports _) sourcePath (ParseOk (m@(Module _ _ _ _ _ oldImports _), comments)) sourceText =
     maybe (putStrLn (sourcePath ++ ": no changes"))
           (\ text ->
                putStrLn (sourcePath ++ ": replacing imports") >>
                replaceFile dryRun (++ "~") sourcePath text)
-          (replaceImports oldImports (fixNewImports newImports) sourceText (importsSpan m))
+          (replaceImports oldImports (fixNewImports newImports) sourceText (importsSpan m comments))
 updateSource _ _ sourcePath (ParseFailed _ _) _ = error (sourcePath ++ ": could not parse")
 
 -- | Final touch-ups - sort and merge similar imports.

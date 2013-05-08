@@ -10,7 +10,7 @@ import Control.Exception (SomeException, try)
 import Data.List (findIndex, tails)
 import Data.Maybe (fromJust)
 import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..))
-import Language.Haskell.Exts (parseFile, ParseResult(ParseOk))
+import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Imports.Common (importsSpan, renameSpec, replaceFile, replaceImports)
 
 type FQID = String -- ^ Fully qualified identifier - e.g. Language.Haskell.Imports.Clean.cleanImports
@@ -25,15 +25,15 @@ parseFQID s =
 -- new module.
 moveImports :: Bool -> [(FQID, FQID)] -> FilePath -> IO ()
 moveImports dryRun moves sourcePath =
-    do source <- try ((,) <$> parseFile sourcePath <*> readFile sourcePath)
+    do source <- try ((,) <$> parseFileWithComments defaultParseMode sourcePath <*> readFile sourcePath)
        case source of
          Left (e :: SomeException) -> error (sourcePath ++ ": " ++ show e)
-         Right (ParseOk m@(Module _ _ _ _ _ oldImports _), sourceText) ->
+         Right (ParseOk (m@(Module _ _ _ _ _ oldImports _), comments), sourceText) ->
              maybe (putStrLn (sourcePath ++ ": no changes"))
                    (\ text ->
                         putStrLn (sourcePath ++ ": replacing imports") >>
                         replaceFile dryRun (++ "~") sourcePath text)
-                   (replaceImports oldImports (doMoves moves oldImports) sourceText (importsSpan m))
+                   (replaceImports oldImports (doMoves moves oldImports) sourceText (importsSpan m comments))
          Right _ -> error (sourcePath ++ ": could not parse")
 
 doMoves :: [(FQID, FQID)] -> [ImportDecl] -> [ImportDecl]

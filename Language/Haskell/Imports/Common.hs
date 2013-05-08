@@ -11,6 +11,7 @@ module Language.Haskell.Imports.Common
 
 import Control.Exception (catch, throw)
 import Data.Monoid ((<>))
+import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (mkSrcSpan, SrcSpan)
 import Language.Haskell.Exts.Syntax (CName, ImportDecl, ImportSpec(..), Module(..), Name(..))
 import Language.Haskell.Exts.Parser (parseModule)
@@ -58,6 +59,9 @@ instance HasSrcLoc Decl where
 instance HasSrcLoc ImportDecl where
     srcLoc = importLoc
 
+instance HasSrcLoc Comment where
+    srcLoc (Comment _ sp _) = srcSpanStart' sp
+
 srcSpanStart' :: SrcSpan -> SrcLoc
 srcSpanStart' sp = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanStart sp)
 
@@ -76,9 +80,18 @@ cutSrcSpan sp s =
         (_, e) = cutSrcLoc (srcSpanEnd' sp) s in
     (b, e)
 
-importsSpan :: Module -> SrcSpan
-importsSpan (Module _ _ _ _ _ (i : _) (d : _)) = mkSrcSpan (srcLoc i) (srcLoc d)
-importsSpan _ = error "importsSpan"
+importsSpan :: Module -> [Comment] -> SrcSpan
+importsSpan (Module _ _ _ _ _ imports@(i : _) (d : _)) comments =
+    mkSrcSpan b e
+    where
+      b = srcLoc i
+      -- The imports section ends when the first commend following the
+      -- last import starts, or else where the first declartion
+      -- starts.
+      e = case dropWhile (\ comment -> srcLoc comment <= srcLoc (last imports)) comments of
+            (c : _) -> srcLoc c
+            [] -> srcLoc d
+importsSpan _ _ = error "importsSpan"
 
 renameSpec :: String -> ImportSpec -> ImportSpec
 renameSpec s x = mapSpecName (const s) x
