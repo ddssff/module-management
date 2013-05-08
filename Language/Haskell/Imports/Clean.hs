@@ -3,7 +3,6 @@
 module Language.Haskell.Imports.Clean
     ( cleanImports
     , cleanBuildImports
-    , replaceChangedImports
     , test1
     ) where
 
@@ -21,7 +20,7 @@ import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Syntax (ImportDecl(importSpecs), ImportSpec, Module(..))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts (defaultParseMode, parseFile, parseFileWithMode, ParseResult(..))
-import Language.Haskell.Imports.Common (importsSpan, replaceChangedImports, specName)
+import Language.Haskell.Imports.Common (importsSpan, replaceImports, specName)
 import System.Directory (doesFileExist, getDirectoryContents, removeFile)
 import System.Exit (ExitCode(..))
 import System.IO (hPutStrLn, stderr)
@@ -113,7 +112,7 @@ updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ Nothing _ _)) _ =
 updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ _ _ [])) _ =
     error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no declarations")
 updateSource dryRun (Module _ _ _ _ _ newImports _) sourcePath (ParseOk m@(Module _ _ _ _ _ oldImports _)) sourceText =
-    replaceChangedImports dryRun oldImports (fixNewImports newImports) sourceText sourcePath (importsSpan m)
+    replaceImports dryRun oldImports (fixNewImports newImports) sourceText sourcePath (importsSpan m)
 updateSource _ _ sourcePath (ParseFailed _ _) _ = error (sourcePath ++ ": could not parse")
 
 -- | Final touch-ups - sort and merge similar imports.

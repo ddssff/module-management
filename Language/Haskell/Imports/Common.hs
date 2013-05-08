@@ -1,10 +1,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Imports.Common
-    ( importsSpan
+    ( HasSrcLoc(srcLoc)
+    , cutSrcSpan
+    , importsSpan
     , renameSpec
     , specName
-    , replaceChangedImports
+    , replaceImports
     ) where
 
 import Control.Exception (catch, throw)
@@ -14,10 +16,66 @@ import Language.Haskell.Exts.Syntax (CName, ImportDecl, ImportSpec(..), Module(.
 import Language.Haskell.Exts.Parser (parseModule)
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(..), PPLayout(..), prettyPrintWithMode)
 import Language.Haskell.Exts (ParseResult(ParseOk))
-import Language.Haskell.Imports.SrcSpan (cutSrcSpan, HasSrcLoc(srcLoc))
 import System.Directory (removeFile, renameFile)
 import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
+import Data.List (intercalate)
+import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, srcSpanStart)
+import Language.Haskell.Exts.Syntax (Decl(..), ImportDecl(..))
+
+class HasSrcLoc x where
+    srcLoc :: x -> SrcLoc
+
+instance HasSrcLoc Decl where
+    srcLoc (TypeDecl s _ _ _) = s
+    srcLoc (TypeFamDecl s _ _ _) = s
+    srcLoc (DataDecl s _ _ _ _ _ _) = s
+    srcLoc (GDataDecl s _ _ _ _ _ _ _) = s
+    srcLoc (DataFamDecl s _ _ _ _) = s
+    srcLoc (TypeInsDecl s _ _) = s
+    srcLoc (DataInsDecl s _ _ _ _) = s
+    srcLoc (GDataInsDecl s _ _ _ _ _) = s
+    srcLoc (ClassDecl s _ _ _ _ _) = s
+    srcLoc (InstDecl s _ _ _ _) = s
+    srcLoc (DerivDecl s _ _ _) = s
+    srcLoc (InfixDecl s _ _ _) = s
+    srcLoc (DefaultDecl s _) = s
+    srcLoc (SpliceDecl s _) = s
+    srcLoc (TypeSig s _ _) = s
+    srcLoc (FunBind _) = error "srcLoc FunBind"
+    srcLoc (PatBind s _ _ _ _) = s
+    srcLoc (ForImp s _ _ _ _ _) = s
+    srcLoc (ForExp s _ _ _ _) = s
+    srcLoc (RulePragmaDecl s _) = s
+    srcLoc (DeprPragmaDecl s _) = s
+    srcLoc (WarnPragmaDecl s _) = s
+    srcLoc (InlineSig s _ _ _) = s
+    srcLoc (InlineConlikeSig s _ _) = s
+    srcLoc (SpecSig s _ _) = s
+    srcLoc (SpecInlineSig s _ _ _ _) = s
+    srcLoc (InstSig s _ _ _) = s
+    srcLoc (AnnPragma s _) = s
+
+instance HasSrcLoc ImportDecl where
+    srcLoc = importLoc
+
+srcSpanStart' :: SrcSpan -> SrcLoc
+srcSpanStart' sp = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanStart sp)
+
+srcSpanEnd' :: SrcSpan -> SrcLoc
+srcSpanEnd' sp = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanEnd sp)
+
+cutSrcLoc :: SrcLoc -> String -> (String, String)
+cutSrcLoc loc s =
+    let (h, (t1 : t2)) = splitAt (srcLine loc - 1) (lines s) in
+    let (h', t') = splitAt (srcColumn loc - 1) t1 in
+    (intercalate "\n" (h ++ [h']), unlines ([t'] ++ t2))
+
+cutSrcSpan :: SrcSpan -> String -> (String, String)
+cutSrcSpan sp s =
+    let (b, _) = cutSrcLoc (srcSpanStart' sp) s
+        (_, e) = cutSrcLoc (srcSpanEnd' sp) s in
+    (b, e)
 
 importsSpan :: Module -> SrcSpan
 importsSpan (Module _ _ _ _ _ (i : _) (d : _)) = mkSrcSpan (srcLoc i) (srcLoc d)
@@ -48,21 +106,31 @@ foldName _ symbol (Symbol s) = symbol s
 specName :: ImportSpec -> String
 specName = foldSpec (foldName id id) (foldName id id) (foldName id id) (\ n _ -> foldName id id n)
 
-replaceChangedImports :: Bool -> [ImportDecl] -> [ImportDecl] -> String -> FilePath -> SrcSpan -> IO ()
-replaceChangedImports dryRun oldImports newImports sourceText sourcePath importsSpan =
+-- | Compare the old and new import sets and if they differ clip out
+-- the imports from the sourceText and insert the new ones.
+replaceImports :: Bool -> [ImportDecl] -> [ImportDecl] -> String -> FilePath -> SrcSpan -> IO ()
+replaceImports dryRun oldImports newImports sourceText sourcePath importsSpan =
+    maybe (putStrLn (sourcePath ++ ": no changes"))
+          (\ text ->
+               hPutStrLn stderr (sourcePath ++ ": replacing imports") >>
+               replaceFile dryRun (++ "~") sourcePath text)
+          (replaceImports'  oldImports newImports sourceText importsSpan)
+
+-- | Compare the old and new import sets and if they differ clip out
+-- the imports from the sourceText and insert the new ones.
+replaceImports' :: [ImportDecl] -> [ImportDecl] -> String -> SrcSpan -> Maybe String
+replaceImports' oldImports newImports sourceText importsSpan =
     if newPretty /= oldPretty -- the ImportDecls won't match because they have different SrcLoc values
-    then hPutStrLn stderr (sourcePath ++ ": replacing imports -\n" ++ oldPretty ++ "\n ->\n" ++ newPretty) >>
-         replaceImports dryRun newImports sourceText sourcePath importsSpan
-    else putStrLn (sourcePath ++ ": no changes")
+    then let (hd, tl) = cutSrcSpan importsSpan sourceText
+             -- Instead of inserting this newline we should figure out what was
+             -- between the last import and the first declaration, but not sure
+             -- how to locate the end of an import.
+             new = hd <> newPretty <> "\n" <> tl in
+         if new /= sourceText then Just new else Nothing
+    else Nothing
     where
       oldPretty = prettyImports oldImports
       newPretty = prettyImports newImports
-
-replaceImports :: Bool -> [ImportDecl] -> String -> FilePath -> SrcSpan -> IO ()
-replaceImports dryRun newImports sourceText sourcePath importsSpan =
-    maybe (return ())
-          (\ text -> replaceFile dryRun (++ "~") sourcePath text)
-          (replaceImports' sourceText importsSpan (prettyImports newImports))
 
 prettyImports :: [ImportDecl] -> String
 prettyImports imports =
@@ -83,16 +151,6 @@ replaceFile _ backup path text =
       rename = renameFile path (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       write = writeFile path text
 
--- Assume the import section begins with a blank line and then
--- "import" and ends with the a blank line following "\nimport"
-replaceImports' :: String -> SrcSpan -> String -> Maybe String
-replaceImports' old sp imports =
-    let (hd, tl) = cutSrcSpan sp old
-        -- Instead of inserting this newline we should figure out what was
-        -- between the last import and the first declaration, but not sure
-        -- how to locate the end of an import.
-        new = hd <> imports <> "\n" <> tl in
-    if new /= old then Just new else Nothing
 {-
     let start = findIndex (isPrefixOf "\n\nimport ") (tails text)
         (prefix, rest) = splitAt (maybe 0 id start + 1) text
