@@ -9,8 +9,9 @@ module Language.Haskell.Imports.Clean
 import Control.Applicative ((<$>), (<*>))
 import Control.Applicative.Error (Failing(..))
 import Control.Exception (SomeException, try, catch, throw)
-import Data.List (isSuffixOf, isInfixOf, tails, isPrefixOf, findIndex, intercalate)
-import Data.Maybe (fromJust)
+import Data.Function (on)
+import Data.List (isSuffixOf, isInfixOf, tails, isPrefixOf, findIndex, intercalate, groupBy, sortBy, sort, nub)
+import Data.Maybe (fromJust, catMaybes)
 import Data.Monoid ((<>))
 import Distribution.PackageDescription (PackageDescription(executables), Executable(modulePath))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr)
@@ -155,8 +156,20 @@ updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ Nothing _ _)) _ =
 updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ _ _ [])) _ =
     error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no declarations")
 updateSource dryRun (Module _ _ _ _ _ newImports _) sourcePath (ParseOk (Module _ _ _ _ _ oldImports _)) sourceText =
-    replaceChangedImports dryRun oldImports newImports sourceText sourcePath
+    replaceChangedImports dryRun oldImports (fixNewImports newImports) sourceText sourcePath
 updateSource _ _ sourcePath (ParseFailed _ _) _ = error (sourcePath ++ ": could not parse")
+
+-- | Final touch-ups - sort and merge similar imports.
+fixNewImports :: [ImportDecl] -> [ImportDecl]
+fixNewImports imports =
+    map mergeDecls (groupBy ((==) `on` noSpecs) (sortBy (compare `on` noSpecs) imports))
+    where
+      noSpecs :: ImportDecl -> ImportDecl
+      noSpecs x = x {importSpecs = fmap (\ (flag, _) -> (flag, [])) (importSpecs x)}
+      mergeDecls :: [ImportDecl] -> ImportDecl
+      mergeDecls xs@(x : _) = x {importSpecs = mergeSpecs (catMaybes (map importSpecs xs))}
+      mergeSpecs :: [(Bool, [ImportSpec])] -> Maybe (Bool, [ImportSpec])
+      mergeSpecs (x : xs) = Just (fst x, nub (concat (snd x : map snd xs)))
 
 replaceChangedImports :: Bool -> [ImportDecl] -> [ImportDecl] -> String -> FilePath -> IO ()
 replaceChangedImports dryRun oldImports newImports sourceText sourcePath =
