@@ -1,5 +1,5 @@
 Name:               import-management
-Version:            0.1
+Version:            0.2
 Synopsis:           Functions to call from Setup to minimize imports and move declarations between modules
 Homepage:           https://src.seereason.com/import-management
 License:            BSD3
