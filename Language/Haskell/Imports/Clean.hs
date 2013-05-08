@@ -227,3 +227,6 @@ dropSuffix suf x =
 dropPrefix :: Eq a => [a] -> [a] -> [a]
 dropPrefix pre x =
     if isPrefixOf pre x then drop (length x) x else x
+
+test1 = cleanImports True "Language/Haskell/Imports/Clean.hs"
+test2 = moveImports True [("Language.Haskell.Exts.Pretty.defaultMode", "Language.Haskell.def")] "Language/Haskell/Imports/Clean.hs"
