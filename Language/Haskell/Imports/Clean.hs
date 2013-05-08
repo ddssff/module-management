@@ -10,11 +10,10 @@ import Control.Applicative ((<$>), (<*>))
 import Control.Applicative.Error (Failing(..))
 import Control.Exception (SomeException, try, catch, throw)
 import Data.List (isSuffixOf, isInfixOf, tails, isPrefixOf, findIndex, intercalate)
+import Data.Maybe (fromJust)
 import Data.Monoid ((<>))
-import Debug.Trace (trace)
 import Distribution.PackageDescription (PackageDescription(executables), Executable(modulePath))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr)
-import Language.Haskell.Exts.Annotated.Syntax ()
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Syntax (Module(..), ImportDecl(..), ImportSpec(..), ModuleName(ModuleName), Name(Ident, Symbol))
 import Language.Haskell.Exts.Parser (ParseMode(..), parseModule)
@@ -57,22 +56,43 @@ moveImports moves sourcePath =
 
 doMoves :: [(FQID, FQID)] -> [ImportDecl] -> [ImportDecl]
 doMoves moves imports =
-    map (\ i -> foldr moveImport i moves) imports
+    foldr moveDecls [] moves
     where
-      moveImport :: (FQID, FQID) -> ImportDecl -> ImportDecl
-      moveImport _ decl@(ImportDecl {importSpecs = Nothing}) = decl
-      moveImport move decl@(ImportDecl {importModule = m, importSpecs = Just (flag, specs)}) =
-          decl {importSpecs = Just (flag, map (moveSpec move m) specs)}
-      -- If we see the src, remove it and return dst.  If we are in
-      -- the dst module add the dst.
-      moveSpec :: (FQID, FQID) -> ModuleName -> ImportSpec -> ImportSpec
-      moveSpec (src, dst) (ModuleName m) x@(IVar (Ident n)) =
-          if m ++ "." ++ n == src then IVar (Ident (dropPrefix (m ++ ".") dst)) else x
-      moveSpec (src, dst) (ModuleName m) x@(IVar (Symbol n)) =
-          if m ++ "." ++ n == src then IVar (Ident (dropPrefix (m ++ ".") dst)) else x
-      moveSpec move m x@(IAbs _n) = trace ("moveSpec " ++ show move ++ " " ++ show m ++ " " ++ show x) x
-      moveSpec move m x@(IThingAll _n) = trace ("moveSpec " ++ show move ++ " " ++ show m ++ " " ++ show x) x
-      moveSpec move m x@(IThingWith _n _cn) = trace ("moveSpec " ++ show move ++ " " ++ show m ++ " " ++ show x) x
+      moveDecls :: (FQID, FQID) -> [ImportDecl] -> [ImportDecl]
+      moveDecls (src, dst) decls =
+          foldr moveDecl decls imports
+          where
+            (srcM, srcN) = parseFQID src
+            (dstM, dstN) = parseFQID dst
+            moveDecl :: ImportDecl -> [ImportDecl] -> [ImportDecl]
+            moveDecl decl@(ImportDecl {importSpecs = Nothing}) result = decl : result
+            moveDecl decl@(ImportDecl {importModule = m, importSpecs = Just (flag, specs)}) result =
+                [decl {importSpecs = Just (flag, specs')}] ++ decls' ++ result
+                where
+                  (specs', decls') = foldr moveSpec ([], []) specs
+                  moveSpec :: ImportSpec -> ([ImportSpec], [ImportDecl]) -> ([ImportSpec], [ImportDecl])
+                  moveSpec spec (specs, decls) =
+                      if m == srcM && spec == srcSpec
+                      then (specs, (decl {importModule = dstM, importSpecs = Just (False, [dstSpec])} : decls))
+                      else (spec : specs, decls)
+                      where
+                        srcSpec = renameSpec srcN spec
+                        dstSpec = renameSpec dstN spec
+
+renameSpec :: String -> ImportSpec -> ImportSpec
+renameSpec s (IVar n) = IVar (reName s n)
+renameSpec s (IAbs n) = IAbs (reName s n)
+renameSpec s (IThingAll n) = IThingAll (reName s n)
+renameSpec s (IThingWith n cn) = IThingWith (reName s n) cn
+
+reName :: String -> Name -> Name
+reName s (Ident _) = Ident s
+reName s (Symbol _) = Symbol s
+
+parseFQID :: FQID -> (ModuleName, String)
+parseFQID s =
+    let (m, n) = splitAt (fromJust (findIndex (not . elem '.') (tails s)) - 1) s in
+    (ModuleName m, (tail n))
 
 -- | To use this function you must first make sure...
 --    1. There are up-to-date .imports files in the top directory, generated when
