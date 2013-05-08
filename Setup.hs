@@ -6,5 +6,5 @@ import Distribution.Simple.LocalBuildInfo (localPkgDescr)
 import Language.Haskell.Imports.Clean (cleanDumpedImports)
 
 main = defaultMainWithHooks simpleUserHooks {
-         postConf = \ _ _ _ lbi -> cleanDumpedImports lbi
+         postConf = \ _ _ _ lbi -> cleanBuildImports lbi
        }
