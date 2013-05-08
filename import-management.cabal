@@ -10,9 +10,10 @@ Build-type:         Simple
 Cabal-version:      >=1.6
 
 Library
-  ghc-Options:      -Wall -O2 -ddump-minimal-imports
+  ghc-Options:      -Wall -O2
   Exposed-Modules:  Language.Haskell.Imports.Clean,
                     Language.Haskell.Imports.Common,
-                    Language.Haskell.Imports.Move
-  Build-Depends:    applicative-extras, base, Cabal, directory, haskell-src-exts, pretty, process
+                    Language.Haskell.Imports.Move,
+                    Language.Haskell.Imports.Params
+  Build-Depends:    applicative-extras, base, Cabal, data-default, directory, filepath, haskell-src-exts, MonadCatchIO-mtl, mtl, pretty, process
 

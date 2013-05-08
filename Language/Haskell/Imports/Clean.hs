@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Imports.Clean
     ( cleanImports
@@ -7,28 +7,34 @@ module Language.Haskell.Imports.Clean
     ) where
 
 import Control.Applicative ((<$>), (<*>))
-import Control.Applicative.Error (Failing(..))
-import Control.Exception (catch, SomeException, try)
+import Control.Exception (SomeException)
+import Control.Monad (when)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (try, catch, MonadCatchIO)
+import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
+import Data.Default (Default(def))
 import Data.Function (on)
 import Data.List (groupBy, intercalate, isSuffixOf, nub, sortBy)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
-import Distribution.PackageDescription (Executable(modulePath), PackageDescription(executables))
+import qualified Distribution.ModuleName as D (components, fromString, ModuleName)
+import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Executable(modulePath), Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
-import Language.Haskell.Exts.Syntax (ImportDecl(importSpecs), ImportSpec, Module(..))
+import Language.Haskell.Exts.Syntax (ImportDecl(importSpecs), ImportSpec, Module(..), ModuleName(ModuleName))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
 import Language.Haskell.Imports.Common (importsSpan, replaceFile, replaceImports, specName)
-import System.Directory (doesFileExist, getDirectoryContents, removeFile)
+import Language.Haskell.Imports.Params (Params(dryRun, verbosity), MonadParams(askParams), runParamsT)
+import System.Directory (doesFileExist, removeFile)
 import System.Exit (ExitCode(..))
+import System.FilePath ((<.>), (</>))
 import System.IO (hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode, showCommandForUser)
 
 test1 :: IO ()
-test1 = cleanImports True "Language/Haskell/Imports/Clean.hs"
+test1 = runParamsT (def {dryRun = True}) (cleanImports "Language/Haskell/Imports/Clean.hs")
 
 -- | To use this function you must first make sure...
 --    1. There are up-to-date .imports files in the top directory, generated when
@@ -49,29 +55,42 @@ test1 = cleanImports True "Language/Haskell/Imports/Clean.hs"
 --       file or move the backup file (suffix ~) back to where the
 --       original was.
 -- Bug: it removes declarations like "import Prelude hiding (last)"
-cleanBuildImports :: Bool -> LocalBuildInfo -> IO ()
-cleanBuildImports dryRun lbi = cleanDumpedImports dryRun (map modulePath (executables (localPkgDescr lbi)))
-
-cleanDumpedImports :: Bool -> [FilePath] -> IO ()
-cleanDumpedImports dryRun exePaths =
-    getDirectoryContents "." >>= mapM_ doImports
+cleanBuildImports :: MonadParams m => LocalBuildInfo -> m ()
+cleanBuildImports lbi =
+    mapM (liftIO . toFilePath srcDirs) (maybe [] exposedModules (library (localPkgDescr lbi))) >>= \ libPaths ->
+    mapM_ cleanImports (libPaths ++ exePaths)
     where
-      doImports importsPath | not (isSuffixOf ".imports" importsPath) = return ()
-      doImports importsPath =
-          do let sourcePath = importsPathToSourcePath importsPath
-             result <- doesFileExist sourcePath >>= return . findSourcePath exePaths sourcePath
-             case result of
-               Failure messages -> putStrLn (intercalate ", " messages)
-               Success sourcePath' ->
-                   try (checkImports dryRun importsPath sourcePath') >>=
-                   either (\ (e :: SomeException) -> putStrLn (show e)) return
+      exePaths = map modulePath (executables (localPkgDescr lbi))
+      -- libModules :: [D.ModuleName]
+      -- libModules = maybe [] exposedModules (library (localPkgDescr lbi))
+      -- exeModules :: [D.ModuleName]
+      -- exeModules = 
+      srcDirs = case (maybe [] hsSourceDirs . fmap libBuildInfo . library . localPkgDescr $ lbi) of
+                  [] -> ["."]
+                  xs -> xs
+      toFilePath :: [FilePath] -> D.ModuleName -> IO FilePath
+      toFilePath [] m = error $ "Missing module: " ++ intercalate "." (D.components m)
+      toFilePath (dir : dirs) m =
+          let path = (dir </> intercalate "/" (D.components m) <.> "hs") in
+          doesFileExist path >>= \ exists ->
+          if exists then return path else toFilePath dirs m
+
+{-
+toModuleName :: FilePath -> D.ModuleName
+toModuleName path = D.fromString $ map (\ c -> if c == '/' then '.' else c) (dropSuffix ".hs" path)
+
+whenVerbose :: MonadParams m => m () -> m ()
+whenVerbose action =
+    askParams >>= return . verbosity >>= \ v ->
+    when (v > 0) action
+-}
 
 -- | Clean up the imports of a source file.
-cleanImports :: Bool -> FilePath -> IO ()
-cleanImports dryRun sourcePath =
-    (dump >> replace >> cleanup) `catch` (\ (e :: SomeException) -> hPutStrLn stderr (show e))
+cleanImports :: MonadParams m => FilePath -> m ()
+cleanImports sourcePath =
+    (liftIO dump >> replace >> liftIO cleanup) `catch` (\ (e :: SomeException) -> liftIO (hPutStrLn stderr (show e)))
     where
-      importsPath = (sourcePathToImportsPath sourcePath)
+      -- importsPath = (sourcePathToImportsPath moduleName)
 
       dump = let cmd = "ghc"
                  args = ["--make", "-ddump-minimal-imports", sourcePath] in
@@ -80,45 +99,46 @@ cleanImports dryRun sourcePath =
                ExitSuccess -> return ()
                ExitFailure _ -> error (sourcePath ++ ": compile failed\n " ++ showCommandForUser cmd args ++ " ->\n" ++ err)
 
-      replace = checkImports dryRun importsPath sourcePath
+      replace = checkImports sourcePath
 
       cleanup = removeFile (dropSuffix ".hs" sourcePath <> ".o") >>
-                removeFile (dropSuffix ".hs" sourcePath <> ".hi") >>
-                removeFile importsPath
+                removeFile (dropSuffix ".hs" sourcePath <> ".hi")
 
 -- | Parse the import list generated by GHC, parse the original source
 -- file, and if all goes well insert the new imports into the old
 -- source file.
-checkImports :: Bool -> FilePath -> FilePath -> IO ()
-checkImports dryRun importsPath sourcePath =
-    do result <- parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath
-       case result of
-         ParseOk newImports ->
-             do source <- try ((,) <$> parseFileWithComments defaultParseMode sourcePath <*> readFile sourcePath)
-                either (\ (e :: SomeException) -> error (sourcePath ++ ": " ++ show e))
-                       (uncurry (updateSource dryRun newImports sourcePath)) source
-         _ -> error ("Parse of imports failed: " ++ show result)
+checkImports :: MonadParams m => {- FilePath -> -} FilePath -> m ()
+checkImports sourcePath =
+    do source <- liftIO $ try ((,) <$> parseFileWithComments defaultParseMode sourcePath <*> readFile sourcePath)
+       case source of
+         Left (e :: SomeException) -> error (sourcePath ++ ": " ++ show e)
+         Right ((ParseOk (m@(Module _ (ModuleName name) _ _ _ _ _), comments)), sourceText) ->
+             do let importsPath = name <.> ".imports"
+                result <- liftIO (parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath)
+                case result of
+                  ParseOk newImports -> updateSource newImports sourcePath m comments sourceText
+                  _ -> error (importsPath ++ ": parse failed")
+         Right _ -> error (sourcePath ++ ": parse failed")
 
-importsPathToSourcePath :: String -> FilePath
-importsPathToSourcePath name = map (\ c -> if c == '.' then '/' else c) (dropSuffix ".imports" name) <> ".hs"
+-- importsPathToSourcePath :: String -> FilePath
+-- importsPathToSourcePath name = map (\ c -> if c == '.' then '/' else c) (dropSuffix ".imports" name) <> ".hs"
 
-sourcePathToImportsPath :: FilePath -> FilePath
-sourcePathToImportsPath sourcePath = map (\ c -> if c == '/' then '.' else c) (dropSuffix ".hs" sourcePath) <> ".imports"
+-- sourcePathToImportsPath :: D.ModuleName -> FilePath
+-- sourcePathToImportsPath moduleName = intercalate "." (D.components moduleName) <> ".imports"
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: Bool -> Module -> FilePath -> (ParseResult (Module, [Comment])) -> String -> IO ()
-updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ Nothing _ _, _)) _ =
+updateSource :: MonadParams m => Module -> FilePath -> Module -> [Comment] -> String -> m ()
+updateSource _ sourcePath (Module _ _ _ _ Nothing _ _) _ _ =
     error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no explicit export list")
-updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ _ _ [], _)) _ =
+updateSource _ sourcePath (Module _ _ _ _ _ _ []) _ _ =
     error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no declarations")
-updateSource dryRun (Module _ _ _ _ _ newImports _) sourcePath (ParseOk (m@(Module _ _ _ _ _ oldImports _), comments)) sourceText =
-    maybe (putStrLn (sourcePath ++ ": no changes"))
+updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ oldImports _)) comments sourceText =
+    maybe (liftIO (putStrLn (sourcePath ++ ": no changes")))
           (\ text ->
-               putStrLn (sourcePath ++ ": replacing imports") >>
-               replaceFile dryRun (++ "~") sourcePath text)
+               liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
+               replaceFile (++ "~") sourcePath text)
           (replaceImports oldImports (fixNewImports newImports) sourceText (importsSpan m comments))
-updateSource _ _ sourcePath (ParseFailed _ _) _ = error (sourcePath ++ ": could not parse")
 
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: [ImportDecl] -> [ImportDecl]
@@ -140,6 +160,7 @@ compareSpecs a b =
       EQ -> compare a b
       x -> x
 
+{-
 findSourcePath :: [FilePath] -> FilePath -> Bool -> Failing FilePath
 findSourcePath exePaths path exists =
     case (exists, matches) of
@@ -150,6 +171,7 @@ findSourcePath exePaths path exists =
       (False, xs) -> Failure ["Multiple executables named " ++ path ++ ": " ++ show xs]
     where
       matches = filter (isSuffixOf ('/' : path)) exePaths
+-}
 
 dropSuffix :: Eq a => [a] -> [a] -> [a]
 dropSuffix suf x = if isSuffixOf suf x then take (length x - length suf) x else x

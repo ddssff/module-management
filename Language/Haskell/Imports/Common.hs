@@ -10,6 +10,7 @@ module Language.Haskell.Imports.Common
     ) where
 
 import Control.Exception (catch, throw)
+import Control.Monad.Trans (liftIO)
 import Data.Monoid ((<>))
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (mkSrcSpan, SrcSpan)
@@ -17,6 +18,7 @@ import Language.Haskell.Exts.Syntax (CName, ImportDecl, ImportSpec(..), Module(.
 import Language.Haskell.Exts.Parser (parseModule)
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(..), PPLayout(..), prettyPrintWithMode)
 import Language.Haskell.Exts (ParseResult(ParseOk))
+import Language.Haskell.Imports.Params (Params(dryRun), MonadParams(askParams))
 import System.Directory (removeFile, renameFile)
 import System.IO.Error (isDoesNotExistError)
 import Data.List (intercalate)
@@ -120,9 +122,9 @@ specName = foldSpec (foldName id id) (foldName id id) (foldName id id) (\ n _ ->
 -- | Compare the old and new import sets and if they differ clip out
 -- the imports from the sourceText and insert the new ones.
 replaceImports :: [ImportDecl] -> [ImportDecl] -> String -> SrcSpan -> Maybe String
-replaceImports oldImports newImports sourceText importsSpan =
+replaceImports oldImports newImports sourceText sp =
     if newPretty /= oldPretty -- the ImportDecls won't match because they have different SrcLoc values
-    then let (hd, tl) = cutSrcSpan importsSpan sourceText
+    then let (hd, tl) = cutSrcSpan sp sourceText
              -- Instead of inserting this newline we should figure out what was
              -- between the last import and the first declaration, but not sure
              -- how to locate the end of an import.
@@ -142,11 +144,12 @@ prettyImports imports =
       munge = unlines . map (init . tail . tail) . tail . lines
 
 -- | If backup is the identity function you're going to have a bad time.
-replaceFile :: Bool -> (FilePath -> FilePath) -> FilePath -> String -> IO ()
-replaceFile True _ path new =
-    putStrLn ("dryRun: replaceFile " ++ show path ++ " " ++ show new)
-replaceFile _ backup path text =
-    remove >> rename >> write
+replaceFile :: MonadParams m => (FilePath -> FilePath) -> FilePath -> String -> m ()
+replaceFile backup path text =
+    askParams >>= return . dryRun >>= \ dryRun' ->
+    case dryRun' of
+      True -> liftIO $ putStrLn ("dryRun: replaceFile " ++ show path ++ " " ++ show text)
+      False -> liftIO $ remove >> rename >> write
     where
       remove = removeFile (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       rename = renameFile path (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)

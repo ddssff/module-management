@@ -7,11 +7,14 @@ module Language.Haskell.Imports.Move
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Exception (SomeException, try)
+import Control.Monad.Trans (liftIO)
+import Data.Default (def)
 import Data.List (findIndex, tails)
 import Data.Maybe (fromJust)
 import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Imports.Common (importsSpan, renameSpec, replaceFile, replaceImports)
+import Language.Haskell.Imports.Params (Params(dryRun), MonadParams, runParamsT)
 
 type FQID = String -- ^ Fully qualified identifier - e.g. Language.Haskell.Imports.Clean.cleanImports
 
@@ -23,16 +26,16 @@ parseFQID s =
 -- | This function needs to be able to compile the source file, so it
 -- must be run *before* the declaration actually gets moved to its
 -- new module.
-moveImports :: Bool -> [(FQID, FQID)] -> FilePath -> IO ()
-moveImports dryRun moves sourcePath =
-    do source <- try ((,) <$> parseFileWithComments defaultParseMode sourcePath <*> readFile sourcePath)
+moveImports :: MonadParams m => [(FQID, FQID)] -> FilePath -> m ()
+moveImports moves sourcePath =
+    do source <- liftIO $ try ((,) <$> parseFileWithComments defaultParseMode sourcePath <*> readFile sourcePath)
        case source of
          Left (e :: SomeException) -> error (sourcePath ++ ": " ++ show e)
          Right (ParseOk (m@(Module _ _ _ _ _ oldImports _), comments), sourceText) ->
-             maybe (putStrLn (sourcePath ++ ": no changes"))
+             maybe (liftIO $ putStrLn (sourcePath ++ ": no changes"))
                    (\ text ->
-                        putStrLn (sourcePath ++ ": replacing imports") >>
-                        replaceFile dryRun (++ "~") sourcePath text)
+                        liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
+                        replaceFile (++ "~") sourcePath text)
                    (replaceImports oldImports (doMoves moves oldImports) sourceText (importsSpan m comments))
          Right _ -> error (sourcePath ++ ": could not parse")
 
@@ -61,5 +64,7 @@ doMoves moves imports =
                         srcSpec = renameSpec srcN spec
                         dstSpec = renameSpec dstN spec
 
-test2 :: IO ()
-test2 = moveImports True [("Language.Haskell.Imports.Clean.moveImports", "Language.Haskell.Imports.Move.moveImports")] "Language/Haskell/Imports/Clean.hs"
+test2 :: MonadParams m => m ()
+test2 = runParamsT
+          (def {dryRun = True})
+          (moveImports [("Language.Haskell.Imports.Clean.moveImports", "Language.Haskell.Imports.Move.moveImports")] "Language/Haskell/Imports/Clean.hs")
