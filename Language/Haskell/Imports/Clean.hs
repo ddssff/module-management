@@ -4,23 +4,26 @@ module Language.Haskell.Imports.Clean
     ( cleanImports
     , moveImports
     , cleanBuildImports
+    , test1
+    , test2
     ) where
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Applicative.Error (Failing(..))
-import Control.Exception (SomeException, try, catch, throw)
+import Control.Exception (catch, SomeException, throw, try)
+import Data.Char (toLower)
 import Data.Function (on)
-import Data.List (isSuffixOf, isInfixOf, tails, isPrefixOf, findIndex, intercalate, groupBy, sortBy, sort, nub)
-import Data.Maybe (fromJust, catMaybes)
+import Data.List (findIndex, groupBy, intercalate, isInfixOf, isPrefixOf, isSuffixOf, nub, sortBy, tails)
+import Data.Maybe (catMaybes, fromJust)
 import Data.Monoid ((<>))
-import Distribution.PackageDescription (PackageDescription(executables), Executable(modulePath))
+import Distribution.PackageDescription (Executable(modulePath), PackageDescription(executables))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
-import Language.Haskell.Exts.Syntax (Module(..), ImportDecl(..), ImportSpec(..), ModuleName(ModuleName), Name(Ident, Symbol))
+import Language.Haskell.Exts.Syntax (CName, ImportDecl(..), ImportSpec(..), Module(..), ModuleName(ModuleName), Name(Ident, Symbol))
 import Language.Haskell.Exts.Parser (ParseMode(..), parseModule)
-import Language.Haskell.Exts.Pretty (prettyPrintWithMode, defaultMode, PPHsMode(..), PPLayout(..))
-import Language.Haskell.Exts (ParseResult(..), parseFile, parseFileWithMode, defaultParseMode)
-import System.Directory (getDirectoryContents, removeFile, doesFileExist, renameFile)
+import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(..), PPLayout(..), prettyPrintWithMode)
+import Language.Haskell.Exts (defaultParseMode, parseFile, parseFileWithMode, ParseResult(..))
+import System.Directory (doesFileExist, getDirectoryContents, removeFile, renameFile)
 import System.Exit (ExitCode(..))
 import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
@@ -72,23 +75,38 @@ doMoves moves imports =
                 where
                   (specs', decls') = foldr moveSpec ([], []) specs
                   moveSpec :: ImportSpec -> ([ImportSpec], [ImportDecl]) -> ([ImportSpec], [ImportDecl])
-                  moveSpec spec (specs, decls) =
+                  moveSpec spec (specs'', decls'') =
                       if m == srcM && spec == srcSpec
-                      then (specs, (decl {importModule = dstM, importSpecs = Just (False, [dstSpec])} : decls))
-                      else (spec : specs, decls)
+                      then (specs'', (decl {importModule = dstM, importSpecs = Just (False, [dstSpec])} : decls''))
+                      else (spec : specs'', decls'')
                       where
                         srcSpec = renameSpec srcN spec
                         dstSpec = renameSpec dstN spec
 
 renameSpec :: String -> ImportSpec -> ImportSpec
-renameSpec s (IVar n) = IVar (reName s n)
-renameSpec s (IAbs n) = IAbs (reName s n)
-renameSpec s (IThingAll n) = IThingAll (reName s n)
-renameSpec s (IThingWith n cn) = IThingWith (reName s n) cn
+renameSpec s x = mapSpecName (const s) x
 
-reName :: String -> Name -> Name
-reName s (Ident _) = Ident s
-reName s (Symbol _) = Symbol s
+-- reName :: String -> Name -> Name
+-- reName s x = mapName (const s) x
+
+mapSpecName :: (String -> String) -> ImportSpec -> ImportSpec
+mapSpecName f = foldSpec (IVar . mapName f) (IAbs . mapName f) (IThingAll . mapName f) (\ n cn -> IThingWith (mapName f n) cn)
+
+mapName :: (String -> String) -> Name -> Name
+mapName f = foldName (Ident . f) (Symbol . f)
+
+foldSpec :: (Name -> a) -> (Name -> a) -> (Name -> a) -> (Name -> [CName] -> a) -> ImportSpec -> a
+foldSpec iVar _ _ _ (IVar n) = iVar n
+foldSpec _ iAbs _ _ (IAbs n) = iAbs n
+foldSpec _ _ iThingAll _ (IThingAll n) = iThingAll n
+foldSpec _ _ _ iThingWith (IThingWith n cn) = iThingWith n cn
+
+foldName :: (String -> a) -> (String -> a) -> Name -> a
+foldName ident _ (Ident s) = ident s
+foldName _ symbol (Symbol s) = symbol s
+
+specName :: ImportSpec -> String
+specName = foldSpec (foldName id id) (foldName id id) (foldName id id) (\ n _ -> foldName id id n)
 
 parseFQID :: FQID -> (ModuleName, String)
 parseFQID s =
@@ -168,8 +186,16 @@ fixNewImports imports =
       noSpecs x = x {importSpecs = fmap (\ (flag, _) -> (flag, [])) (importSpecs x)}
       mergeDecls :: [ImportDecl] -> ImportDecl
       mergeDecls xs@(x : _) = x {importSpecs = mergeSpecs (catMaybes (map importSpecs xs))}
+      mergeDecls [] = error "mergeDecls"
       mergeSpecs :: [(Bool, [ImportSpec])] -> Maybe (Bool, [ImportSpec])
-      mergeSpecs (x : xs) = Just (fst x, nub (concat (snd x : map snd xs)))
+      mergeSpecs (x : xs) = Just (fst x, sortBy compareSpecs (nub (concat (snd x : map snd xs))))
+      mergeSpecs [] = error "mergeSpecs"
+
+compareSpecs :: ImportSpec -> ImportSpec -> Ordering
+compareSpecs a b =
+    case compare (map toLower $ specName a) (map toLower $ specName b) of
+      EQ -> compare a b
+      x -> x
 
 replaceChangedImports :: Bool -> [ImportDecl] -> [ImportDecl] -> String -> FilePath -> IO ()
 replaceChangedImports dryRun oldImports newImports sourceText sourcePath =
@@ -197,7 +223,7 @@ prettyImports imports =
 
 -- | If backup is the identity function you're going to have a bad time.
 replaceFile :: Bool -> (FilePath -> FilePath) -> FilePath -> String -> IO ()
-replaceFile True backup path new =
+replaceFile True _ path new =
     putStrLn ("dryRun: replaceFile " ++ show path ++ " " ++ show new)
 replaceFile _ backup path text =
     remove >> rename >> write
@@ -236,12 +262,12 @@ replaceImports' text imports =
           else Nothing
 
 dropSuffix :: Eq a => [a] -> [a] -> [a]
-dropSuffix suf x =
-    if isSuffixOf suf x then take (length x - length suf) x else x
+dropSuffix suf x = if isSuffixOf suf x then take (length x - length suf) x else x
 
-dropPrefix :: Eq a => [a] -> [a] -> [a]
-dropPrefix pre x =
-    if isPrefixOf pre x then drop (length x) x else x
+-- dropPrefix :: Eq a => [a] -> [a] -> [a]
+-- dropPrefix pre x = if isPrefixOf pre x then drop (length x) x else x
 
+test1 :: IO ()
 test1 = cleanImports True "Language/Haskell/Imports/Clean.hs"
+test2 :: IO ()
 test2 = moveImports True [("Language.Haskell.Exts.Pretty.defaultMode", "Language.Haskell.def")] "Language/Haskell/Imports/Clean.hs"
