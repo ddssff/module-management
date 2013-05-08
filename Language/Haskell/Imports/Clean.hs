@@ -13,21 +13,23 @@ import Control.Applicative.Error (Failing(..))
 import Control.Exception (catch, SomeException, throw, try)
 import Data.Char (toLower)
 import Data.Function (on)
-import Data.List (findIndex, groupBy, intercalate, isInfixOf, isPrefixOf, isSuffixOf, nub, sortBy, tails)
+import Data.List (findIndex, groupBy, intercalate, isSuffixOf, nub, sortBy, tails)
 import Data.Maybe (catMaybes, fromJust)
 import Data.Monoid ((<>))
 import Distribution.PackageDescription (Executable(modulePath), PackageDescription(executables))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
+import Language.Haskell.Exts.SrcLoc (mkSrcSpan, SrcSpan)
 import Language.Haskell.Exts.Syntax (CName, ImportDecl(..), ImportSpec(..), Module(..), ModuleName(ModuleName), Name(Ident, Symbol))
 import Language.Haskell.Exts.Parser (ParseMode(..), parseModule)
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(..), PPLayout(..), prettyPrintWithMode)
 import Language.Haskell.Exts (defaultParseMode, parseFile, parseFileWithMode, ParseResult(..))
+import Language.Haskell.Imports.SrcSpan (cutSrcSpan, HasSrcLoc(srcLoc))
 import System.Directory (doesFileExist, getDirectoryContents, removeFile, renameFile)
 import System.Exit (ExitCode(..))
 import System.IO (hPutStrLn, stderr)
 import System.IO.Error (isDoesNotExistError)
-import System.Process (readProcessWithExitCode)
+import System.Process (readProcessWithExitCode, showCommandForUser)
 
 type FQID = String -- ^ Fully qualified identifier - e.g. Language.Haskell.Imports.Clean.cleanImports
 
@@ -38,24 +40,29 @@ cleanImports dryRun sourcePath =
     where
       importsPath = (sourcePathToImportsPath sourcePath)
 
-      dump = readProcessWithExitCode "ghc" ["-S", "-ddump-minimal-imports", sourcePath] "" >>= \ (code, _out, _err) ->
+      dump = let cmd = "ghc"
+                 args = ["--make", "-ddump-minimal-imports", sourcePath] in
+             readProcessWithExitCode cmd args "" >>= \ (code, _out, err) ->
              case code of
                ExitSuccess -> return ()
-               ExitFailure _ -> error (sourcePath ++ ": compile failed")
+               ExitFailure _ -> error (sourcePath ++ ": compile failed\n " ++ showCommandForUser cmd args ++ " ->\n" ++ err)
 
       replace = checkImports dryRun importsPath sourcePath
 
-      cleanup = removeFile (dropSuffix ".hs" sourcePath <> ".s") >>
+      cleanup = removeFile (dropSuffix ".hs" sourcePath <> ".o") >>
                 removeFile (dropSuffix ".hs" sourcePath <> ".hi") >>
                 removeFile importsPath
 
+-- | This function needs to be able to compile the source file, so it
+-- must be run *before* the declaration actually gets moved to its
+-- new module.
 moveImports :: Bool -> [(FQID, FQID)] -> FilePath -> IO ()
 moveImports dryRun moves sourcePath =
     do source <- try ((,) <$> parseFile sourcePath <*> readFile sourcePath)
        case source of
          Left (e :: SomeException) -> error (sourcePath ++ ": " ++ show e)
-         Right (ParseOk (Module _ _ _ _ _ oldImports _), sourceText) ->
-             replaceChangedImports dryRun oldImports (doMoves moves oldImports) sourceText sourcePath
+         Right (ParseOk m@(Module _ _ _ _ _ oldImports _), sourceText) ->
+             replaceChangedImports dryRun oldImports (doMoves moves oldImports) sourceText sourcePath (importsSpan m)
          Right _ -> error (sourcePath ++ ": could not parse")
 
 doMoves :: [(FQID, FQID)] -> [ImportDecl] -> [ImportDecl]
@@ -173,9 +180,14 @@ updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ Nothing _ _)) _ =
     error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no explicit export list")
 updateSource _ _ sourcePath (ParseOk (Module _ _ _ _ _ _ [])) _ =
     error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no declarations")
-updateSource dryRun (Module _ _ _ _ _ newImports _) sourcePath (ParseOk (Module _ _ _ _ _ oldImports _)) sourceText =
-    replaceChangedImports dryRun oldImports (fixNewImports newImports) sourceText sourcePath
+updateSource dryRun (Module _ _ _ _ _ newImports _) sourcePath (ParseOk m@(Module _ _ _ _ _ oldImports decls)) sourceText =
+    replaceChangedImports dryRun oldImports (fixNewImports newImports) sourceText sourcePath (importsSpan m)
 updateSource _ _ sourcePath (ParseFailed _ _) _ = error (sourcePath ++ ": could not parse")
+
+importsSpan :: Module -> SrcSpan
+importsSpan (Module _ _ _ _ _ (i : _) (d : _)) =
+    mkSrcSpan (srcLoc i) (srcLoc d)
+importsSpan_ = error "importsSpan"
 
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: [ImportDecl] -> [ImportDecl]
@@ -197,21 +209,21 @@ compareSpecs a b =
       EQ -> compare a b
       x -> x
 
-replaceChangedImports :: Bool -> [ImportDecl] -> [ImportDecl] -> String -> FilePath -> IO ()
-replaceChangedImports dryRun oldImports newImports sourceText sourcePath =
+replaceChangedImports :: Bool -> [ImportDecl] -> [ImportDecl] -> String -> FilePath -> SrcSpan -> IO ()
+replaceChangedImports dryRun oldImports newImports sourceText sourcePath importsSpan =
     if newPretty /= oldPretty -- the ImportDecls won't match because they have different SrcLoc values
     then hPutStrLn stderr (sourcePath ++ ": replacing imports -\n" ++ oldPretty ++ "\n ->\n" ++ newPretty) >>
-         replaceImports dryRun newImports sourceText sourcePath
+         replaceImports dryRun newImports sourceText sourcePath importsSpan
     else putStrLn (sourcePath ++ ": no changes")
     where
       oldPretty = prettyImports oldImports
       newPretty = prettyImports newImports
 
-replaceImports :: Bool -> [ImportDecl] -> String -> FilePath -> IO ()
-replaceImports dryRun newImports sourceText sourcePath =
+replaceImports :: Bool -> [ImportDecl] -> String -> FilePath -> SrcSpan -> IO ()
+replaceImports dryRun newImports sourceText sourcePath importsSpan =
     maybe (return ())
           (\ text -> replaceFile dryRun (++ "~") sourcePath text)
-          (replaceImports' sourceText (prettyImports newImports))
+          (replaceImports' sourceText importsSpan (prettyImports newImports))
 
 prettyImports :: [ImportDecl] -> String
 prettyImports imports =
@@ -245,8 +257,15 @@ findSourcePath exePaths path exists =
 
 -- Assume the import section begins with a blank line and then
 -- "import" and ends with the a blank line following "\nimport"
-replaceImports' :: String -> String -> Maybe String
-replaceImports' text imports =
+replaceImports' :: String -> SrcSpan -> String -> Maybe String
+replaceImports' old sp imports =
+    let (hd, tl) = cutSrcSpan sp old
+        -- Instead of inserting this newline we should figure out what was
+        -- between the last import and the first declaration, but not sure
+        -- how to locate the end of an import.
+        new = hd <> imports <> "\n" <> tl in
+    if new /= old then Just new else Nothing
+{-
     let start = findIndex (isPrefixOf "\n\nimport ") (tails text)
         (prefix, rest) = splitAt (maybe 0 id start + 1) text
         final = maybe 1 (+ 1) (findIndex (not . isInfixOf "\nimport ") (tails rest))
@@ -260,6 +279,7 @@ replaceImports' text imports =
           if text /= text'
           then Just text'
           else Nothing
+-}
 
 dropSuffix :: Eq a => [a] -> [a] -> [a]
 dropSuffix suf x = if isSuffixOf suf x then take (length x - length suf) x else x
@@ -270,4 +290,4 @@ dropSuffix suf x = if isSuffixOf suf x then take (length x - length suf) x else 
 test1 :: IO ()
 test1 = cleanImports True "Language/Haskell/Imports/Clean.hs"
 test2 :: IO ()
-test2 = moveImports True [("Language.Haskell.Exts.Pretty.defaultMode", "Language.Haskell.def")] "Language/Haskell/Imports/Clean.hs"
+test2 = moveImports True [("Language.Haskell.Imports.Clean.moveImports", "Language.Haskell.Imports.Move.moveImports")] "Language/Haskell/Imports/Clean.hs"

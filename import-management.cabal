@@ -11,6 +11,7 @@ Cabal-version:      >=1.6
 
 Library
   ghc-Options:      -Wall -O2 -ddump-minimal-imports
-  Exposed-Modules:  Language.Haskell.Imports.Clean
-  Build-Depends:    applicative-extras, base, Cabal, directory, haskell-src-exts, pretty
+  Exposed-Modules:  Language.Haskell.Imports.Clean,
+                    Language.Haskell.Imports.SrcSpan
+  Build-Depends:    applicative-extras, base, Cabal, directory, haskell-src-exts, pretty, process
 
