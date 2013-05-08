@@ -85,11 +85,10 @@ importsSpan (Module _ _ _ _ _ imports@(i : _) (d : _)) comments =
     mkSrcSpan b e
     where
       b = srcLoc i
-      -- The imports section ends when the first commend following the
-      -- last import starts, or else where the first declartion
-      -- starts.
+      -- The imports section ends when the first declaration or
+      -- comment following the last import starts
       e = case dropWhile (\ comment -> srcLoc comment <= srcLoc (last imports)) comments of
-            (c : _) -> srcLoc c
+            (c : _) -> min (srcLoc c) (srcLoc d)
             [] -> srcLoc d
 importsSpan _ _ = error "importsSpan"
 
