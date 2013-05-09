@@ -57,6 +57,9 @@ doMoves moves decls =
                   (specs', decls'') = foldr moveSpec ([], []) specs
                   moveSpec :: ImportSpec -> ([ImportSpec], [ImportDecl]) -> ([ImportSpec], [ImportDecl])
                   moveSpec spec (specs'', decls''') =
+                      -- If we looking at the old symbol, remove it
+                      -- and add an import of the new symbol.  Later
+                      -- the cleanup code might remove it.
                       if m == srcM && spec == srcSpec
                       then (specs'', (decl {importModule = dstM, importSpecs = Just (False, [dstSpec])} : decls'''))
                       else (spec : specs'', decls''')

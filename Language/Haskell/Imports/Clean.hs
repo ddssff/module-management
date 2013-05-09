@@ -100,9 +100,9 @@ removeFile' path = hPutStrLn stderr ("removeFile " ++ show path) >> removeFile p
 -- old, update the source file with the new imports.
 updateSource :: MonadParams m => Module -> FilePath -> Module -> [Comment] -> String -> m ()
 updateSource _ sourcePath (Module _ _ _ _ Nothing _ _) _ _ =
-    error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no explicit export list")
+    error (sourcePath ++ ": Won't modify source file with no explicit export list")
 updateSource _ sourcePath (Module _ _ _ _ _ _ []) _ _ =
-    error ("Invalid source file " ++ sourcePath ++ ": Won't modify source file with no declarations")
+    error (sourcePath ++ ": Won't modify source file with no declarations")
 updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ oldImports _)) comments sourceText =
     maybe (liftIO (putStrLn (sourcePath ++ ": no changes")))
           (\ text ->
