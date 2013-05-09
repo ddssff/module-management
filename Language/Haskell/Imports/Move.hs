@@ -12,7 +12,7 @@ import Data.List (findIndex, tails)
 import Data.Maybe (fromJust)
 import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk))
-import Language.Haskell.Imports.Common (importsSpan, renameSpec, replaceFile, replaceImports)
+import Language.Haskell.Imports.Common (importsSpan, renameSpec, replaceImports, tildeBackup, replaceFile)
 import Language.Haskell.Imports.Params (putDryRun, MonadParams, runParamsT)
 
 type FQID = String -- ^ Fully qualified identifier - e.g. Language.Haskell.Imports.Clean.cleanImports
@@ -35,7 +35,7 @@ moveImports moves sourcePath =
              maybe (liftIO $ putStrLn (sourcePath ++ ": no changes"))
                    (\ text ->
                         liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
-                        replaceFile (++ "~") sourcePath text)
+                        replaceFile tildeBackup sourcePath text)
                    (replaceImports oldImports (doMoves moves oldImports) sourceText (importsSpan m comments))
          Right _ -> error (sourcePath ++ ": could not parse")
 

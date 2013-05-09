@@ -12,9 +12,8 @@ import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (try, catch, MonadCatchIO)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
 import Data.Function (on)
-import Data.List (groupBy, intercalate, isSuffixOf, nub, sortBy)
+import Data.List (groupBy, intercalate, nub, sortBy)
 import Data.Maybe (catMaybes)
-import Data.Monoid ((<>))
 import Data.Set (toList)
 import qualified Distribution.ModuleName as D (components, ModuleName)
 import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Executable(modulePath), Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
@@ -24,8 +23,8 @@ import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Syntax (ImportDecl(importSpecs, importModule), ImportSpec, Module(..), ModuleName(ModuleName))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
-import Language.Haskell.Imports.Common (importsSpan, replaceFile, replaceImports, specName)
-import Language.Haskell.Imports.Params (MonadParams, runParamsT, putDryRun, hsFlags, putJunk, putScratchJunk, junk, putScratchDir, scratchDir)
+import Language.Haskell.Imports.Common (importsSpan, replaceImports, specName, tildeBackup, replaceFile)
+import Language.Haskell.Imports.Params (MonadParams, runParamsT, putDryRun, hsFlags, putJunk, junk, putScratchDir, scratchDir)
 import System.Directory (doesFileExist, removeFile, createDirectoryIfMissing)
 import System.Exit (ExitCode(..))
 import System.FilePath ((<.>), (</>))
@@ -107,7 +106,7 @@ updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ old
     maybe (liftIO (putStrLn (sourcePath ++ ": no changes")))
           (\ text ->
                liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
-               replaceFile (++ "~") sourcePath text)
+               replaceFile tildeBackup sourcePath text)
           (replaceImports oldImports (fixNewImports newImports) sourceText (importsSpan m comments))
 
 -- | Final touch-ups - sort and merge similar imports.
@@ -134,9 +133,8 @@ compareSpecs a b =
       EQ -> compare a b
       x -> x
 
-
-dropSuffix :: Eq a => [a] -> [a] -> [a]
-dropSuffix suf x = if isSuffixOf suf x then take (length x - length suf) x else x
+-- dropSuffix :: Eq a => [a] -> [a] -> [a]
+-- dropSuffix suf x = if isSuffixOf suf x then take (length x - length suf) x else x
 
 -- dropPrefix :: Eq a => [a] -> [a] -> [a]
 -- dropPrefix pre x = if isPrefixOf pre x then drop (length x) x else x

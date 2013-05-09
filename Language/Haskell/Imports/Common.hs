@@ -6,6 +6,8 @@ module Language.Haskell.Imports.Common
     , renameSpec
     , specName
     , replaceImports
+    , tildeBackup
+    , noBackup
     , replaceFile
     ) where
 
@@ -147,16 +149,22 @@ prettyImports imports =
       -- Strip of the module declaration line, the leading spaces, and the terminating semicolons
       munge = unlines . map (init . tail . tail) . tail . lines
 
+tildeBackup :: FilePath -> Maybe FilePath
+tildeBackup = Just . (++ "~")
+
+noBackup :: FilePath -> Maybe FilePath
+noBackup = const Nothing
+
 -- | Replace the file at path with the given text, moving the original
 -- to the location returned by passing path to backup.  If backup is
 -- the identity function you're going to have a bad time.
-replaceFile :: MonadParams m => (FilePath -> FilePath) -> FilePath -> String -> m ()
+replaceFile :: MonadParams m => (FilePath -> Maybe FilePath) -> FilePath -> String -> m ()
 replaceFile backup path text =
     dryRun >>= \ dryRun' ->
     case dryRun' of
       True -> liftIO $ putStrLn ("dryRun: replaceFile " ++ show path ++ " " ++ show text)
       False -> liftIO $ remove >> rename >> write
     where
-      remove = removeFile (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-      rename = renameFile path (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+      remove = maybe (return ()) removeFile (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+      rename = maybe (return ()) (renameFile path) (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       write = writeFile path text
