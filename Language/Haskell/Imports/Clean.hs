@@ -35,25 +35,9 @@ import System.Process (readProcessWithExitCode, showCommandForUser)
 test1 :: IO ()
 test1 = runParamsT (putDryRun True >> cleanImports "Language/Haskell/Imports/Clean.hs")
 
--- | To use this function you must first make sure...
---    1. There are up-to-date .imports files in the top directory, generated when
---       the -ddump-minimal-imports flag is added to ghc-options.
---    2. The first import must be preceded by a blank line
---    3. The last import must be followed by a blank line
---    4. No imports commented out with {- -} appear anywhere
--- It will not operate on files without an explicit export list or on
--- files with no declarations.  To use it do the following:
---    1. Set the postConf value in Setup  to:
---         @\ _ _ _ lbi -> cleanDumpedImports lbi@
---    1. Add -ddump-minimal-imports to the GHC-Options value in your
---       cabal file.  Then do a Setup build to generate the .imports
---       files.
---    2. Next do a Setup configure to update the source files
---    3. Do another Setup build to make sure everything still builds.
---       If there are problems with a module, either edit the source
---       file or move the backup file (suffix ~) back to where the
---       original was.
--- Bug: it removes declarations like "import Prelude hiding (last)"
+-- | This is designed to be called from the postConf script of your
+-- Setup file, it cleans up the imports of all the source files in the
+-- package.
 cleanBuildImports :: MonadParams m => LocalBuildInfo -> m ()
 cleanBuildImports lbi =
     putScratchDir (Distribution.Simple.LocalBuildInfo.scratchDir lbi) >>
@@ -62,10 +46,6 @@ cleanBuildImports lbi =
     junk >>= liftIO . mapM_ removeFile' . toList
     where
       exePaths = map modulePath (executables (localPkgDescr lbi))
-      -- libModules :: [D.ModuleName]
-      -- libModules = maybe [] exposedModules (library (localPkgDescr lbi))
-      -- exeModules :: [D.ModuleName]
-      -- exeModules = 
       srcDirs = case (maybe [] hsSourceDirs . fmap libBuildInfo . library . localPkgDescr $ lbi) of
                   [] -> ["."]
                   xs -> xs
@@ -116,12 +96,6 @@ checkImports sourcePath =
 removeFile' :: FilePath -> IO ()
 removeFile' path = hPutStrLn stderr ("removeFile " ++ show path) >> removeFile path
 
--- importsPathToSourcePath :: String -> FilePath
--- importsPathToSourcePath name = map (\ c -> if c == '.' then '/' else c) (dropSuffix ".imports" name) <> ".hs"
-
--- sourcePathToImportsPath :: D.ModuleName -> FilePath
--- sourcePathToImportsPath moduleName = intercalate "." (D.components moduleName) <> ".imports"
-
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
 updateSource :: MonadParams m => Module -> FilePath -> Module -> [Comment] -> String -> m ()
@@ -160,18 +134,6 @@ compareSpecs a b =
       EQ -> compare a b
       x -> x
 
-{-
-findSourcePath :: [FilePath] -> FilePath -> Bool -> Failing FilePath
-findSourcePath exePaths path exists =
-    case (exists, matches) of
-      (True, []) -> Success path
-      (True, _) -> Success path -- dubious
-      (False, [x]) -> Success x
-      (False, []) -> Failure ["Can't find " ++ path]
-      (False, xs) -> Failure ["Multiple executables named " ++ path ++ ": " ++ show xs]
-    where
-      matches = filter (isSuffixOf ('/' : path)) exePaths
--}
 
 dropSuffix :: Eq a => [a] -> [a] -> [a]
 dropSuffix suf x = if isSuffixOf suf x then take (length x - length suf) x else x

@@ -25,6 +25,7 @@ import Data.List (intercalate)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, srcSpanStart)
 import Language.Haskell.Exts.Syntax (Decl(..), ImportDecl(..))
 
+-- | Class of values that contain a source location.
 class HasSrcLoc x where
     srcLoc :: x -> SrcLoc
 
@@ -82,6 +83,9 @@ cutSrcSpan sp s =
         (_, e) = cutSrcLoc (srcSpanEnd' sp) s in
     (b, e)
 
+-- | Compute the span of the source file which contains the imports by
+-- examining the SrcLoc values in the parsed source code and the
+-- comments.
 importsSpan :: Module -> [Comment] -> SrcSpan
 importsSpan (Module _ _ _ _ _ imports@(i : _) (d : _)) comments =
     mkSrcSpan b e
@@ -94,11 +98,10 @@ importsSpan (Module _ _ _ _ _ imports@(i : _) (d : _)) comments =
             [] -> srcLoc d
 importsSpan _ _ = error "importsSpan"
 
+-- | Change the symbol name (but not the module path) of an
+-- ImportSpec.
 renameSpec :: String -> ImportSpec -> ImportSpec
 renameSpec s x = mapSpecName (const s) x
-
--- reName :: String -> Name -> Name
--- reName s x = mapName (const s) x
 
 mapSpecName :: (String -> String) -> ImportSpec -> ImportSpec
 mapSpecName f = foldSpec (IVar . mapName f) (IAbs . mapName f) (IThingAll . mapName f) (\ n cn -> IThingWith (mapName f n) cn)
@@ -116,6 +119,7 @@ foldName :: (String -> a) -> (String -> a) -> Name -> a
 foldName ident _ (Ident s) = ident s
 foldName _ symbol (Symbol s) = symbol s
 
+-- | Get the symbol name of an ImportSpec.
 specName :: ImportSpec -> String
 specName = foldSpec (foldName id id) (foldName id id) (foldName id id) (\ n _ -> foldName id id n)
 
@@ -143,7 +147,9 @@ prettyImports imports =
       -- Strip of the module declaration line, the leading spaces, and the terminating semicolons
       munge = unlines . map (init . tail . tail) . tail . lines
 
--- | If backup is the identity function you're going to have a bad time.
+-- | Replace the file at path with the given text, moving the original
+-- to the location returned by passing path to backup.  If backup is
+-- the identity function you're going to have a bad time.
 replaceFile :: MonadParams m => (FilePath -> FilePath) -> FilePath -> String -> m ()
 replaceFile backup path text =
     dryRun >>= \ dryRun' ->
@@ -154,19 +160,3 @@ replaceFile backup path text =
       remove = removeFile (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       rename = renameFile path (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       write = writeFile path text
-
-{-
-    let start = findIndex (isPrefixOf "\n\nimport ") (tails text)
-        (prefix, rest) = splitAt (maybe 0 id start + 1) text
-        final = maybe 1 (+ 1) (findIndex (not . isInfixOf "\nimport ") (tails rest))
-        suffix = drop final rest
-        after = fmap (+ 2) (findIndex (isPrefixOf "\n\n") (tails suffix)) in
-    case after of
-      Nothing -> Nothing
-      Just after' ->
-          let suffix' = drop after' suffix
-              text' = prefix ++ "\n" ++ imports ++ "\n" ++ suffix' in
-          if text /= text'
-          then Just text'
-          else Nothing
--}

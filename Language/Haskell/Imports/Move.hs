@@ -22,9 +22,10 @@ parseFQID s =
     let (m, n) = splitAt (fromJust (findIndex (not . elem '.') (tails s)) - 1) s in
     (ModuleName m, (tail n))
 
--- | This function needs to be able to compile the source file, so it
--- must be run *before* the declaration actually gets moved to its
--- new module.
+-- | Modify the imports of a source file to reflect the changes
+-- described in the list of FQID pairs.  This function needs to be
+-- able to compile the source file, so it must be run *before* the
+-- declaration actually gets moved to its new module.
 moveImports :: MonadParams m => [(FQID, FQID)] -> FilePath -> m ()
 moveImports moves sourcePath =
     do source <- liftIO $ try ((,) <$> parseFileWithComments defaultParseMode sourcePath <*> readFile sourcePath)
