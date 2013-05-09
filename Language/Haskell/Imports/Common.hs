@@ -18,7 +18,7 @@ import Language.Haskell.Exts.Syntax (CName, ImportDecl, ImportSpec(..), Module(.
 import Language.Haskell.Exts.Parser (parseModule)
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(..), PPLayout(..), prettyPrintWithMode)
 import Language.Haskell.Exts (ParseResult(ParseOk))
-import Language.Haskell.Imports.Params (Params(dryRun), MonadParams(askParams))
+import Language.Haskell.Imports.Params (dryRun, MonadParams)
 import System.Directory (removeFile, renameFile)
 import System.IO.Error (isDoesNotExistError)
 import Data.List (intercalate)
@@ -146,7 +146,7 @@ prettyImports imports =
 -- | If backup is the identity function you're going to have a bad time.
 replaceFile :: MonadParams m => (FilePath -> FilePath) -> FilePath -> String -> m ()
 replaceFile backup path text =
-    askParams >>= return . dryRun >>= \ dryRun' ->
+    dryRun >>= \ dryRun' ->
     case dryRun' of
       True -> liftIO $ putStrLn ("dryRun: replaceFile " ++ show path ++ " " ++ show text)
       False -> liftIO $ remove >> rename >> write

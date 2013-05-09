@@ -15,5 +15,5 @@ Library
                     Language.Haskell.Imports.Common,
                     Language.Haskell.Imports.Move,
                     Language.Haskell.Imports.Params
-  Build-Depends:    applicative-extras, base, Cabal, data-default, directory, filepath, haskell-src-exts, MonadCatchIO-mtl, mtl, pretty, process
+  Build-Depends:    applicative-extras, base, Cabal, containers, data-default, directory, filepath, haskell-src-exts, MonadCatchIO-mtl, mtl, pretty, process
 

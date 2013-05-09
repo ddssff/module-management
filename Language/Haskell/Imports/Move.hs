@@ -8,13 +8,12 @@ module Language.Haskell.Imports.Move
 import Control.Applicative ((<$>), (<*>))
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans (liftIO)
-import Data.Default (def)
 import Data.List (findIndex, tails)
 import Data.Maybe (fromJust)
 import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Imports.Common (importsSpan, renameSpec, replaceFile, replaceImports)
-import Language.Haskell.Imports.Params (Params(dryRun), MonadParams, runParamsT)
+import Language.Haskell.Imports.Params (putDryRun, MonadParams, runParamsT)
 
 type FQID = String -- ^ Fully qualified identifier - e.g. Language.Haskell.Imports.Clean.cleanImports
 
@@ -66,5 +65,5 @@ doMoves moves imports =
 
 test2 :: MonadParams m => m ()
 test2 = runParamsT
-          (def {dryRun = True})
-          (moveImports [("Language.Haskell.Imports.Clean.moveImports", "Language.Haskell.Imports.Move.moveImports")] "Language/Haskell/Imports/Clean.hs")
+          (putDryRun True >>
+           moveImports [("Language.Haskell.Imports.Clean.moveImports", "Language.Haskell.Imports.Move.moveImports")] "Language/Haskell/Imports/Clean.hs")

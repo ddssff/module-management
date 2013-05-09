@@ -8,33 +8,32 @@ module Language.Haskell.Imports.Clean
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Exception (SomeException)
-import Control.Monad (when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (try, catch, MonadCatchIO)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
-import Data.Default (Default(def))
 import Data.Function (on)
 import Data.List (groupBy, intercalate, isSuffixOf, nub, sortBy)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
-import qualified Distribution.ModuleName as D (components, fromString, ModuleName)
+import Data.Set (toList)
+import qualified Distribution.ModuleName as D (components, ModuleName)
 import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Executable(modulePath), Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
-import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr)
+import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Syntax (ImportDecl(importSpecs, importModule), ImportSpec, Module(..), ModuleName(ModuleName))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
 import Language.Haskell.Imports.Common (importsSpan, replaceFile, replaceImports, specName)
-import Language.Haskell.Imports.Params (Params(dryRun, verbosity, hsFlags), MonadParams(askParams), runParamsT)
-import System.Directory (doesFileExist, removeFile)
+import Language.Haskell.Imports.Params (MonadParams, runParamsT, putDryRun, hsFlags, putJunk, putScratchJunk, junk, putScratchDir, scratchDir)
+import System.Directory (doesFileExist, removeFile, createDirectoryIfMissing)
 import System.Exit (ExitCode(..))
 import System.FilePath ((<.>), (</>))
 import System.IO (hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode, showCommandForUser)
 
 test1 :: IO ()
-test1 = runParamsT (def {dryRun = True}) (cleanImports "Language/Haskell/Imports/Clean.hs")
+test1 = runParamsT (putDryRun True >> cleanImports "Language/Haskell/Imports/Clean.hs")
 
 -- | To use this function you must first make sure...
 --    1. There are up-to-date .imports files in the top directory, generated when
@@ -57,8 +56,10 @@ test1 = runParamsT (def {dryRun = True}) (cleanImports "Language/Haskell/Imports
 -- Bug: it removes declarations like "import Prelude hiding (last)"
 cleanBuildImports :: MonadParams m => LocalBuildInfo -> m ()
 cleanBuildImports lbi =
+    putScratchDir (Distribution.Simple.LocalBuildInfo.scratchDir lbi) >>
     mapM (liftIO . toFilePath srcDirs) (maybe [] exposedModules (library (localPkgDescr lbi))) >>= \ libPaths ->
-    mapM_ cleanImports (libPaths ++ exePaths)
+    mapM_ cleanImports (libPaths ++ exePaths) >>
+    junk >>= liftIO . mapM_ removeFile' . toList
     where
       exePaths = map modulePath (executables (localPkgDescr lbi))
       -- libModules :: [D.ModuleName]
@@ -75,37 +76,25 @@ cleanBuildImports lbi =
           doesFileExist path >>= \ exists ->
           if exists then return path else toFilePath dirs m
 
-{-
-toModuleName :: FilePath -> D.ModuleName
-toModuleName path = D.fromString $ map (\ c -> if c == '/' then '.' else c) (dropSuffix ".hs" path)
-
-whenVerbose :: MonadParams m => m () -> m ()
-whenVerbose action =
-    askParams >>= return . verbosity >>= \ v ->
-    when (v > 0) action
--}
-
 -- | Clean up the imports of a source file.
 cleanImports :: MonadParams m => FilePath -> m ()
 cleanImports sourcePath =
-    (dump >> replace >> liftIO cleanup) `catch` (\ (e :: SomeException) -> liftIO (hPutStrLn stderr (show e)))
+    (do scratch <- Language.Haskell.Imports.Params.scratchDir
+        liftIO $ createDirectoryIfMissing True scratch
+        dump scratch
+        replace) `catch` (\ (e :: SomeException) -> liftIO (hPutStrLn stderr (show e)))
     where
-      -- importsPath = (sourcePathToImportsPath moduleName)
-
-      dump =
-          do args' <- askParams >>= return . (args ++) . hsFlags
+      dump scratch =
+          do args' <- hsFlags >>= return . (args ++)
              (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
              case code of
                ExitSuccess -> return ()
                ExitFailure _ -> error (sourcePath ++ ": compile failed\n " ++ showCommandForUser cmd args' ++ " ->\n" ++ err)
           where
             cmd = "ghc"
-            args = ["--make", "-ddump-minimal-imports", sourcePath]
+            args = ["--make", "-ddump-minimal-imports", "-outputdir", scratch, sourcePath]
 
       replace = checkImports sourcePath
-
-      cleanup = removeFile (dropSuffix ".hs" sourcePath <> ".o") >>
-                removeFile (dropSuffix ".hs" sourcePath <> ".hi")
 
 -- | Parse the import list generated by GHC, parse the original source
 -- file, and if all goes well insert the new imports into the old
@@ -118,10 +107,14 @@ checkImports sourcePath =
          Right ((ParseOk (m@(Module _ (ModuleName name) _ _ _ _ _), comments)), sourceText) ->
              do let importsPath = name <.> ".imports"
                 result <- liftIO (parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath)
+                putJunk importsPath
                 case result of
                   ParseOk newImports -> updateSource newImports sourcePath m comments sourceText
                   _ -> error (importsPath ++ ": parse failed")
          Right _ -> error (sourcePath ++ ": parse failed")
+
+removeFile' :: FilePath -> IO ()
+removeFile' path = hPutStrLn stderr ("removeFile " ++ show path) >> removeFile path
 
 -- importsPathToSourcePath :: String -> FilePath
 -- importsPathToSourcePath name = map (\ c -> if c == '.' then '/' else c) (dropSuffix ".imports" name) <> ".hs"
