@@ -14,10 +14,11 @@ data Params
     = Params
       { dryRun :: Bool
       , verbosity :: Int
+      , hsFlags :: [String]
       } deriving (Eq, Ord, Show)
 
 instance Default Params where
-    def = Params {dryRun = False, verbosity = 0}
+    def = Params {dryRun = False, verbosity = 0, hsFlags = []}
 
 class (MonadIO m, MonadCatchIO m) => MonadParams m where
     askParams :: m Params

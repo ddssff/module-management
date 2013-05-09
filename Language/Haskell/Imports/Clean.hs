@@ -26,7 +26,7 @@ import Language.Haskell.Exts.Syntax (ImportDecl(importSpecs), ImportSpec, Module
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
 import Language.Haskell.Imports.Common (importsSpan, replaceFile, replaceImports, specName)
-import Language.Haskell.Imports.Params (Params(dryRun, verbosity), MonadParams(askParams), runParamsT)
+import Language.Haskell.Imports.Params (Params(dryRun, verbosity, hsFlags), MonadParams(askParams), runParamsT)
 import System.Directory (doesFileExist, removeFile)
 import System.Exit (ExitCode(..))
 import System.FilePath ((<.>), (</>))
@@ -88,16 +88,19 @@ whenVerbose action =
 -- | Clean up the imports of a source file.
 cleanImports :: MonadParams m => FilePath -> m ()
 cleanImports sourcePath =
-    (liftIO dump >> replace >> liftIO cleanup) `catch` (\ (e :: SomeException) -> liftIO (hPutStrLn stderr (show e)))
+    (dump >> replace >> liftIO cleanup) `catch` (\ (e :: SomeException) -> liftIO (hPutStrLn stderr (show e)))
     where
       -- importsPath = (sourcePathToImportsPath moduleName)
 
-      dump = let cmd = "ghc"
-                 args = ["--make", "-ddump-minimal-imports", sourcePath] in
-             readProcessWithExitCode cmd args "" >>= \ (code, _out, err) ->
+      dump =
+          do args' <- askParams >>= return . (args ++) . hsFlags
+             (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
              case code of
                ExitSuccess -> return ()
-               ExitFailure _ -> error (sourcePath ++ ": compile failed\n " ++ showCommandForUser cmd args ++ " ->\n" ++ err)
+               ExitFailure _ -> error (sourcePath ++ ": compile failed\n " ++ showCommandForUser cmd args' ++ " ->\n" ++ err)
+          where
+            cmd = "ghc"
+            args = ["--make", "-ddump-minimal-imports", sourcePath]
 
       replace = checkImports sourcePath
 
