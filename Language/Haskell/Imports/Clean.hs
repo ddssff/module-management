@@ -22,7 +22,7 @@ import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Exe
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
-import Language.Haskell.Exts.Syntax (ImportDecl(importSpecs), ImportSpec, Module(..), ModuleName(ModuleName))
+import Language.Haskell.Exts.Syntax (ImportDecl(importSpecs, importModule), ImportSpec, Module(..), ModuleName(ModuleName))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
 import Language.Haskell.Imports.Common (importsSpan, replaceFile, replaceImports, specName)
@@ -146,8 +146,12 @@ updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ old
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: [ImportDecl] -> [ImportDecl]
 fixNewImports imports =
-    map mergeDecls (groupBy ((==) `on` noSpecs) (sortBy (compare `on` noSpecs) imports))
+    map mergeDecls (groupBy ((==) `on` noSpecs) (sortBy importCompare imports))
     where
+      importCompare a b =
+          case (compare `on` importModule) a b of
+            EQ -> (compare `on` noSpecs) a b
+            x -> x
       noSpecs :: ImportDecl -> ImportDecl
       noSpecs x = x {importSpecs = fmap (\ (flag, _) -> (flag, [])) (importSpecs x)}
       mergeDecls :: [ImportDecl] -> ImportDecl
