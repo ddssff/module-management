@@ -40,26 +40,26 @@ moveImports moves sourcePath =
          Right _ -> error (sourcePath ++ ": could not parse")
 
 doMoves :: [(FQID, FQID)] -> [ImportDecl] -> [ImportDecl]
-doMoves moves imports =
-    foldr moveDecls [] moves
+doMoves moves decls =
+    foldr moveDecls decls moves -- For each of the FQID pairs do a pass through the decls
     where
       moveDecls :: (FQID, FQID) -> [ImportDecl] -> [ImportDecl]
-      moveDecls (src, dst) decls =
-          foldr moveDecl decls imports
+      moveDecls (src, dst) decls' =
+          foldr moveDecl [] decls'
           where
             (srcM, srcN) = parseFQID src
             (dstM, dstN) = parseFQID dst
             moveDecl :: ImportDecl -> [ImportDecl] -> [ImportDecl]
             moveDecl decl@(ImportDecl {importSpecs = Nothing}) result = decl : result
             moveDecl decl@(ImportDecl {importModule = m, importSpecs = Just (flag, specs)}) result =
-                [decl {importSpecs = Just (flag, specs')}] ++ decls' ++ result
+                [decl {importSpecs = Just (flag, specs')}] ++ decls'' ++ result
                 where
-                  (specs', decls') = foldr moveSpec ([], []) specs
+                  (specs', decls'') = foldr moveSpec ([], []) specs
                   moveSpec :: ImportSpec -> ([ImportSpec], [ImportDecl]) -> ([ImportSpec], [ImportDecl])
-                  moveSpec spec (specs'', decls'') =
+                  moveSpec spec (specs'', decls''') =
                       if m == srcM && spec == srcSpec
-                      then (specs'', (decl {importModule = dstM, importSpecs = Just (False, [dstSpec])} : decls''))
-                      else (spec : specs'', decls'')
+                      then (specs'', (decl {importModule = dstM, importSpecs = Just (False, [dstSpec])} : decls'''))
+                      else (spec : specs'', decls''')
                       where
                         srcSpec = renameSpec srcN spec
                         dstSpec = renameSpec dstN spec
