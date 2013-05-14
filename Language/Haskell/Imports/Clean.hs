@@ -71,7 +71,7 @@ cleanImports sourcePath =
                ExitFailure _ -> error (sourcePath ++ ": compile failed\n " ++ showCommandForUser cmd args' ++ " ->\n" ++ err)
           where
             cmd = "ghc"
-            args = ["--make", "-ddump-minimal-imports", "-outputdir", scratch, sourcePath]
+            args = ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, sourcePath]
 
       replace = checkImports sourcePath
 
