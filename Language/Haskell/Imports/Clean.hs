@@ -11,6 +11,7 @@ import Control.Exception (SomeException)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (try, catch, MonadCatchIO)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
+import Data.Default (Default, def)
 import Data.Function (on)
 import Data.List (groupBy, intercalate, nub, sortBy)
 import Data.Maybe (catMaybes)
@@ -20,7 +21,7 @@ import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Exe
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
-import Language.Haskell.Exts.Syntax (ImportDecl(importSpecs, importModule), ImportSpec, Module(..), ModuleName(ModuleName))
+import Language.Haskell.Exts.Syntax (ImportDecl(importLoc, importSpecs, importModule), ImportSpec, Module(..), ModuleName(ModuleName), SrcLoc(..))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
 import Language.Haskell.Imports.Common (importsSpan, replaceImports, specName, tildeBackup, replaceFile)
@@ -30,6 +31,9 @@ import System.Exit (ExitCode(..))
 import System.FilePath ((<.>), (</>))
 import System.IO (hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode, showCommandForUser)
+
+instance Default SrcLoc where
+    def = SrcLoc def def def
 
 test1 :: IO ()
 test1 = runParamsT (putDryRun True >> cleanImports "Language/Haskell/Imports/Clean.hs")
@@ -119,7 +123,7 @@ fixNewImports imports =
             EQ -> (compare `on` noSpecs) a b
             x -> x
       noSpecs :: ImportDecl -> ImportDecl
-      noSpecs x = x {importSpecs = fmap (\ (flag, _) -> (flag, [])) (importSpecs x)}
+      noSpecs x = x {importLoc = def, importSpecs = fmap (\ (flag, _) -> (flag, [])) (importSpecs x)}
       mergeDecls :: [ImportDecl] -> ImportDecl
       mergeDecls xs@(x : _) = x {importSpecs = mergeSpecs (catMaybes (map importSpecs xs))}
       mergeDecls [] = error "mergeDecls"
