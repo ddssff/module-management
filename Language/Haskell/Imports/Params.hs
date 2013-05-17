@@ -11,6 +11,8 @@ module Language.Haskell.Imports.Params
     , putScratchJunk
     , scratchDir
     , putScratchDir
+    , removeEmpty
+    , putRemoveEmpty
     ) where
 
 import Data.Default (Default(def))
@@ -27,10 +29,15 @@ data Params
       , hsFlags_ :: [String]
       , junk_ :: Set FilePath
       , scratchDir_ :: FilePath
+      , removeEmpty_ :: Bool -- ^ If true, remove any import that
+                             -- became empty due to the clean.  THe
+                             -- import might still be required because
+                             -- of the instances it contains, but
+                             -- usually it is not.
       } deriving (Eq, Ord, Show)
 
 instance Default Params where
-    def = Params {dryRun_ = False, verbosity_ = 0, hsFlags_ = [], junk_ = empty, scratchDir_ = "dist/scratch"}
+    def = Params {dryRun_ = False, verbosity_ = 0, hsFlags_ = [], junk_ = empty, scratchDir_ = "dist/scratch", removeEmpty_ = True}
 
 class (MonadIO m, MonadCatchIO m) => MonadParams m where
     getParams :: m Params
@@ -72,3 +79,9 @@ scratchDir = getParams >>= return . scratchDir_
 
 putScratchDir :: MonadParams m => FilePath -> m ()
 putScratchDir x = modifyParams (\ p -> p {scratchDir_ = x})
+
+removeEmpty :: MonadParams m => m Bool
+removeEmpty = getParams >>= return . removeEmpty_
+
+putRemoveEmpty :: MonadParams m => Bool -> m ()
+putRemoveEmpty x = modifyParams (\ p -> p {removeEmpty_ = x})
