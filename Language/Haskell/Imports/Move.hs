@@ -10,10 +10,10 @@ import Control.Exception (SomeException, try)
 import Control.Monad.Trans (liftIO)
 import Data.List (findIndex, tails)
 import Data.Maybe (fromJust)
-import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk))
-import Language.Haskell.Imports.Common (importsSpan, renameSpec, replaceImports, tildeBackup, replaceFile)
-import Language.Haskell.Imports.Params (putDryRun, MonadParams, runParamsT)
+import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..))
+import Language.Haskell.Imports.Common (importsSpan, renameSpec, replaceFile, replaceImports, tildeBackup)
+import Language.Haskell.Imports.Params (MonadParams, putDryRun, runParamsT)
 
 type FQID = String -- ^ Fully qualified identifier - e.g. Language.Haskell.Imports.Clean.cleanImports
 

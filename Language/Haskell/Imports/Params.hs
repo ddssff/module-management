@@ -15,11 +15,11 @@ module Language.Haskell.Imports.Params
     , putRemoveEmpty
     ) where
 
-import Data.Default (Default(def))
-import Data.Set (Set, empty, insert)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO)
+import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (MonadIO)
-import Control.Monad.State (StateT(runStateT), MonadState(get, put))
+import Data.Default (Default(def))
+import Data.Set (empty, insert, Set)
 import System.FilePath ((</>))
 
 data Params

@@ -93,9 +93,9 @@ untabify s =
     where
       loop :: Int -> String -> String
       loop n ('\t' : s') = replicate (8 - mod n 8) ' ' ++ loop 0 s'
-      loop n ('\n' : s') = '\n' : loop 0 s'
+      loop _ ('\n' : s') = '\n' : loop 0 s'
       loop n (c : s') = c : loop (n + 1) s'
-      loop n [] = []
+      loop _ [] = []
 
 textEndLoc :: String -> SrcLoc
 textEndLoc text = def {srcLine = length (lines text), srcColumn = length (last (lines text)) + 1}
@@ -145,20 +145,9 @@ srcLocSucc :: String -> SrcLoc -> SrcLoc
 srcLocSucc text pos =
     case drop (srcLine pos - 1) (lines text) of
       [] -> pos {srcColumn = srcColumn pos + 1}
-      (x : xs) -> case drop (srcColumn pos - 1) x of
-                    "" -> pos {srcLine = srcLine pos + 1, srcColumn = 1}
-                    _ -> pos {srcColumn = srcColumn pos + 1}
-
-srcLocPred :: String -> SrcLoc -> SrcLoc
-srcLocPred text pos =
-    case srcColumn pos of
-      n | n > 1 -> pos {srcColumn = srcColumn pos - 1}
-      _ -> case srcLine pos of
-             n | n > 1 ->
-                   -- Find the end of the previous line
-                   let (line : _) = drop (srcLine pos - 2) (lines text) in
-                   pos {srcLine = srcLine pos - 1, srcColumn = length line {- - 1? -}}
-             _ -> error $ "srcLocPred - beginning of text: " ++ show pos
+      (x : _) -> case drop (srcColumn pos - 1) x of
+                   "" -> pos {srcLine = srcLine pos + 1, srcColumn = 1}
+                   _ -> pos {srcColumn = srcColumn pos + 1}
 
 -- | A version of lines that preserves the presence or absence of a
 -- terminating newline

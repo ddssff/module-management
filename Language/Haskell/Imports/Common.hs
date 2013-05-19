@@ -13,32 +13,26 @@ module Language.Haskell.Imports.Common
     , tests
     ) where
 
-import Control.Applicative ((<$>), (<*>))
-import Control.Exception (SomeException, catch, throw, try)
-import Control.Monad (foldM)
-import Control.Monad.State (State, runState, get, put)
+import Control.Exception (catch, SomeException, throw, try)
 import Control.Monad.Trans (liftIO)
 import qualified Data.ByteString.Lazy.Char8 as B (readFile)
 import Data.Char (isSpace)
-import Data.Default (Default, def)
+import Data.Default (def, Default)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Function (on)
-import Data.List (intercalate, sortBy, groupBy, partition)
-import Data.Maybe (listToMaybe, fromMaybe)
+import Data.List (groupBy, partition, sortBy)
 import Data.Monoid ((<>))
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(..))
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Parser (parseModule)
-import Language.Haskell.Exts.Pretty (Pretty(..), defaultMode, PPHsMode(..), PPLayout(..), prettyPrintWithMode, prettyPrint)
-import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, srcSpanStart, mkSrcSpan, mergeSrcSpan)
-import Language.Haskell.Exts.Syntax -- (CName, ImportDecl(..), ImportSpec(..), Module(..), ModulePragma(..), WarningText(..), Name(..), Match(..), ModuleName(..), ExportSpec(..), Decl(..))
+import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
+import Language.Haskell.Exts.SrcLoc (mergeSrcSpan, mkSrcSpan, SrcSpan(..))
+import Language.Haskell.Exts.Syntax (CName, Decl, ImportDecl, ImportSpec(..), Module(..), Name(..), SrcLoc(..))
 import Language.Haskell.Imports.Params (dryRun, MonadParams)
-import Language.Haskell.Imports.SrcLoc (HasSrcLoc(..), HasEndLoc(..), srcSpan, textEndLoc, srcSpanTriple, srcLocPairTriple, srcSpanText, srcLocSucc, {-srcLocPred,-} srcSpanStart', srcSpanEnd', srcPairText, untabify, lines')
+import Language.Haskell.Imports.SrcLoc (HasEndLoc(..), HasSrcLoc(..), lines', srcPairText, srcSpan, srcSpanEnd', srcSpanText, srcSpanTriple, textEndLoc, untabify)
 import System.Directory (removeFile, renameFile)
-import System.IO (hPutStrLn, hFlush, stdout, stderr)
 import System.IO.Error (isDoesNotExistError)
-import Test.HUnit (Test(TestList, TestCase), assertEqual, runTestTT, Counts)
-import Text.PrettyPrint (text)
+import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 -- | Compute the span of the source file which contains the imports by
 -- examining the SrcLoc values in the parsed source code and the
@@ -101,7 +95,7 @@ prettyImports imports =
     munge . prettyPrintWithMode (defaultMode {layout = PPInLine}) $ Module a b c d e imports f
     where
       ParseOk (Module a b c d e _ f) = parseModule ""
-      -- Strip of the module declaration line, the leading spaces, and the terminating semicolons
+      -- Strip off the module declaration line, the leading spaces, and the terminating semicolons
       munge = unlines . map (init . tail . tail) . tail . lines
 
 tildeBackup :: FilePath -> Maybe FilePath
@@ -124,75 +118,6 @@ replaceFile backup path text =
       rename = maybe (return ()) (renameFile path) (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       write = writeFile path text
 
--- data Module = Module SrcLoc ModuleName [ModulePragma] (Maybe WarningText) (Maybe [ExportSpec]) [ImportDecl] [Decl]
-
-type ModuleState = (SrcLoc, [Comment])
-type ModuleMonad = State ModuleState
-
-getLoc :: ModuleMonad SrcLoc
-getLoc = get >>= return . fst
-
-putLoc :: SrcLoc -> ModuleMonad ()
-putLoc loc =
-    do (_, comments) <- get
-       put (loc, comments)
-
-lookComment :: ModuleMonad (Maybe Comment)
-lookComment =
-    do (_, comments) <- get
-       case comments of
-         [] -> return Nothing
-         (x : _) -> return (Just x)
-
-popComment :: ModuleMonad (Maybe Comment)
-popComment =
-    do (loc, comments) <- get
-       case comments of
-         [] -> return Nothing
-         (x : xs) -> put (loc, xs) >> return (Just x)
-
-{-
-pushComment :: Comment -> ModuleMonad ()
-pushComment comment =
-    do (loc, comments) <- get
-       put (loc, comment : comments)
-
-takeComments :: (Comment -> Bool) -> ModuleMonad [Comment]
-takeComments p =
-    do (loc, comments) <- get
-       case comments of
-         (comment : comments') | p comment -> do put (loc, comments')
-                                                 comments'' <- takeComments p
-                                                 return $ comment : comments''
-         _ -> return []
-
--- Because construct ends are not stored, we compute them by
--- finding the beginning of either the next command or the next
--- construct, whichever comes first.
-nextCommentStart :: ModuleMonad (Maybe SrcLoc)
-nextCommentStart = lookComment >>= return . fmap commentStart
--}
-
-commentStart :: Comment -> SrcLoc
-commentStart (Comment _ sp _) = srcSpanStart' sp
-
-commentEnd :: Comment -> SrcLoc
-commentEnd (Comment _ sp _) = srcSpanEnd' sp
-
--- Pop and return the comments that are embedded in the code before a
--- location, but not the ones that come after then end of the code.
-embeddedComments :: SrcLoc -> ModuleMonad [Comment]
-embeddedComments end =
-    do (loc, comments) <- get
-       let (candidates, later) = break (\ c -> commentEnd c >= end) comments
-       let (embedded, between, _) = foldr (\ c (em, be, l) -> if commentEnd c == l
-                                                              then (em, c : be, commentStart c)
-                                                              else (c : em, be, l)) ([], [], end) (reverse candidates)
-       put (loc, between ++ later)
-       return embedded
-
--- [Head Text][Comment][Comment][Import1][Commment][Import2][Commment] ... [Comment][Decl1][Comment] ...
-
 data SrcUnion a
     = Head' a Module
     | Comment' a Comment
@@ -207,12 +132,12 @@ class Display a where
     display :: a -> String
 
 instance Display (SrcUnion SrcSpan) where
-    display (Comment' sp c) = "Comment' " ++ display sp
-    display (Other' sp s _) = "Other' " ++ display sp
-    display (Space' sp s _) = "Space' " ++ display sp
-    display (ImportDecl' sp x) = "ImportDecl' " ++ display sp
-    display (Decl' sp x) = "Decl' " ++ display sp
-    display (Head' sp x) = "Decl' " ++ display sp
+    display (Comment' sp _) = "Comment' " ++ display sp
+    display (Other' sp _ _) = "Other' " ++ display sp
+    display (Space' sp _ _) = "Space' " ++ display sp
+    display (ImportDecl' sp _) = "ImportDecl' " ++ display sp
+    display (Decl' sp _) = "Decl' " ++ display sp
+    display (Head' sp _) = "Decl' " ++ display sp
 
 class HasSrcSpan a where
     srcSpan' :: a -> SrcSpan
@@ -278,24 +203,16 @@ instance HasSrcLoc (SrcUnion a) where
 instance HasEndLoc (SrcUnion SrcSpan) where
     endLoc = srcSpanEnd' . getA
 
-data TextClass
-    = CommentText String
-    | Space String
-    | Other String
-
-{-
-zipOverlappingItems :: [SrcLocUnion] -> [SrcLocUnion] -> ([SrcLocUnion], SrcLoc)
-zipOverlappingItems (x : xs) (c : cs) =
--}
-
 -- | Wrap the source code elements in SrcLocUnion constructors, sort, and add end locations
-moduleDecls text m@(Module loc name pragmas warn exps imps decls) =
+moduleDecls :: String -> Module -> [SrcUnion SrcSpan]
+moduleDecls text m@(Module _ _ _ _ _ imps decls) =
     case insertSpaceItems text (sortBy (compare `on` srcLoc) ([Head' () m] ++ map (ImportDecl' ()) imps ++ map (Decl' ()) decls)) of
       -- The first element may be a comment, which will also get returned by moduleSpace
       Other' {} : xs -> xs
       xs -> xs
 
 -- | Same for comments, then group runs of Comment or Space, these are guaranteed to be adjacent
+moduleSpace :: String -> [Comment] -> [SrcUnion SrcSpan]
 moduleSpace text comments =
     groupSpace text $ insertSpaceItems text $ sortBy (compare `on` srcLoc) (map (Comment' ()) comments)
 
@@ -317,23 +234,11 @@ moduleItemGroups text m comments =
                 if endLoc y == e || srcLoc y >= b
                 then loop (min b (srcLoc y)) (max e (endLoc y)) ((y : r) : rs) ys
                 else loop (srcLoc y) (endLoc y) ([y] : (r : rs)) ys
-{-
-      groups =
-          let (x : xs) = descendingEnds in
-          loop (srcLoc x) [[x]] xs
-              where loop loc (rs : rss) (x : ys) =
-                        if srcLoc x > loc
-                        then loop loc ((x : rs) : rss) ys
-                        else loop loc [x] : (rs : rss)
-            loop (rs : rss)
--}
-{-
-      groups = groupBy (\ a b -> srcLoc a < srcLoc b || endLoc a == endLoc b) $ descendingEnds
--}
       descendingEnds = reverse $ sortBy (compare `on` endLoc) $ decls ++ space
       decls = moduleDecls text m
       space = moduleSpace text comments
 
+moduleItems :: String -> Module -> [Comment] -> [SrcUnion SrcSpan]
 moduleItems text m comments =
     descendingEnds
     where
@@ -341,29 +246,30 @@ moduleItems text m comments =
       decls = moduleDecls text m
       space = moduleSpace text comments
 
+-- | Convert a compare function into an (==)
 toEq :: Ord a => (a -> a -> Ordering) -> (a -> a -> Bool)
 toEq cmp a b =
     case cmp a b of
       EQ -> True
       _ -> False
 
+-- | Combine sortBy and groupBy
 groupBy' :: Ord a => (a -> a -> Ordering) -> [a] -> [[a]]
 groupBy' cmp xs = groupBy (toEq cmp) $ sortBy cmp xs
 
 filterEmbedded :: [SrcUnion SrcSpan] -> [SrcUnion SrcSpan]
 filterEmbedded xs =
-    filter (not . embedded sp) xs
+    filter (not . embedded) xs
     where
+      embedded x = srcLoc sp < srcLoc x && endLoc x < endLoc sp
       sp = foldr1 mergeSrcSpan (map srcSpan' xs)
-      spb = srcLoc sp
-      spe = endLoc sp
-      embedded sp x = srcLoc sp < srcLoc x && endLoc x < endLoc sp
 
 -- | If two elements have the same end position, one will be space and
 -- one will be code.  Move the end of the code element to just before
 -- the beginning of the space element.  Finally, remove any space
 -- items that start after their successor, these are embedded comments
 -- which we can't do anything with.
+moduleItemsFinal :: String -> Module -> [Comment] -> [SrcUnion SrcSpan]
 moduleItemsFinal text m comments =
     sortBy (compare `on` srcSpan') $ concatMap (adjust . sortBy (compare `on` srcLoc)) groups
     where
@@ -372,9 +278,6 @@ moduleItemsFinal text m comments =
       -- and end before the union of all the spans.  The resulting elements
       -- are then adjusted so they don't overlap.
       adjust xs =
-          let sp = foldr1 mergeSrcSpan (map srcSpan' xs)
-              spb = srcLoc sp
-              spe = endLoc sp in
           case partition ((== sp) . srcSpan') xs of
             ([x], ys) ->
                 case ys of
@@ -384,28 +287,8 @@ moduleItemsFinal text m comments =
                   [] -> [x]
             ([], _) -> error "adjust: No covering element"
             _ -> error "adjust: multiple spanning elements"
-{-
-            [x] -> [x]
-            [x, y] ->
-                let bx = srcLoc x
-                    by = srcLoc y
-                    ex = endLoc x
-                    ey = endLoc y in
-                if bx == by
-                then if ex == ey
-                     then error "adjust: duplicate"
-                     else [mapA (\ sp -> srcSpan by ex) y]
-                else [mapA (\ sp -> srcSpan bx by) x,
-                      mapA (\ sp -> srcSpan by ex) y]
-            _ -> error $ "adjust: " ++ show xs ++ " -> " ++ show xs'
--}
-{-
-      filterEmbedded (x : y : zs) =
-          if srcLoc (t1 y x) > srcLoc y
-          then filterEmbedded (y : zs)
-          else x : filterEmbedded (y : zs)
-      filterEmbedded xs = xs
--}
+          where
+            sp = foldr1 mergeSrcSpan (map srcSpan' xs)
 
 -- Note that comments will overlap with the other elements
 foldModule :: forall r.
@@ -416,34 +299,34 @@ foldModule :: forall r.
            -> (String -> SrcSpan -> r -> r)
            -> (String -> SrcSpan -> r -> r)
            -> Module -> [Comment] -> String -> r -> r
-foldModule headf importf declf commentf spacef otherf m@(Module loc name pragmas warn exps imps decls) comments text r0 =
+foldModule headf importf declf commentf spacef otherf m comments text r0 =
     doItems (moduleItemsFinal text' m comments) r0
     where
       doItems (x : y : xs) r = doItems (y : xs) (doItem x (srcLoc x) (srcLoc y) r)
       doItems [x] r = doItem x (srcLoc x) (textEndLoc text) r
       doItems [] r = r
       doItem :: SrcUnion SrcSpan -> SrcLoc -> SrcLoc -> r -> r
-      doItem (Comment' sp s) b e r = commentf s (srcPairText b e text) r
+      doItem (Comment' _ s) b e r = commentf s (srcPairText b e text) r
       doItem (Head' sp x) b e r = headf x (srcPairText b e text) sp r
       doItem (ImportDecl' sp x) b e r = importf x (srcPairText b e text) sp r
       doItem (Decl' sp x) b e r = declf x (srcPairText b e text) sp r
-      doItem (Space' sp s l) b e r = spacef (srcPairText b e text) (srcSpan b e) r
-      doItem (Other' sp s l) b e r = otherf (srcPairText b e text) (srcSpan b e) r
+      doItem (Space' _ _ _) b e r = spacef (srcPairText b e text) (srcSpan b e) r
+      doItem (Other' _ _ _) b e r = otherf (srcPairText b e text) (srcSpan b e) r
       text' = untabify text
 
 -- | Given a list of Comment, Space and Other elements, discard the
 -- Other elements, group adjoining elements, and then turn each group
 -- of adjacent elements into a single Space element.
 groupSpace :: String -> [SrcUnion SrcSpan] -> [SrcUnion SrcSpan]
-groupSpace text xs =
-    map makeSpace $ foldr f [[]] xs
+groupSpace text items =
+    map makeSpace $ foldr f [[]] items
     where
       -- Add an element to the newest list
       f x@(Space' {}) (xs : xss) = (x : xs) : xss
       f x@(Comment' {}) (xs : xss) = (x : xs) : xss
       -- Start a new list
-      f x ([] : xss) = ([] : xss)
-      f x (xs : xss) = ([] : xs : xss)
+      f _ ([] : xss) = ([] : xss)
+      f _ (xs : xss) = ([] : xs : xss)
       -- Turn a list of elements into a single Space element
       makeSpace  :: [SrcUnion SrcSpan] -> SrcUnion SrcSpan
       makeSpace xs =
@@ -451,13 +334,6 @@ groupSpace text xs =
               e = endLoc (last xs)
               sp = srcSpan b e in
           Space' sp (srcSpanText sp text) b
-
-zipItems (x : xs) (y : ys) =
-    case y of
-      Comment' sp _ -> undefined
-      Space' _ _ sp -> undefined
-      Other' _ _ sp -> undefined
-      _ -> error "zipItems"
 
 insertSpaceItems :: String -> [SrcUnion ()] -> [SrcUnion SrcSpan]
 insertSpaceItems text items =
@@ -495,19 +371,6 @@ appendLoc text loc =
       [line] -> loc {srcColumn = srcColumn loc + length line}
       xs -> loc {srcLine = srcLine loc + length xs - 1, srcColumn = length (last xs) + 1}
 
--- Classify the text segments by whether they are Comment, Space, or Other
-classifyText :: [Comment] -> String -> [TextClass]
-classifyText comments text =
-    fst $ foldr f ([], def) comments
-    where
-      f :: Comment -> ([TextClass], SrcLoc) -> ([TextClass], SrcLoc)
-      f c@(Comment _ sp _) (r, loc) =
-          let r' = r ++ classify (srcPairText loc (commentStart c) text) ++ [CommentText (srcSpanText sp text)] in
-          (r', srcLocSucc text (commentEnd c))
-      classify "" = []
-      classify s | all isSpace s = [Space s]
-      classify s = [Other s]
-
 ----------------
 -- UNIT TESTS --
 ----------------
@@ -540,7 +403,7 @@ withTestData f =
        case (text, source) of
          (Right text', Right (ParseOk (m, comments))) ->
              return $ f m comments (untabify text')
-         (Right text', Right _) -> error "parse failure"
+         (Right _, Right _) -> error "parse failure"
          (Left (_ :: SomeException), _) -> error "failure"
          (_, Left (_ :: SomeException)) -> error "failure"
 
@@ -571,19 +434,18 @@ test1 =
       "decl: [343:1 - 344:1]","decl: [344:1 - 356:1]","decl: [356:1 - 357:1]","decl: [357:1 - 361:1]","decl: [361:1 - 362:1]",
       "decl: [362:1 - 366:1]","decl: [366:1 - 367:1]","decl: [367:1 - 371:1]","decl: [371:1 - 372:1]","decl: [372:1 - 376:1]",
       "space: [376:1 - 377:1]","decl: [377:1 - 378:1]","decl: [378:1 - 385:1]","decl: [385:1 - 386:1]","decl: [386:1 - 392:41]"]
-     
      output)
     where
       test :: Module -> [Comment] -> String -> [String]
       test m comments text =
           foldModule headf importf declf commentf spacef otherf m comments text []
           where
-            headf x s sp r = r ++ ["head: " ++ display sp]
-            importf x s sp r = r ++ ["import: " ++ display sp]
-            declf x s sp r = r ++ ["decl: " ++ display sp]
-            commentf x@(Comment _ sp _) s r = r ++ ["comment: " ++ display sp]
-            spacef s l r = r ++ ["space: " ++ display l]
-            otherf s l r = r ++ ["other: " ++ display l]
+            headf _x _s sp r = r ++ ["head: " ++ display sp]
+            importf _x _s sp r = r ++ ["import: " ++ display sp]
+            declf _x _s sp r = r ++ ["decl: " ++ display sp]
+            commentf (Comment _ sp _) _ r = r ++ ["comment: " ++ display sp]
+            spacef _s l r = r ++ ["space: " ++ display l]
+            otherf _s l r = r ++ ["other: " ++ display l]
 
 test2a :: Test
 test2a =
@@ -743,7 +605,7 @@ test2b =
      (map display items))
     where
       test :: Module -> [Comment] -> String -> [SrcUnion SrcSpan]
-      test m@(Module loc name pragmas warn exps imps decls) comments text =
+      test _ comments text =
           insertSpaceItems text $ sortBy (compare `on` srcLoc) (map (Comment' ()) comments)
 
 test2c :: Test
@@ -756,26 +618,24 @@ test2c =
      (map display items))
     where
       test :: Module -> [Comment] -> String -> [SrcUnion SrcSpan]
-      test m@(Module loc name pragmas warn exps imps decls) comments text =
-          moduleDecls text m
+      test m _ text = moduleDecls text m
 
 test2d :: Test
 test2d =
     TestCase
-    (withTestData test >>= \ items -> -- hPutStrLn stderr . intercalate "\n     , " . map show
+    (withTestData test >>= \ items ->
      assertEqual
      "moduleItems"
      ["Decl' [386:1 - 392:41]","Decl' [385:1 - 386:1]","Decl' [378:1 - 385:1]","Decl' [377:1 - 378:1]","Space' [376:1 - 377:1]","Decl' [372:1 - 377:1]","Decl' [371:1 - 372:1]","Decl' [367:1 - 371:1]","Decl' [366:1 - 367:1]","Decl' [362:1 - 366:1]","Decl' [361:1 - 362:1]","Decl' [357:1 - 361:1]","Decl' [356:1 - 357:1]","Decl' [344:1 - 356:1]","Space' [351:33 - 352:11]","Decl' [343:1 - 344:1]","Decl' [331:1 - 343:1]","Space' [338:33 - 339:11]","Decl' [330:1 - 331:1]","Space' [329:1 - 330:1]","Decl' [276:1 - 330:1]","Space' [318:23 - 320:23]","Space' [281:7 - 282:7]","Space' [277:5 - 278:5]","Decl' [275:1 - 276:1]","Space' [273:1 - 275:1]","Decl' [267:1 - 275:1]","Decl' [262:1 - 267:1]","Decl' [261:1 - 262:1]","Decl' [254:1 - 261:1]","Decl' [253:1 - 254:1]","Space' [241:1 - 253:1]","Decl' [229:1 - 253:1]","Decl' [228:1 - 229:1]","Space' [216:1 - 228:1]","Decl' [208:1 - 228:1]","Space' [209:37 - 210:8]","Decl' [207:1 - 208:1]","Decl' [166:1 - 207:1]","Space' [188:7 - 190:7]","Space' [179:5 - 180:5]","Decl' [165:1 - 166:1]","Decl' [157:1 - 165:1]","Decl' [156:1 - 157:1]","Space' [154:1 - 156:1]","Decl' [152:1 - 156:1]","Decl' [151:1 - 152:1]","Space' [150:1 - 151:1]","Decl' [148:1 - 151:1]","Decl' [147:1 - 148:1]","Space' [146:1 - 147:1]","Decl' [122:1 - 147:1]","Decl' [121:1 - 122:1]","Space' [119:1 - 121:1]","Decl' [108:1 - 121:1]","Space' [114:33 - 115:11]","Decl' [107:1 - 108:1]","Space' [106:1 - 107:1]","Decl' [104:1 - 107:1]","Decl' [103:1 - 104:1]","Space' [98:1 - 103:1]","Decl' [96:1 - 103:1]","Decl' [95:1 - 96:1]","Decl' [93:1 - 95:1]","Decl' [92:1 - 93:1]","Space' [91:1 - 92:1]","Decl' [89:1 - 92:1]","Decl' [88:1 - 89:1]","Decl' [86:1 - 88:1]","Decl' [85:1 - 86:1]","Decl' [83:1 - 85:1]","Decl' [82:1 - 83:1]","Decl' [80:1 - 82:1]","Decl' [79:1 - 80:1]","Space' [72:1 - 79:1]","Decl' [70:1 - 79:1]","ImportDecl' [68:1 - 70:1]","ImportDecl' [67:1 - 68:1]","ImportDecl' [66:1 - 67:1]","ImportDecl' [65:1 - 66:1]","ImportDecl' [64:1 - 65:1]","ImportDecl' [63:1 - 64:1]","ImportDecl' [62:1 - 63:1]","ImportDecl' [61:1 - 62:1]","ImportDecl' [60:1 - 61:1]","ImportDecl' [59:1 - 60:1]","ImportDecl' [58:1 - 59:1]","ImportDecl' [57:1 - 58:1]","ImportDecl' [56:1 - 57:1]","ImportDecl' [55:1 - 56:1]","ImportDecl' [54:1 - 55:1]","ImportDecl' [53:1 - 54:1]","ImportDecl' [52:1 - 53:1]","ImportDecl' [51:1 - 52:1]","ImportDecl' [50:1 - 51:1]","ImportDecl' [49:1 - 50:1]","ImportDecl' [48:1 - 49:1]","ImportDecl' [47:1 - 48:1]","ImportDecl' [46:1 - 47:1]","ImportDecl' [45:1 - 46:1]","ImportDecl' [44:1 - 45:1]","ImportDecl' [43:1 - 44:1]","ImportDecl' [42:1 - 43:1]","ImportDecl' [41:1 - 42:1]","ImportDecl' [40:1 - 41:1]","ImportDecl' [39:1 - 40:1]","ImportDecl' [38:1 - 39:1]","ImportDecl' [37:1 - 38:1]","ImportDecl' [36:1 - 37:1]","ImportDecl' [35:1 - 36:1]","ImportDecl' [34:1 - 35:1]","Decl' [2:1 - 34:1]","Space' [4:1 - 7:1]","Space' [1:1 - 2:1]"]
      (map display items))
     where
       test :: Module -> [Comment] -> String -> [SrcUnion SrcSpan]
-      test m@(Module loc name pragmas warn exps imps decls) comments text =
-          moduleItems text m comments
+      test m comments text = moduleItems text m comments
 
 test2e :: Test
 test2e =
     TestCase
-    (withTestData test >>= \ items -> -- hPutStrLn stderr . intercalate "\n     , " . map show
+    (withTestData test >>= \ items ->
      assertEqual
      "moduleItemGroups"
      [["Decl' [386:1 - 392:41]"],
@@ -872,13 +732,12 @@ test2e =
      (map (map display) items))
     where
       test :: Module -> [Comment] -> String -> [[SrcUnion SrcSpan]]
-      test m@(Module loc name pragmas warn exps imps decls) comments text =
-          moduleItemGroups text m comments
+      test m comments text = moduleItemGroups text m comments
 
 test2f :: Test
 test2f =
     TestCase
-    (withTestData test >>= \ items -> -- hPutStrLn stderr . intercalate "\n     , " . map show
+    (withTestData test >>= \ items ->
      assertEqual
      "moduleItemGroups filtered"
      [["Decl' [386:1 - 392:41]"],
@@ -974,7 +833,7 @@ test2f =
      (map (map display) items))
     where
       test :: Module -> [Comment] -> String -> [[SrcUnion SrcSpan]]
-      test m@(Module loc name pragmas warn exps imps decls) comments text =
+      test m comments text =
           map filterEmbedded $ moduleItemGroups text m comments
 
 test2g :: Test
@@ -1090,8 +949,8 @@ test2g =
      (map display items))
     where
       test :: Module -> [Comment] -> String -> [SrcUnion SrcSpan]
-      test m@(Module loc name pragmas warn exps imps decls) comments text =
-          moduleItemsFinal text m comments
+      test m comments s =
+          moduleItemsFinal s m comments
 
 test3 :: Test
 test3 = TestCase (assertEqual "textEndLoc" (SrcLoc {srcFilename = "<unknown>.hs", srcLine = 2, srcColumn = 6}) (textEndLoc "hello\nworld\n"))
@@ -1099,15 +958,8 @@ test3 = TestCase (assertEqual "textEndLoc" (SrcLoc {srcFilename = "<unknown>.hs"
 test4 :: Test
 test4 =
     TestCase
-    (B.readFile "Debian/Repo/AptCache.hs" >>= return . show . md5 >>= \ sum ->
+    (B.readFile "Debian/Repo/AptCache.hs" >>= return . show . md5 >>= \ checksum ->
      assertEqual
      "Checksum"
      "3c0c2e7422bfc3c3f39402f3dd4fa5af"
-     sum)
-
-test5 :: IO ()
-test5 =
-    withTestData test >>= putStrLn
-    where
-      test :: Module -> [Comment] -> String -> String
-      test _ cs _ = show cs
+     checksum)
