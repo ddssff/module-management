@@ -14,7 +14,7 @@ module Language.Haskell.Imports.SrcLoc
     , srcLocSucc
     , untabify
     , lines'
-    , test7
+    , tests
     ) where
 
 import Data.Default (Default, def)
@@ -97,15 +97,6 @@ untabify s =
       loop n (c : s') = c : loop (n + 1) s'
       loop n [] = []
 
-test7 = runTestTT $
-    TestList
-    [ TestCase (assertEqual "untabify 1" "abc" (untabify "abc"))
-    , TestCase (assertEqual "untabify 2" "ab      c" (untabify "ab\tc"))
-    , TestCase (assertEqual "untabify 3" "ab              c" (untabify "ab\t\tc"))
-    , TestCase (assertEqual "untabify 4" "        abc" (untabify "\tabc"))
-    , TestCase (assertEqual "untabify 5" "abcdefg h" (untabify "abcdefg\th"))
-    , TestCase (assertEqual "untabify 6" "abcdefgh        i" (untabify "abcdefgh\ti")) ]
-
 textEndLoc :: String -> SrcLoc
 textEndLoc text = def {srcLine = length (lines text), srcColumn = length (last (lines text)) + 1}
 
@@ -187,7 +178,15 @@ lines' s =
       eol (x : xs) = x : eol xs
       eol [] = []
 
-test6 = runTestTT $
+----------------
+-- UNIT TESTS --
+----------------
+
+tests :: Test
+tests = TestList [test6, test7, test8]
+
+test6 :: Test
+test6 =
     TestList
     [ TestCase (assertEqual "lines' 0" [""] (lines' ""))
     , TestCase (assertEqual "lines' 1" ["abc"] (lines' "abc"))
@@ -195,3 +194,23 @@ test6 = runTestTT $
     , TestCase (assertEqual "lines' 3" ["abc","","123"] (lines' "abc\n\n123"))
     , TestCase (assertEqual "lines' 4" ["abc","123",""] (lines' "abc\n123\n"))
     , TestCase (assertEqual "lines' 5" ["abc","","","123",""] (lines' "abc\n\n\n123\n")) ]
+
+test7 :: Test
+test7 =
+    TestList
+    [ TestCase (assertEqual "untabify 1" "abc" (untabify "abc"))
+    , TestCase (assertEqual "untabify 2" "ab      c" (untabify "ab\tc"))
+    , TestCase (assertEqual "untabify 3" "ab              c" (untabify "ab\t\tc"))
+    , TestCase (assertEqual "untabify 4" "        abc" (untabify "\tabc"))
+    , TestCase (assertEqual "untabify 5" "abcdefg h" (untabify "abcdefg\th"))
+    , TestCase (assertEqual "untabify 6" "abcdefgh        i" (untabify "abcdefgh\ti")) ]
+
+test8 :: Test
+test8 =
+    TestList
+    [ TestCase (assertEqual "cutSrcLoc 1" ("abcd\n","efgh\nijkl\n") (cutSrcLoc (SrcLoc "<unknown>.hs" 2 1) "abcd\nefgh\nijkl\n"))
+    , TestCase (assertEqual "cutSrcLoc 2" ("abcd\nef","gh\nijkl\n") (cutSrcLoc (SrcLoc "<unknown>.hs" 2 3) "abcd\nefgh\nijkl\n"))
+    , TestCase (assertEqual "cutSrcLoc 3" ("abcd\nefgh","\nijkl\n") (cutSrcLoc (SrcLoc "<unknown>.hs" 2 5) "abcd\nefgh\nijkl\n"))
+    , TestCase (assertEqual "cutSrcLoc 4" ("abcd\nefgh\n","ijkl") (cutSrcLoc (SrcLoc "<unknown>.hs" 3 1) "abcd\nefgh\nijkl"))
+    , TestCase (assertEqual "cutSrcLoc 5" ("abcd\nefgh\nij","kl") (cutSrcLoc (SrcLoc "<unknown>.hs" 3 3) "abcd\nefgh\nijkl"))
+    , TestCase (assertEqual "cutSrcLoc 6" ("abcd\nefgh\nijkl","") (cutSrcLoc (SrcLoc "<unknown>.hs" 3 5) "abcd\nefgh\nijkl")) ]
