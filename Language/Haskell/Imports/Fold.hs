@@ -1,15 +1,7 @@
 {-# LANGUAGE BangPatterns, FlexibleInstances, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
-module Language.Haskell.Imports.Common
-    ( HasSrcLoc(srcLoc)
-    , importsSpan
-    , renameSpec
-    , specName
-    , replaceImports
-    , tildeBackup
-    , noBackup
-    , replaceFile
-    , foldModule
+module Language.Haskell.Imports.Fold
+    ( foldModule
     , tests
     ) where
 
@@ -33,90 +25,6 @@ import Language.Haskell.Imports.SrcLoc (HasEndLoc(..), HasSrcLoc(..), lines', sr
 import System.Directory (removeFile, renameFile)
 import System.IO.Error (isDoesNotExistError)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
-
--- | Compute the span of the source file which contains the imports by
--- examining the SrcLoc values in the parsed source code and the
--- comments.
-importsSpan :: Module -> [Comment] -> SrcSpan
-importsSpan (Module _ _ _ _ _ imports@(i : _) (d : _)) comments =
-    mkSrcSpan b e
-    where
-      b = srcLoc i
-      -- The imports section ends when the first declaration or
-      -- comment following the last import starts
-      e = case dropWhile (\ comment -> srcLoc comment <= srcLoc (last imports)) comments of
-            (c : _) -> min (srcLoc c) (srcLoc d)
-            [] -> srcLoc d
-importsSpan _ _ = error "importsSpan"
-
--- | Change the symbol name (but not the module path) of an
--- ImportSpec.
-renameSpec :: String -> ImportSpec -> ImportSpec
-renameSpec s x = mapSpecName (const s) x
-
-mapSpecName :: (String -> String) -> ImportSpec -> ImportSpec
-mapSpecName f = foldSpec (IVar . mapName f) (IAbs . mapName f) (IThingAll . mapName f) (\ n cn -> IThingWith (mapName f n) cn)
-
-mapName :: (String -> String) -> Name -> Name
-mapName f = foldName (Ident . f) (Symbol . f)
-
-foldSpec :: (Name -> a) -> (Name -> a) -> (Name -> a) -> (Name -> [CName] -> a) -> ImportSpec -> a
-foldSpec iVar _ _ _ (IVar n) = iVar n
-foldSpec _ iAbs _ _ (IAbs n) = iAbs n
-foldSpec _ _ iThingAll _ (IThingAll n) = iThingAll n
-foldSpec _ _ _ iThingWith (IThingWith n cn) = iThingWith n cn
-
-foldName :: (String -> a) -> (String -> a) -> Name -> a
-foldName ident _ (Ident s) = ident s
-foldName _ symbol (Symbol s) = symbol s
-
--- | Get the symbol name of an ImportSpec.
-specName :: ImportSpec -> String
-specName = foldSpec (foldName id id) (foldName id id) (foldName id id) (\ n _ -> foldName id id n)
-
--- | Compare the old and new import sets and if they differ clip out
--- the imports from the sourceText and insert the new ones.
-replaceImports :: [ImportDecl] -> [ImportDecl] -> String -> SrcSpan -> Maybe String
-replaceImports oldImports newImports sourceText sp =
-    if newPretty /= oldPretty -- the ImportDecls won't match because they have different SrcLoc values
-    then let (hd, _, tl) = srcSpanTriple sp sourceText
-             -- Instead of inserting this newline we should figure out what was
-             -- between the last import and the first declaration, but not sure
-             -- how to locate the end of an import.
-             new = hd <> newPretty <> "\n" <> tl in
-         if new /= sourceText then Just new else Nothing
-    else Nothing
-    where
-      oldPretty = prettyImports oldImports
-      newPretty = prettyImports newImports
-
-prettyImports :: [ImportDecl] -> String
-prettyImports imports =
-    munge . prettyPrintWithMode (defaultMode {layout = PPInLine}) $ Module a b c d e imports f
-    where
-      ParseOk (Module a b c d e _ f) = parseModule ""
-      -- Strip off the module declaration line, the leading spaces, and the terminating semicolons
-      munge = unlines . map (init . tail . tail) . tail . lines
-
-tildeBackup :: FilePath -> Maybe FilePath
-tildeBackup = Just . (++ "~")
-
-noBackup :: FilePath -> Maybe FilePath
-noBackup = const Nothing
-
--- | Replace the file at path with the given text, moving the original
--- to the location returned by passing path to backup.  If backup is
--- the identity function you're going to have a bad time.
-replaceFile :: MonadParams m => (FilePath -> Maybe FilePath) -> FilePath -> String -> m ()
-replaceFile backup path text =
-    dryRun >>= \ dryRun' ->
-    case dryRun' of
-      True -> liftIO $ putStrLn ("dryRun: replaceFile " ++ show path ++ " " ++ show text)
-      False -> liftIO $ remove >> rename >> write
-    where
-      remove = maybe (return ()) removeFile (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-      rename = maybe (return ()) (renameFile path) (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-      write = writeFile path text
 
 data SrcUnion a
     = Head' a Module
@@ -246,17 +154,6 @@ moduleItems text m comments =
       decls = moduleDecls text m
       space = moduleSpace text comments
 
--- | Convert a compare function into an (==)
-toEq :: Ord a => (a -> a -> Ordering) -> (a -> a -> Bool)
-toEq cmp a b =
-    case cmp a b of
-      EQ -> True
-      _ -> False
-
--- | Combine sortBy and groupBy
-groupBy' :: Ord a => (a -> a -> Ordering) -> [a] -> [[a]]
-groupBy' cmp xs = groupBy (toEq cmp) $ sortBy cmp xs
-
 filterEmbedded :: [SrcUnion SrcSpan] -> [SrcUnion SrcSpan]
 filterEmbedded xs =
     filter (not . embedded) xs
@@ -273,10 +170,10 @@ moduleItemsFinal :: String -> Module -> [Comment] -> [SrcUnion SrcSpan]
 moduleItemsFinal text m comments =
     sortBy (compare `on` srcSpan') $ concatMap (adjust . sortBy (compare `on` srcLoc)) groups
     where
-      groups = map filterEmbedded (moduleItemGroups text m comments)
       -- Remove embedded spans from the list - those that begin after
-      -- and end before the union of all the spans.  The resulting elements
-      -- are then adjusted so they don't overlap.
+      -- and end before the union of all the spans.
+      groups = map filterEmbedded (moduleItemGroups text m comments)
+      -- Adjust the remaining elements so they don't overlap.
       adjust xs =
           case partition ((== sp) . srcSpan') xs of
             ([x], ys) ->
@@ -292,25 +189,30 @@ moduleItemsFinal text m comments =
 
 -- Note that comments will overlap with the other elements
 foldModule :: forall r.
-              (Module -> String -> SrcSpan -> r -> r)
-           -> (ImportDecl -> String -> SrcSpan -> r -> r)
-           -> (Decl -> String -> SrcSpan -> r -> r)
+              (Module -> Maybe (String, SrcSpan) -> String -> SrcSpan -> r -> r)
+           -> (ImportDecl -> Maybe (String, SrcSpan) -> String -> SrcSpan -> r -> r)
+           -> (Decl -> Maybe (String, SrcSpan) -> String -> SrcSpan -> r -> r)
            -> (String -> SrcSpan -> r -> r)
            -> Module -> [Comment] -> String -> r -> r
 foldModule headf importf declf spacef m comments text r0 =
-    doItems (moduleItemsFinal text' m comments) r0
+    doItems Nothing (moduleItemsFinal text' m comments) r0
     where
-      doItems (x : y : xs) r = doItems (y : xs) (doItem x (srcLoc x) (srcLoc y) r)
-      doItems [x] r = doItem x (srcLoc x) (textEndLoc text) r
-      doItems [] r = r
-      doItem :: SrcUnion SrcSpan -> SrcLoc -> SrcLoc -> r -> r
-      doItem (Head' sp x) b e r = headf x (srcPairText b e text) sp r
-      doItem (ImportDecl' sp x) b e r = importf x (srcPairText b e text) sp r
-      doItem (Decl' sp x) b e r = declf x (srcPairText b e text) sp r
-      doItem (Space' _ _ _) b e r = spacef (srcPairText b e text) (srcSpan b e) r
+      doItems :: Maybe (String, SrcSpan) -> [SrcUnion SrcSpan] -> r -> r
+      doItems Nothing (x@(Space' sp s _) : xs) r = doItems (Just (s, sp)) xs r
+      doItems pre (x : y : xs) r = let r' = doItem pre x (srcLoc x) (srcLoc y) r in doItems Nothing (y : xs) r'
+      doItems pre [x] r = doItem pre x (srcLoc x) (textEndLoc text) r -- x is not a Space' here
+      doItems (Just (s, sp)) [] r = let x = Space' sp s (srcLoc sp) in doItem Nothing x (srcLoc x) (textEndLoc text) r
+      doItems Nothing [] r = r
+
+      doItem :: Maybe (String, SrcSpan) -> SrcUnion SrcSpan -> SrcLoc -> SrcLoc -> r -> r
+      doItem pre (Head' sp x) b e r = headf x pre (srcPairText b e text) sp r
+      doItem pre (ImportDecl' sp x) b e r = importf x pre (srcPairText b e text) sp r
+      doItem pre (Decl' sp x) b e r = declf x pre (srcPairText b e text) sp r
+      doItem Nothing (Space' _ _ _) b e r = spacef (srcPairText b e text) (srcSpan b e) r
+      doItem _ (Space' _ _ _) _ _ _ = error "Unexpected pair of Space' constructors"
       -- These should have been converted to Space
-      doItem (Comment' _ _) _ _ _ = error "Unexpected: Comment'"
-      doItem (Other' _ _ _) _ _ _ = error "Unexpected: Other'"
+      doItem _ (Comment' _ _) _ _ _ = error "Unexpected: Comment'"
+      doItem _ (Other' _ _ _) _ _ _ = error "Unexpected: Other'"
       text' = untabify text
 
 -- | Given a list of Comment, Space and Other elements, discard the
@@ -439,9 +341,13 @@ test1 =
       test m comments text =
           foldModule headf importf declf spacef m comments text []
           where
-            headf _x _s sp r = r ++ ["head: " ++ display sp]
-            importf _x _s sp r = r ++ ["import: " ++ display sp]
-            declf _x _s sp r = r ++ ["decl: " ++ display sp]
+            headf :: Module -> Maybe (String, SrcSpan) -> String -> SrcSpan -> [String] -> [String]
+            headf _x pre _s sp r = r ++ maybe [] (\ (_, sp) -> ["space: " ++ display sp]) pre ++ ["head: " ++ display sp]
+            importf :: ImportDecl -> Maybe (String, SrcSpan) -> String -> SrcSpan -> [String] -> [String]
+            importf _x pre _s sp r = r ++ maybe [] (\ (_, sp) -> ["space: " ++ display sp]) pre ++ ["import: " ++ display sp]
+            declf :: Decl -> Maybe (String, SrcSpan) -> String -> SrcSpan -> [String] -> [String]
+            declf _x pre _s sp r = r ++ maybe [] (\ (_, sp) -> ["space: " ++ display sp]) pre ++ ["decl: " ++ display sp]
+            spacef :: String -> SrcSpan -> [String] -> [String]
             spacef _s l r = r ++ ["space: " ++ display l]
 
 test2a :: Test

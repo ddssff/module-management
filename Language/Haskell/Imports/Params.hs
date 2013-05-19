@@ -6,13 +6,13 @@ module Language.Haskell.Imports.Params
     , putDryRun
     , hsFlags
     , putHsFlags
-    , junk
-    , putJunk
+    , toDelete
+    , markForDelete
     , putScratchJunk
     , scratchDir
     , putScratchDir
-    , removeEmpty
-    , putRemoveEmpty
+    , removeEmptyImports
+    , putRemoveEmptyImports
     ) where
 
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO)
@@ -62,11 +62,11 @@ hsFlags = getParams >>= return . hsFlags_
 putHsFlags :: MonadParams m => [String] -> m ()
 putHsFlags x = modifyParams (\ p -> p {hsFlags_ = x})
 
-junk :: MonadParams m => m (Set FilePath)
-junk = getParams >>= return . junk_
+toDelete :: MonadParams m => m (Set FilePath)
+toDelete = getParams >>= return . junk_
 
-putJunk :: MonadParams m => FilePath -> m ()
-putJunk x = modifyParams (\ p -> p {junk_ = insert x (junk_ p)})
+markForDelete :: MonadParams m => FilePath -> m ()
+markForDelete x = modifyParams (\ p -> p {junk_ = insert x (junk_ p)})
 
 putScratchJunk :: MonadParams m => FilePath -> m ()
 putScratchJunk x = scratchDir >>= \ scratch -> modifyParams (\ p -> p {junk_ = insert (scratch </> x) (junk_ p)})
@@ -80,8 +80,8 @@ scratchDir = getParams >>= return . scratchDir_
 putScratchDir :: MonadParams m => FilePath -> m ()
 putScratchDir x = modifyParams (\ p -> p {scratchDir_ = x})
 
-removeEmpty :: MonadParams m => m Bool
-removeEmpty = getParams >>= return . removeEmpty_
+removeEmptyImports :: MonadParams m => m Bool
+removeEmptyImports = getParams >>= return . removeEmpty_
 
-putRemoveEmpty :: MonadParams m => Bool -> m ()
-putRemoveEmpty x = modifyParams (\ p -> p {removeEmpty_ = x})
+putRemoveEmptyImports :: MonadParams m => Bool -> m ()
+putRemoveEmptyImports x = modifyParams (\ p -> p {removeEmpty_ = x})

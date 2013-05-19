@@ -25,19 +25,40 @@ splitModule path =
     do source <- liftIO $ try ((,) <$> parseFileWithComments defaultParseMode path <*> readFile path)
        case source of
          Left (e :: SomeException) -> error (path ++ ": " ++ show e)
-         Right (ParseOk ((Module loc (ModuleName name) pragmas warn
-                                (Just exports) imports decls), comments), text) ->
-             -- The symbols that are exported go into modules named
-             -- dir.base.symbol, others into dir.base.internal.symbol.
-             mapM_ (\ (decl, count) ->
-                        case symbol decl of
-                          Nothing -> error "splitModule: no symbol"
-                          Just name ->
-                              do let dir = takeDirectory path
-                                     base = takeBaseName path
-                                     path' = dir </> base <.> printf "%03d" count <.> "hs"
-                                 writeFile path' (prettyPrintWithMode defaultMode (Module loc (ModuleName $ name ++ show count) pragmas warn Nothing imports [decl]))
-                   ) (zip decls ([1..] :: [Int]))
+         Right (ParseOk (m@(Module loc (ModuleName name) pragmas warn (Just exports) imports decls), comments), text) ->
+             case decls of
+               [] -> error "splitModule: module only no declarations"
+               [x] -> error "splitModule: module only has one declaration"
+               xs -> foldModule headf importf declf spacef m comments text ""
+                   -- The symbols that are exported go into modules named
+                   -- dir.base.symbol, others into dir.base.internal.symbol.
+                   let (public, private) = partition exported decls in
+                   mapM_ (\ (decl, count) ->
+                              case symbol decl of
+                                Nothing -> error "splitModule: no symbol"
+                                Just name ->
+                                    do let dir = takeDirectory path
+                                           base = takeBaseName path
+                                           path' = dir </> base <.> printf "%03d" count <.> "hs"
+                                       writeFile path' (prettyPrintWithMode defaultMode (Module loc (ModuleName $ name ++ show count) pragmas warn Nothing imports [decl]))
+                         ) (zip decls ([1..] :: [Int]))
+
+moduleHeader :: String -> Module -> [Comment] -> String -> String
+moduleHeader export m =
+    foldModule headf importf declf spacef m comments text ("", False)
+    where
+      headf _ s _ (r, done) = (r ++ s, done)
+      importf _ s _ (r, done) = (r ++ s, done)
+      declf _ _ (r, _) = (r, True)
+      spacef s _ (r, done) = (r ++ if done then "" else s, done)
+
+exported :: Module -> String -> Bool
+exported (Module _ _ _ _ exports _ _) s =
+    maybe True (exported' s) exports
+    where
+      exported' :: String -> [ExportSpec] -> Bool
+      exported' s exports =
+          any (== (Just s)) (map symbol exports)
 
 class HasSymbol a where
     symbol :: a -> Maybe String
