@@ -14,7 +14,8 @@ Library
   Exposed-Modules:  Language.Haskell.Imports.Clean,
                     Language.Haskell.Imports.Common,
                     Language.Haskell.Imports.Move,
-                    Language.Haskell.Imports.Params
+                    Language.Haskell.Imports.Params,
+                    Language.Haskell.Imports.Split
   Build-Depends:    applicative-extras,
                     base,
                     bytestring,

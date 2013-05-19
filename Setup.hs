@@ -10,7 +10,7 @@ import System.Directory (setCurrentDirectory)
 import System.FilePath ((</>))
 
 main = defaultMainWithHooks simpleUserHooks {
-         postBuild = \ _ _ _ lbi -> do setCurrentDirectory "test"
+         postBuild = \ _ _ _ lbi -> do setCurrentDirectory "testdata"
                                        code <- system (".." </> buildDir lbi </> "tests/tests")
                                        if code == ExitSuccess then putStrLn "Tests passed" else error "Tests failed"
        -- , postConf = \ _ _ _ lbi -> runParamsT (cleanBuildImports lbi)
