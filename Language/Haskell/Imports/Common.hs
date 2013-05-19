@@ -293,25 +293,24 @@ moduleItemsFinal text m comments =
 -- Note that comments will overlap with the other elements
 foldModule :: forall r.
               (Module -> String -> SrcSpan -> r -> r)
-           -> (ImportDecl -> String -> SrcSpan -> r -> r) -- SrcLoc
-           -> (Decl -> String -> SrcSpan -> r -> r) -- SrcLoc
-           -> (Comment -> String -> r -> r) -- SrcSpan
-           -> (String -> SrcSpan -> r -> r)
+           -> (ImportDecl -> String -> SrcSpan -> r -> r)
+           -> (Decl -> String -> SrcSpan -> r -> r)
            -> (String -> SrcSpan -> r -> r)
            -> Module -> [Comment] -> String -> r -> r
-foldModule headf importf declf commentf spacef otherf m comments text r0 =
+foldModule headf importf declf spacef m comments text r0 =
     doItems (moduleItemsFinal text' m comments) r0
     where
       doItems (x : y : xs) r = doItems (y : xs) (doItem x (srcLoc x) (srcLoc y) r)
       doItems [x] r = doItem x (srcLoc x) (textEndLoc text) r
       doItems [] r = r
       doItem :: SrcUnion SrcSpan -> SrcLoc -> SrcLoc -> r -> r
-      doItem (Comment' _ s) b e r = commentf s (srcPairText b e text) r
       doItem (Head' sp x) b e r = headf x (srcPairText b e text) sp r
       doItem (ImportDecl' sp x) b e r = importf x (srcPairText b e text) sp r
       doItem (Decl' sp x) b e r = declf x (srcPairText b e text) sp r
       doItem (Space' _ _ _) b e r = spacef (srcPairText b e text) (srcSpan b e) r
-      doItem (Other' _ _ _) b e r = otherf (srcPairText b e text) (srcSpan b e) r
+      -- These should have been converted to Space
+      doItem (Comment' _ _) _ _ _ = error "Unexpected: Comment'"
+      doItem (Other' _ _ _) _ _ _ = error "Unexpected: Other'"
       text' = untabify text
 
 -- | Given a list of Comment, Space and Other elements, discard the
@@ -438,14 +437,12 @@ test1 =
     where
       test :: Module -> [Comment] -> String -> [String]
       test m comments text =
-          foldModule headf importf declf commentf spacef otherf m comments text []
+          foldModule headf importf declf spacef m comments text []
           where
             headf _x _s sp r = r ++ ["head: " ++ display sp]
             importf _x _s sp r = r ++ ["import: " ++ display sp]
             declf _x _s sp r = r ++ ["decl: " ++ display sp]
-            commentf (Comment _ sp _) _ r = r ++ ["comment: " ++ display sp]
             spacef _s l r = r ++ ["space: " ++ display l]
-            otherf _s l r = r ++ ["other: " ++ display l]
 
 test2a :: Test
 test2a =
