@@ -24,8 +24,9 @@ import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Syntax (ImportDecl(..), ImportSpec, Module(..), ModuleName(ModuleName))
-import Language.Haskell.Imports.Common (importsSpan, replaceFile, replaceImports, specName, tildeBackup)
-import Language.Haskell.Imports.Params (hsFlags, MonadParams, putDryRun, markForDelete, toDelete, putScratchDir, removeEmptyImports, runParamsT, scratchDir)
+import Language.Haskell.Imports.Common (replaceFile, tildeBackup)
+import Language.Haskell.Imports.Params (hsFlags, MonadParams, putDryRun, dryRun, markForDelete, toDelete, putScratchDir, removeEmptyImports, runParamsT, scratchDir)
+import Language.Haskell.Imports.Syntax (importsSpan, replaceImports, prettyImports, HasSymbol(symbol), nameString)
 import Prelude hiding (head)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile, setCurrentDirectory)
 import System.Exit (ExitCode(..))
@@ -109,10 +110,11 @@ updateSource _ sourcePath (Module _ _ _ _ _ _ []) _ _ =
     error (sourcePath ++ ": Won't modify source file with no declarations")
 updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ oldImports _)) comments sourceText =
     removeEmptyImports >>= \ remove ->
+    dryRun >>= \ dry ->
     maybe (liftIO (putStrLn (sourcePath ++ ": no changes")))
           (\ text ->
                liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
-               replaceFile tildeBackup sourcePath text)
+               liftIO (replaceFile dry tildeBackup sourcePath text))
           (replaceImports oldImports (fixNewImports remove newImports) sourceText (importsSpan m comments))
 
 -- | Final touch-ups - sort and merge similar imports.
@@ -138,7 +140,7 @@ fixNewImports remove imports =
 
 compareSpecs :: ImportSpec -> ImportSpec -> Ordering
 compareSpecs a b =
-    case compare (map toLower $ specName a) (map toLower $ specName b) of
+    case compare (fmap (map toLower . nameString) $ symbol a) (fmap (map toLower . nameString) $ symbol b) of
       EQ -> compare a b
       x -> x
 

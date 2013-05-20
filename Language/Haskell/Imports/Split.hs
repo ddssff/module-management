@@ -12,7 +12,7 @@ import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (def)
 import Data.Function (on)
 import Data.List as List (nub, find, isSuffixOf, filter)
-import Data.Map as Map (Map, insertWith, empty, toList, mapWithKey, elems, delete, fromList, lookup, filter)
+import Data.Map as Map (Map, insertWith, empty, toList, mapWithKey, elems, delete, fromList, lookup, filter, mapKeys, keys, insert)
 import Data.Maybe (catMaybes, fromJust)
 import Data.Monoid ((<>))
 import Data.Set as Set (Set, toList, member, null, intersection, fromList)
@@ -22,10 +22,12 @@ import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(..), PPLayout(..), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpan)
 import Language.Haskell.Exts.Syntax -- (Module(..), ModuleName(..), ImportDecl(..), ExportSpec(..), QName(..), Decl(..), SrcLoc(..))
+import Language.Haskell.Imports.Clean (cleanImports)
 import Language.Haskell.Imports.Common (groupBy')
 import Language.Haskell.Imports.Fold (foldModule)
 import Language.Haskell.Imports.Params (putDryRun, MonadParams, runParamsT)
 import Language.Haskell.Imports.SrcLoc (HasSrcLoc(srcLoc))
+import Language.Haskell.Imports.Syntax (symbol, nameString)
 import Prelude hiding (head)
 import System.Directory (setCurrentDirectory, createDirectoryIfMissing)
 import System.FilePath ((</>), (<.>), takeDirectory, takeBaseName, dropExtension)
@@ -108,14 +110,18 @@ splitModule path =
                                                          oldImports <>
                                                          concatMap snd decls) declPairs
                             -- Replace the body of the old module with imports
-                            newReExporter = oldHeader <>
-                                            prettyPrintWithMode defaultMode (Module loc (subModuleName moduleName (Symbol "ReExporter")) pragmas warn (Just exports) (elems allNewImports) [])
+                            newReExporter = oldHeader <> prettyPrintWithMode defaultMode (Module loc (subModuleName moduleName (Symbol "ReExporter")) pragmas warn (Just exports) (elems allNewImports) [])
+                            -- The paths and contents of the files we will write
+                            newFiles :: Map FilePath String
+                            newFiles =
+                                Map.insert (dropExtension path <.> "hs") newReExporter $
+                                Map.mapKeys (\ (ModuleName mod) -> map (\ c -> case c of '.' -> '/'; c -> c) mod <.> "hs") newModules
                         -- Create a subdirectory named after the old module
                         createDirectoryIfMissing True (dropExtension path)
                         -- Write the new modules
-                        mapM_ (\ (ModuleName mod, text) -> writeFile (map (\ c -> case c of '.' -> '/'; c -> c) mod <.> "hs") text) (Map.toList newModules)
-                        -- Write the re-exporter
-                        writeFile (dropExtension path <.> "ReExporter" <.> "hs") newReExporter
+                        mapM_ (uncurry writeFile) (Map.toList newFiles)
+                        -- Clean the new modules
+                        mapM_ (runParamsT . cleanImports) (Map.keys newFiles)
 
 exported :: Module -> String -> Bool
 exported (Module _ _ _ _ exports _ _) s =
@@ -154,65 +160,6 @@ toExportSpec (x, _) =
       Just name -> Just (EVar (UnQual name))
       Just name -> Just (EVar (UnQual name))
       Nothing -> Nothing
-
-nameString :: Name -> String
-nameString (Ident s) = s
-nameString (Symbol s) = s
-
-class HasSymbol a where
-    symbol :: a -> Maybe Name
-
-instance HasSymbol Decl where
-    symbol (TypeDecl _ name _ _) = symbol name
-    symbol (TypeFamDecl _ name _ _) = symbol name
-    symbol (DataDecl _ _ _ name _ _ _) = symbol name
-    symbol (GDataDecl _ _ _ name _ _ _ _) = symbol name
-    symbol (DataFamDecl _ _ name _ _) = symbol name
-    symbol x@(TypeInsDecl _ _ _ {-SrcLoc Type Type-}) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(DataInsDecl _ _ _ _ _ {-SrcLoc DataOrNew Type [QualConDecl] [Deriving]-}) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(GDataInsDecl _ _ _ _ _ _ {-SrcLoc DataOrNew Type (Maybe Kind) [GadtDecl] [Deriving]-}) = error $ "HasSymbol Decl " ++ show x
-    symbol (ClassDecl _ _ name _ _ _) = symbol name
-    symbol x@(InstDecl _ _ _ _ _ {-SrcLoc Context QName [Type] [InstDecl]-}) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(DerivDecl _ _ _ _ {-SrcLoc Context QName [Type]-}) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(InfixDecl _ _ _ _ {-SrcLoc Assoc Int [Op]-}) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(DefaultDecl _ _ {-SrcLoc [Type]-}) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(SpliceDecl _ _ {-SrcLoc Exp-}) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(TypeSig loc names _) = case nub names of
-                                        [name] -> symbol name
-                                        _ -> error $ "HasSymbol TypeSig: multiple names at " ++ show loc
-    symbol x@(FunBind matches) = case nub (map symbol matches) of
-                                   [Just name] -> Just name
-                                   _ -> error $ "HasSymbol FunBind: multiple matches at " ++ show (srcLoc x)
-    symbol x@(PatBind _ _ _ _ _ {-SrcLoc Pat (Maybe Type) Rhs Binds-}) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(ForImp _ _ _ _ _ _ {-SrcLoc CallConv Safety String Name Type-}) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(ForExp {-SrcLoc CallConv String Name Type-} _ _ _ _ _) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(RulePragmaDecl {-SrcLoc [Rule]-} _ _) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(DeprPragmaDecl {-SrcLoc [([Name], String)]-} _ _) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(WarnPragmaDecl {-SrcLoc [([Name], String)]-} _ _) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(InlineSig {-SrcLoc Bool Activation QName-} _ _ _ _) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(InlineConlikeSig {-SrcLoc Activation QName-} _ _ _) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(SpecSig {-SrcLoc QName [Type]-} _ _ _) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(SpecInlineSig {-SrcLoc Bool Activation QName [Type]-} _ _ _ _ _) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(InstSig {-SrcLoc Context QName [Type]-} _ _ _ _) = error $ "HasSymbol Decl " ++ show x
-    symbol x@(AnnPragma {-SrcLoc Annotation-} _ _) = error $ "HasSymbol Decl " ++ show x
-
-instance HasSymbol Match where
-    symbol (Match _loc name _ _ _ _) = symbol name
-
-instance HasSymbol ExportSpec where
-    symbol (EVar qname) = symbol qname
-    symbol (EAbs qname) = symbol qname
-    symbol (EThingAll qname) = symbol qname
-    symbol (EThingWith qname _) = symbol qname
-    symbol (EModuleContents _) = Nothing
-
-instance HasSymbol QName where
-    symbol (Qual _ name) = symbol name
-    symbol (UnQual name) = symbol name
-    symbol (Special _) = Nothing
-
-instance HasSymbol Name where
-    symbol x = Just x
 
 tests :: Test
 tests = TestList [test1]

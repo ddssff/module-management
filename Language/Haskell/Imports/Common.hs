@@ -32,28 +32,11 @@ import Language.Haskell.Exts.Parser (parseModule)
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (mergeSrcSpan, mkSrcSpan, SrcSpan(..))
 import Language.Haskell.Exts.Syntax (CName, Decl, ImportDecl, ImportSpec(..), Module(..), Name(..), SrcLoc(..))
--- import Language.Haskell.Imports.Params (dryRun, MonadParams)
--- import Language.Haskell.Imports.SrcLoc (HasEndLoc(..), HasSrcLoc(..), lines', srcPairText, srcSpan, srcSpanEnd', srcSpanText, srcSpanTriple, textEndLoc, untabify)
 import System.Directory (removeFile, renameFile, getCurrentDirectory, setCurrentDirectory)
 import System.IO.Error (isDoesNotExistError)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 {-
--- | Compute the span of the source file which contains the imports by
--- examining the SrcLoc values in the parsed source code and the
--- comments.
-importsSpan :: Module -> [Comment] -> SrcSpan
-importsSpan (Module _ _ _ _ _ imports@(i : _) (d : _)) comments =
-    mkSrcSpan b e
-    where
-      b = srcLoc i
-      -- The imports section ends when the first declaration or
-      -- comment following the last import starts
-      e = case dropWhile (\ comment -> srcLoc comment <= srcLoc (last imports)) comments of
-            (c : _) -> min (srcLoc c) (srcLoc d)
-            [] -> srcLoc d
-importsSpan _ _ = error "importsSpan"
-
 -- | Change the symbol name (but not the module path) of an
 -- ImportSpec.
 renameSpec :: String -> ImportSpec -> ImportSpec
@@ -78,30 +61,6 @@ foldName _ symbol (Symbol s) = symbol s
 -- | Get the symbol name of an ImportSpec.
 specName :: ImportSpec -> String
 specName = foldSpec (foldName id id) (foldName id id) (foldName id id) (\ n _ -> foldName id id n)
-
--- | Compare the old and new import sets and if they differ clip out
--- the imports from the sourceText and insert the new ones.
-replaceImports :: [ImportDecl] -> [ImportDecl] -> String -> SrcSpan -> Maybe String
-replaceImports oldImports newImports sourceText sp =
-    if newPretty /= oldPretty -- the ImportDecls won't match because they have different SrcLoc values
-    then let (hd, _, tl) = srcSpanTriple sp sourceText
-             -- Instead of inserting this newline we should figure out what was
-             -- between the last import and the first declaration, but not sure
-             -- how to locate the end of an import.
-             new = hd <> newPretty <> "\n" <> tl in
-         if new /= sourceText then Just new else Nothing
-    else Nothing
-    where
-      oldPretty = prettyImports oldImports
-      newPretty = prettyImports newImports
-
-prettyImports :: [ImportDecl] -> String
-prettyImports imports =
-    munge . prettyPrintWithMode (defaultMode {layout = PPInLine}) $ Module a b c d e imports f
-    where
-      ParseOk (Module a b c d e _ f) = parseModule ""
-      -- Strip off the module declaration line, the leading spaces, and the terminating semicolons
-      munge = unlines . map (init . tail . tail) . tail . lines
 -}
 
 tildeBackup :: FilePath -> Maybe FilePath
