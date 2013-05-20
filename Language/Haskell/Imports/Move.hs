@@ -13,8 +13,8 @@ import Data.Maybe (fromJust)
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..))
 import Language.Haskell.Imports.Common (replaceFile, tildeBackup)
-import Language.Haskell.Imports.Params (MonadParams, putDryRun, dryRun, runParamsT)
-import Language.Haskell.Imports.Syntax (importsSpan, replaceImports, renameSpec)
+import Language.Haskell.Imports.Params (dryRun, MonadParams, putDryRun, runParamsT)
+import Language.Haskell.Imports.Syntax (importsSpan, renameSpec, replaceImports)
 
 type FQID = String -- ^ Fully qualified identifier - e.g. Language.Haskell.Imports.Clean.cleanImports
 

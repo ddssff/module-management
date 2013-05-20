@@ -15,13 +15,13 @@ module Language.Haskell.Imports.SrcLoc
     , tests
     ) where
 
-import Data.Default (Default, def)
-import Data.List (intercalate, groupBy)
+import Data.Default (def, Default)
+import Data.List (intercalate)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, srcSpanStart)
-import Language.Haskell.Exts.Syntax (ImportDecl(..), Module(..), Match(..), Decl(..))
-import Language.Haskell.Imports.Common (untabify, lines', HasSrcLoc(..), HasSrcSpan(..), Display(..))
-import Test.HUnit
+import Language.Haskell.Exts.Syntax (Decl(..), ImportDecl(..), Match(..), Module(..))
+import Language.Haskell.Imports.Common (Display(..), HasSrcLoc(..), HasSrcSpan(..), lines', untabify)
+import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 data SrcUnion a
     = Head' a Module

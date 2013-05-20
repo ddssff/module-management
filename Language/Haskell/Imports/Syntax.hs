@@ -7,25 +7,15 @@ module Language.Haskell.Imports.Syntax
     , renameSpec
     ) where
 
-import Control.Exception (catch, SomeException, throw, try)
-import Control.Monad.Trans (liftIO)
-import qualified Data.ByteString.Lazy.Char8 as B (readFile)
-import Data.Char (isSpace)
-import Data.Default (def, Default)
-import Data.Digest.Pure.MD5 (md5)
-import Data.Function (on)
-import Data.List (groupBy, partition, sortBy, nub)
+import Data.List (nub)
 import Data.Monoid ((<>))
-import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(..))
+import Language.Haskell.Exts (ParseResult(ParseOk))
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Parser (parseModule)
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (mergeSrcSpan, mkSrcSpan, SrcSpan(..))
-import Language.Haskell.Exts.Syntax -- (Module(..), ModuleName(..), ImportDecl(..), ExportSpec(..), QName(..), Decl(..), SrcLoc(..))
-import Language.Haskell.Imports.SrcLoc
-import System.Directory (removeFile, renameFile, getCurrentDirectory, setCurrentDirectory)
-import System.IO.Error (isDoesNotExistError)
-import Test.HUnit (assertEqual, Test(TestCase, TestList))
+import Language.Haskell.Exts.SrcLoc (mkSrcSpan, SrcSpan)
+import Language.Haskell.Exts.Syntax (CName, Decl(..), ExportSpec(..), ImportDecl, ImportSpec(..), Match(..), Module(..), Name(..), QName(..))
+import Language.Haskell.Imports.SrcLoc (HasSrcLoc(srcLoc), srcSpanTriple)
 
 -- | Compute the span of the source file which contains the imports by
 -- examining the SrcLoc values in the parsed source code and the

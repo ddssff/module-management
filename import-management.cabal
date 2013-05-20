@@ -15,7 +15,10 @@ Library
                     Language.Haskell.Imports.Common,
                     Language.Haskell.Imports.Fold,
                     Language.Haskell.Imports.Move,
-                    Language.Haskell.Imports.Params
+                    Language.Haskell.Imports.Params,
+                    Language.Haskell.Imports.Split,
+                    Language.Haskell.Imports.Syntax,
+                    Language.Haskell.Imports.SrcLoc
   Build-Depends:    applicative-extras,
                     base,
                     bytestring,
