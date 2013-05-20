@@ -116,34 +116,6 @@ splitModule path =
                         mapM_ (\ (ModuleName mod, text) -> writeFile (map (\ c -> case c of '.' -> '/'; c -> c) mod <.> "hs") text) (Map.toList newModules)
                         -- Write the re-exporter
                         writeFile (dropExtension path <.> "ReExporter" <.> "hs") newReExporter
-{-
-                        -- mapM_ (putStrLn . show) (Map.toList modules)
-                        mapM_ (\ (name, decls) ->
-                                   -- Build a module to contain just the decls in this list.  It will have
-                                   -- name appended to its module name, the same imports plus a
-                                   let exports' = [] in
-                                   writeFile
-                                     (dropExtension path </> name <.> "hs")
-                                     (prettyPrintWithMode defaultMode (Module loc (ModuleName (moduleName <.> name)) pragmas warn (Just exports') imports []) <> "\n" + concat decls))
-                              (Map.toList modules)
--}
-    where
-      declf :: Decl -> Maybe (String, SrcSpan) -> String -> SrcSpan -> [(Maybe Name, String)] -> [(Maybe Name, String)]
-      declf x pre s sp r = (symbol x, maybe "" fst pre <> s) : r
-                   -- The symbols that are exported go into modules named
-                   -- dir.base.symbol, others into dir.base.internal.symbol.
-{-
-                   let (public, private) = partition exported decls in
-                   mapM_ (\ (decl, count) ->
-                              case symbol decl of
-                                Nothing -> error "splitModule: no symbol"
-                                Just name ->
-                                    do let dir = takeDirectory path
-                                           base = takeBaseName path
-                                           path' = dir </> base <.> printf "%03d" count <.> "hs"
-                                       writeFile path' (prettyPrintWithMode defaultMode (Module loc (ModuleName $ name ++ show count) pragmas warn Nothing imports [decl]))
-                         ) (zip decls ([1..] :: [Int]))
--}
 
 exported :: Module -> String -> Bool
 exported (Module _ _ _ _ exports _ _) s =
