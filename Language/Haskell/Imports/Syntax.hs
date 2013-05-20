@@ -3,7 +3,6 @@ module Language.Haskell.Imports.Syntax
     , replaceImports
     , prettyImports
     , HasSymbol(symbol)
-    , nameString
     , renameSpec
     ) where
 
@@ -59,6 +58,7 @@ prettyImports imports =
 class HasSymbol a where
     symbol :: a -> Maybe Name
 
+-- Need to finish these
 instance HasSymbol Decl where
     symbol (TypeDecl _ name _ _) = symbol name
     symbol (TypeFamDecl _ name _ _) = symbol name
@@ -117,10 +117,6 @@ instance HasSymbol QName where
 instance HasSymbol Name where
     symbol x = Just x
 
-nameString :: Name -> String
-nameString (Ident s) = s
-nameString (Symbol s) = s
-
 renameSpec :: String -> ImportSpec -> ImportSpec
 renameSpec s x = mapSpecName (const s) x
 -- | Change the symbol name (but not the module path) of an
@@ -132,15 +128,11 @@ mapName :: (String -> String) -> Name -> Name
 mapName f = foldName (Ident . f) (Symbol . f)
 
 foldSpec :: (Name -> a) -> (Name -> a) -> (Name -> a) -> (Name -> [CName] -> a) -> ImportSpec -> a
-foldSpec iVar _ _ _ (IVar n) = iVar n
-foldSpec _ iAbs _ _ (IAbs n) = iAbs n
-foldSpec _ _ iThingAll _ (IThingAll n) = iThingAll n
-foldSpec _ _ _ iThingWith (IThingWith n cn) = iThingWith n cn
+foldSpec f _ _ _ (IVar n) = f n
+foldSpec _ f _ _ (IAbs n) = f n
+foldSpec _ _ f _ (IThingAll n) = f n
+foldSpec _ _ _ f (IThingWith n cn) = f n cn
 
 foldName :: (String -> a) -> (String -> a) -> Name -> a
-foldName ident _ (Ident s) = ident s
-foldName _ symbol (Symbol s) = symbol s
-
--- | Get the symbol name of an ImportSpec.
-specName :: ImportSpec -> String
-specName = foldSpec (foldName id id) (foldName id id) (foldName id id) (\ n _ -> foldName id id n)
+foldName f _ (Ident s) = f s
+foldName _ f (Symbol s) = f s

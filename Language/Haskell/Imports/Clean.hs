@@ -26,7 +26,7 @@ import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Syntax (ImportDecl(..), ImportSpec, Module(..), ModuleName(ModuleName))
 import Language.Haskell.Imports.Common (replaceFile, tildeBackup)
 import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, putDryRun, putScratchDir, removeEmptyImports, runParamsT, scratchDir, toDelete)
-import Language.Haskell.Imports.Syntax (HasSymbol(symbol), importsSpan, nameString, replaceImports)
+import Language.Haskell.Imports.Syntax (HasSymbol(symbol), importsSpan, replaceImports)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile, setCurrentDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath ((<.>), (</>))
@@ -137,6 +137,7 @@ fixNewImports remove imports =
       filterDecls (ImportDecl _ _ _ _ _ _ (Just (_, []))) = not remove
       filterDecls _ = True
 
+-- Not sure why this is case insensitive
 compareSpecs :: ImportSpec -> ImportSpec -> Ordering
 compareSpecs a b =
     case compare (fmap (map toLower . nameString) $ symbol a) (fmap (map toLower . nameString) $ symbol b) of
@@ -148,3 +149,7 @@ compareSpecs a b =
 
 -- dropPrefix :: Eq a => [a] -> [a] -> [a]
 -- dropPrefix pre x = if isPrefixOf pre x then drop (length x) x else x
+
+nameString :: Name -> String
+nameString (Ident s) = s
+nameString (Symbol s) = s

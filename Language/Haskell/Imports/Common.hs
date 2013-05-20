@@ -1,5 +1,5 @@
 {-# LANGUAGE BangPatterns, FlexibleInstances, ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Imports.Common
     ( Display(..)
     , HasSrcLoc(..)
@@ -23,7 +23,7 @@ import Data.Default (def, Default)
 import Data.List (groupBy, sortBy)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcSpan(SrcSpan))
-import Language.Haskell.Exts.Syntax (Decl, ImportDecl, Module(..), SrcLoc(SrcLoc, srcColumn, srcLine))
+import Language.Haskell.Exts.Syntax (Decl, ImportDecl, Module(..), SrcLoc(SrcLoc))
 import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
 import System.IO.Error (isDoesNotExistError)
 
@@ -32,22 +32,6 @@ tildeBackup = Just . (++ "~")
 
 noBackup :: FilePath -> Maybe FilePath
 noBackup = const Nothing
-
-{-
--- | Replace the file at path with the given text, moving the original
--- to the location returned by passing path to backup.  If backup is
--- the identity function you're going to have a bad time.
-replaceFile :: MonadParams m => (FilePath -> Maybe FilePath) -> FilePath -> String -> m ()
-replaceFile backup path text =
-    dryRun >>= \ dryRun' ->
-    case dryRun' of
-      True -> liftIO $ putStrLn ("dryRun: replaceFile " ++ show path ++ " " ++ show text)
-      False -> liftIO $ remove >> rename >> write
-    where
-      remove = maybe (return ()) removeFile (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-      rename = maybe (return ()) (renameFile path) (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-      write = writeFile path text
--}
 
 -- | Replace the file at path with the given text, moving the original
 -- to the location returned by passing path to backup.  If backup is
@@ -98,140 +82,6 @@ instance HasSrcLoc SrcSpan where
 
 instance HasSrcLoc Module where
     srcLoc (Module s _ _ _ _ _ _) = s
-{-
--- | Wrap the source code elements in SrcLocUnion constructors, sort, and add end locations
-moduleDecls :: String -> Module -> [SrcUnion SrcSpan]
-moduleDecls text m@(Module _ _ _ _ _ imps decls) =
-    case insertSpaceItems text (sortBy (compare `on` srcLoc) ([Head' () m] ++ map (ImportDecl' ()) imps ++ map (Decl' ()) decls)) of
-      -- The first element may be a comment, which will also get returned by moduleSpace
-      Other' {} : xs -> xs
-      xs -> xs
-
--- | Same for comments, then group runs of Comment or Space, these are guaranteed to be adjacent
-moduleSpace :: String -> [Comment] -> [SrcUnion SrcSpan]
-moduleSpace text comments =
-    groupSpace text $ insertSpaceItems text $ sortBy (compare `on` srcLoc) (map (Comment' ()) comments)
-
--- | Zip the decls and space together sorted by end position.  Collect overlapping items into groups.
--- To collect overlaps, we first sort by endLoc and reverse the list.  As we scan this list, items whose start location precedes 
-moduleItemGroups :: String -> Module -> [Comment] -> [[SrcUnion SrcSpan]]
-moduleItemGroups text m comments =
-    reverse $ groups
-    where
-      -- Given the items sorted in order of descending end location,
-      -- we start a new group whenever we see an end location equal to
-      -- the smallest start location yet seen
-      groups =
-          let (x : xs) = descendingEnds in
-          loop (srcLoc x) (endLoc x) [[x]] xs
-          where
-            loop _ _ rss [] = rss
-            loop b e (r : rs) (y : ys) =
-                if endLoc y == e || srcLoc y >= b
-                then loop (min b (srcLoc y)) (max e (endLoc y)) ((y : r) : rs) ys
-                else loop (srcLoc y) (endLoc y) ([y] : (r : rs)) ys
-      descendingEnds = reverse $ sortBy (compare `on` endLoc) $ decls ++ space
-      decls = moduleDecls text m
-      space = moduleSpace text comments
-
-moduleItems :: String -> Module -> [Comment] -> [SrcUnion SrcSpan]
-moduleItems text m comments =
-    descendingEnds
-    where
-      descendingEnds = reverse $ sortBy (compare `on` endLoc) $ decls ++ space
-      decls = moduleDecls text m
-      space = moduleSpace text comments
-
-filterEmbedded :: [SrcUnion SrcSpan] -> [SrcUnion SrcSpan]
-filterEmbedded xs =
-    filter (not . embedded) xs
-    where
-      embedded x = srcLoc sp < srcLoc x && endLoc x < endLoc sp
-      sp = foldr1 mergeSrcSpan (map srcSpan' xs)
-
--- | If two elements have the same end position, one will be space and
--- one will be code.  Move the end of the code element to just before
--- the beginning of the space element.  Finally, remove any space
--- items that start after their successor, these are embedded comments
--- which we can't do anything with.
-moduleItemsFinal :: String -> Module -> [Comment] -> [SrcUnion SrcSpan]
-moduleItemsFinal text m comments =
-    sortBy (compare `on` srcSpan') $ concatMap (adjust . sortBy (compare `on` srcLoc)) groups
-    where
-      -- Remove embedded spans from the list - those that begin after
-      -- and end before the union of all the spans.
-      groups = map filterEmbedded (moduleItemGroups text m comments)
-      -- Adjust the remaining elements so they don't overlap.
-      adjust xs =
-          case partition ((== sp) . srcSpan') xs of
-            ([x], ys) ->
-                case ys of
-                  [y] ->
-                      [mapA (const (srcSpan (srcLoc x) (srcLoc y))) x,
-                       mapA (const (srcSpan (srcLoc y) (endLoc x))) y]
-                  [] -> [x]
-            ([], _) -> error "adjust: No covering element"
-            _ -> error "adjust: multiple spanning elements"
-          where
-            sp = foldr1 mergeSrcSpan (map srcSpan' xs)
-
--- | Given a list of Comment, Space and Other elements, discard the
--- Other elements, group adjoining elements, and then turn each group
--- of adjacent elements into a single Space element.
-groupSpace :: String -> [SrcUnion SrcSpan] -> [SrcUnion SrcSpan]
-groupSpace text items =
-    map makeSpace $ foldr f [[]] items
-    where
-      -- Add an element to the newest list
-      f x@(Space' {}) (xs : xss) = (x : xs) : xss
-      f x@(Comment' {}) (xs : xss) = (x : xs) : xss
-      -- Start a new list
-      f _ ([] : xss) = ([] : xss)
-      f _ (xs : xss) = ([] : xs : xss)
-      -- Turn a list of elements into a single Space element
-      makeSpace  :: [SrcUnion SrcSpan] -> SrcUnion SrcSpan
-      makeSpace xs =
-          let b = srcLoc (head xs)
-              e = endLoc (last xs)
-              sp = srcSpan b e in
-          Space' sp (srcSpanText sp text) b
-
-insertSpaceItems :: String -> [SrcUnion ()] -> [SrcUnion SrcSpan]
-insertSpaceItems text items =
-    loop def items
-    where
-      loop :: SrcLoc -> [SrcUnion ()] -> [SrcUnion SrcSpan]
-      loop loc [] = gap loc (textEndLoc text)
-      loop loc (x : xs) | loc < srcLoc x = gap loc (srcLoc x) ++ loop (srcLoc x) (x : xs)
-      loop loc (x : xs) =
-          let end = next xs in
-          case x of
-            Comment' () c@(Comment _ sp _) ->
-                Comment' sp c : loop (endLoc c) xs
-            _ -> mapA (const (srcSpan loc end)) x : loop end xs
-      gap :: SrcLoc -> SrcLoc -> [SrcUnion SrcSpan]
-      gap b e =
-          let s = srcPairText b e text
-              sp = srcSpan b e in
-          case span isSpace s of
-            ("", "") -> []
-            ("", _) -> [Other' sp s b]
-            (_, "") -> [Space' sp s b]
-            (s', t) ->
-                let b' = appendLoc s' b in
-                [Space' (srcSpan b b') s' b,
-                 Other' (srcSpan b' (srcSpanEnd' sp)) t b']
-
-      next :: [SrcUnion ()] -> SrcLoc
-      next [] = textEndLoc text
-      next (x : _) = srcLoc x
--}
-
-appendLoc :: String -> SrcLoc -> SrcLoc
-appendLoc text loc =
-    case lines' text of
-      [line] -> loc {srcColumn = srcColumn loc + length line}
-      xs -> loc {srcLine = srcLine loc + length xs - 1, srcColumn = length (last xs) + 1}
 
 withCurrentDirectory :: FilePath -> IO a -> IO a
 withCurrentDirectory path action =

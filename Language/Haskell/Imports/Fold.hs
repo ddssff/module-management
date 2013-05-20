@@ -192,7 +192,7 @@ foldModule headf importf declf spacef m comments text r0 =
     doItems Nothing (moduleItemsFinal text' m comments) r0
     where
       doItems :: Maybe (String, SrcSpan) -> [SrcUnion SrcSpan] -> r -> r
-      doItems Nothing (x@(Space' sp s _) : xs) r = doItems (Just (s, sp)) xs r
+      doItems Nothing (Space' sp s _ : xs) r = doItems (Just (s, sp)) xs r
       doItems pre (x : y : xs) r = let r' = doItem pre x (srcLoc x) (srcLoc y) r in doItems Nothing (y : xs) r'
       doItems pre [x] r = doItem pre x (srcLoc x) (textEndLoc text) r -- x is not a Space' here
       doItems (Just (s, sp)) [] r = let x = Space' sp s (srcLoc sp) in doItem Nothing x (srcLoc x) (textEndLoc text) r
@@ -338,11 +338,11 @@ test1 =
           foldModule headf importf declf spacef m comments text []
           where
             headf :: Module -> Maybe (String, SrcSpan) -> String -> SrcSpan -> [String] -> [String]
-            headf _x pre _s sp r = r ++ maybe [] (\ (_, sp) -> ["space: " ++ display sp]) pre ++ ["head: " ++ display sp]
+            headf _x pre _s sp r = r ++ maybe [] (\ (_, sp') -> ["space: " ++ display sp']) pre ++ ["head: " ++ display sp]
             importf :: ImportDecl -> Maybe (String, SrcSpan) -> String -> SrcSpan -> [String] -> [String]
-            importf _x pre _s sp r = r ++ maybe [] (\ (_, sp) -> ["space: " ++ display sp]) pre ++ ["import: " ++ display sp]
+            importf _x pre _s sp r = r ++ maybe [] (\ (_, sp') -> ["space: " ++ display sp']) pre ++ ["import: " ++ display sp]
             declf :: Decl -> Maybe (String, SrcSpan) -> String -> SrcSpan -> [String] -> [String]
-            declf _x pre _s sp r = r ++ maybe [] (\ (_, sp) -> ["space: " ++ display sp]) pre ++ ["decl: " ++ display sp]
+            declf _x pre _s sp r = r ++ maybe [] (\ (_, sp') -> ["space: " ++ display sp']) pre ++ ["decl: " ++ display sp]
             spacef :: String -> SrcSpan -> [String] -> [String]
             spacef _s l r = r ++ ["space: " ++ display l]
 

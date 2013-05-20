@@ -65,6 +65,7 @@ getA (Decl' x _) = x
 getA (Space' x _ _) = x
 getA (Other' x _ _) = x
 
+{-
 mapA :: (a -> b) -> SrcUnion a -> SrcUnion b
 mapA f (Head' x y) = Head' (f x) y
 mapA f (Comment' x y) = Comment' (f x) y
@@ -72,6 +73,7 @@ mapA f (ImportDecl' x y) = ImportDecl' (f x) y
 mapA f (Decl' x y) = Decl' (f x) y
 mapA f (Space' x y z) = Space' (f x) y z
 mapA f (Other' x y z) = Other' (f x) y z
+-}
 
 instance HasSrcLoc (SrcUnion a) where
     srcLoc (Head' _ x) = srcLoc x
