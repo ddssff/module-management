@@ -17,51 +17,15 @@ module Language.Haskell.Imports.Common
     , lines'
     ) where
 
-import Control.Exception (catch, SomeException, throw, try)
+import Control.Exception (catch, throw)
 import Control.Monad.Trans (liftIO)
-import qualified Data.ByteString.Lazy.Char8 as B (readFile)
-import Data.Char (isSpace)
 import Data.Default (def, Default)
-import Data.Digest.Pure.MD5 (md5)
-import Data.Function (on)
-import Data.List (groupBy, partition, sortBy)
-import Data.Monoid ((<>))
-import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(..))
+import Data.List (groupBy, sortBy)
 import Language.Haskell.Exts.Comments (Comment(..))
-import Language.Haskell.Exts.Parser (parseModule)
-import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (mergeSrcSpan, mkSrcSpan, SrcSpan(..))
-import Language.Haskell.Exts.Syntax (CName, Decl, ImportDecl, ImportSpec(..), Module(..), Name(..), SrcLoc(..))
-import System.Directory (removeFile, renameFile, getCurrentDirectory, setCurrentDirectory)
+import Language.Haskell.Exts.SrcLoc (SrcSpan(SrcSpan))
+import Language.Haskell.Exts.Syntax (Decl, ImportDecl, Module(..), SrcLoc(SrcLoc, srcColumn, srcLine))
+import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
 import System.IO.Error (isDoesNotExistError)
-import Test.HUnit (assertEqual, Test(TestCase, TestList))
-
-{-
--- | Change the symbol name (but not the module path) of an
--- ImportSpec.
-renameSpec :: String -> ImportSpec -> ImportSpec
-renameSpec s x = mapSpecName (const s) x
-
-mapSpecName :: (String -> String) -> ImportSpec -> ImportSpec
-mapSpecName f = foldSpec (IVar . mapName f) (IAbs . mapName f) (IThingAll . mapName f) (\ n cn -> IThingWith (mapName f n) cn)
-
-mapName :: (String -> String) -> Name -> Name
-mapName f = foldName (Ident . f) (Symbol . f)
-
-foldSpec :: (Name -> a) -> (Name -> a) -> (Name -> a) -> (Name -> [CName] -> a) -> ImportSpec -> a
-foldSpec iVar _ _ _ (IVar n) = iVar n
-foldSpec _ iAbs _ _ (IAbs n) = iAbs n
-foldSpec _ _ iThingAll _ (IThingAll n) = iThingAll n
-foldSpec _ _ _ iThingWith (IThingWith n cn) = iThingWith n cn
-
-foldName :: (String -> a) -> (String -> a) -> Name -> a
-foldName ident _ (Ident s) = ident s
-foldName _ symbol (Symbol s) = symbol s
-
--- | Get the symbol name of an ImportSpec.
-specName :: ImportSpec -> String
-specName = foldSpec (foldName id id) (foldName id id) (foldName id id) (\ n _ -> foldName id id n)
--}
 
 tildeBackup :: FilePath -> Maybe FilePath
 tildeBackup = Just . (++ "~")

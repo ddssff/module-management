@@ -16,12 +16,8 @@ import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResu
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (mergeSrcSpan, SrcSpan(..))
 import Language.Haskell.Exts.Syntax (Decl, ImportDecl, Module(..), SrcLoc(..))
-import Language.Haskell.Imports.Common (untabify, lines', withCurrentDirectory)
-import Language.Haskell.Imports.Params (dryRun, MonadParams)
-import Language.Haskell.Imports.SrcLoc (HasEndLoc(..), HasSrcLoc(..), srcPairText, srcSpan, srcSpanEnd', srcSpanText, srcSpanTriple, textEndLoc)
-import Prelude hiding (head)
-import System.Directory (removeFile, renameFile, setCurrentDirectory, getCurrentDirectory)
-import System.IO.Error (isDoesNotExistError)
+import Language.Haskell.Imports.Common (lines', untabify, withCurrentDirectory)
+import Language.Haskell.Imports.SrcLoc (HasEndLoc(..), HasSrcLoc(..), srcPairText, srcSpan, srcSpanEnd', srcSpanText, textEndLoc)
 import Test.HUnit (assertEqual, Test(TestLabel, TestCase, TestList))
 
 data SrcUnion a

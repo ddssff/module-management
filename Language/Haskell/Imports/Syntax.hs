@@ -4,6 +4,7 @@ module Language.Haskell.Imports.Syntax
     , prettyImports
     , HasSymbol(symbol)
     , nameString
+    , renameSpec
     ) where
 
 import Control.Exception (catch, SomeException, throw, try)
@@ -129,3 +130,27 @@ instance HasSymbol Name where
 nameString :: Name -> String
 nameString (Ident s) = s
 nameString (Symbol s) = s
+
+renameSpec :: String -> ImportSpec -> ImportSpec
+renameSpec s x = mapSpecName (const s) x
+-- | Change the symbol name (but not the module path) of an
+-- ImportSpec.
+mapSpecName :: (String -> String) -> ImportSpec -> ImportSpec
+mapSpecName f = foldSpec (IVar . mapName f) (IAbs . mapName f) (IThingAll . mapName f) (\ n cn -> IThingWith (mapName f n) cn)
+
+mapName :: (String -> String) -> Name -> Name
+mapName f = foldName (Ident . f) (Symbol . f)
+
+foldSpec :: (Name -> a) -> (Name -> a) -> (Name -> a) -> (Name -> [CName] -> a) -> ImportSpec -> a
+foldSpec iVar _ _ _ (IVar n) = iVar n
+foldSpec _ iAbs _ _ (IAbs n) = iAbs n
+foldSpec _ _ iThingAll _ (IThingAll n) = iThingAll n
+foldSpec _ _ _ iThingWith (IThingWith n cn) = iThingWith n cn
+
+foldName :: (String -> a) -> (String -> a) -> Name -> a
+foldName ident _ (Ident s) = ident s
+foldName _ symbol (Symbol s) = symbol s
+
+-- | Get the symbol name of an ImportSpec.
+specName :: ImportSpec -> String
+specName = foldSpec (foldName id id) (foldName id id) (foldName id id) (\ n _ -> foldName id id n)

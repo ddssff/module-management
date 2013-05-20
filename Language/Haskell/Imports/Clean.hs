@@ -25,15 +25,14 @@ import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Syntax (ImportDecl(..), ImportSpec, Module(..), ModuleName(ModuleName))
 import Language.Haskell.Imports.Common (replaceFile, tildeBackup)
-import Language.Haskell.Imports.Params (hsFlags, MonadParams, putDryRun, dryRun, markForDelete, toDelete, putScratchDir, removeEmptyImports, runParamsT, scratchDir)
-import Language.Haskell.Imports.Syntax (importsSpan, replaceImports, prettyImports, HasSymbol(symbol), nameString)
-import Prelude hiding (head)
+import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, putDryRun, putScratchDir, removeEmptyImports, runParamsT, scratchDir, toDelete)
+import Language.Haskell.Imports.Syntax (HasSymbol(symbol), importsSpan, nameString, replaceImports)
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile, setCurrentDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath ((<.>), (</>))
 import System.IO (hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode, showCommandForUser)
-import Test.HUnit (assertEqual, Test(TestCase, TestList))
+import Test.HUnit (assertEqual, Test(TestCase))
 
 test1 :: Test
 test1 =
