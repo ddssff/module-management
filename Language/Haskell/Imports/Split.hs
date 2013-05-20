@@ -5,19 +5,17 @@ module Language.Haskell.Imports.Split
     , tests
     ) where
 
-import Debug.Trace
-
 import Control.Applicative ((<$>), (<*>))
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans (liftIO)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (def)
 import Data.Function (on)
-import Data.List (nub, find, isSuffixOf)
-import Data.Map as Map (Map, insertWith, empty, toList, mapWithKey, elems, delete, fromList, lookup)
+import Data.List as List (nub, find, isSuffixOf, filter)
+import Data.Map as Map (Map, insertWith, empty, toList, mapWithKey, elems, delete, fromList, lookup, filter)
 import Data.Maybe (catMaybes, fromJust)
 import Data.Monoid ((<>))
-import Data.Set as Set (toList)
+import Data.Set as Set (Set, toList, member, null, intersection, fromList)
 import Data.Set.Extra (gFind)
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Comments (Comment)
@@ -35,18 +33,16 @@ import Test.HUnit (assertEqual, Test(TestCase, TestList))
 import Text.Printf (printf)
 
 -- Should be QName -> Name -> QName or something
-symbolToModuleName :: Name -> Name
-symbolToModuleName name =
-    case name of
-      Symbol name -> Symbol (f name)
-      Ident name -> Ident (f name)
+subModuleName :: ModuleName -> Name -> ModuleName
+subModuleName (ModuleName moduleName) name =
+    ModuleName (case name of
+                  Symbol name -> moduleName <.> f name
+                  Ident name -> moduleName <.> f name)
     where
       f x =
-          case filter isAlphaNum x of
+          case List.filter isAlphaNum x of
             [] -> "OtherSymbols"
             (c : s) -> if isAlpha c then toUpper c : s else error $ "symbolToModuleName: must begin with a letter: " ++ show x
-
-t1 x = trace ("t1: " ++ show x) x
 
 -- | Split each of a module's declarations into a new module.  The
 -- resulting modules may need to import some of the other split
@@ -57,73 +53,67 @@ splitModule path =
     do source <- liftIO $ try ((,) <$> parseFileWithComments defaultParseMode path <*> readFile path)
        case source of
          Left (e :: SomeException) -> error (path ++ ": " ++ show e)
-         Right (ParseOk (m@(Module loc (ModuleName moduleName) pragmas warn (Just exports) imports decls), comments), text) ->
+         Right (ParseOk (m@(Module loc moduleName pragmas warn (Just exports) imports decls), comments), text) ->
              case decls of
                [] -> error "splitModule: module only no declarations"
                [x] -> error "splitModule: module only has one declaration"
                xs -> do let -- Build a (new module name, declaration list) map
-                            declPairs :: Map Name [(Decl, String)]
+                            declPairs :: Map ModuleName [(Decl, String)]
                             declPairs =
                                 foldl ins Map.empty (foldModule
                                                            (\ _ _ _ _ r -> r)
                                                            (\ _ _ _ _ r -> r)
-                                                           (\ x pre s sp r -> (t1 (symbol x), (x, maybe "" fst pre <> s)) : r)
+                                                           (\ x pre s sp r -> (symbol x, (x, maybe "" fst pre <> s)) : r)
                                                            (\ _ _ r -> r)
                                                            m comments text [])
-                            ins :: Map Name [a] -> (Maybe Name, a) -> Map Name [a]
-                            ins mp (Just name, x) = insertWith (++) (symbolToModuleName name) [x] mp
+                            ins :: Map ModuleName [a] -> (Maybe Name, a) -> Map ModuleName [a]
+                            ins mp (Just name, x) = insertWith (++) (subModuleName moduleName name) [x] mp
                             ins mp (Nothing, x) = error "splitModule: no symbol"
 
 
                             -- Map from the symbol we will declare to the module name that will
                             -- contain it.  If a symbol used in a declaration is mentioned in
                             -- this map we need to import the corresponding module.
-                            declSymbols :: Map Name Name
+                            declSymbols :: Map Name ModuleName
                             declSymbols = Map.fromList (concatMap (\ (moduleName, declPairs) -> map (\ (decl, _) -> (fromJust (symbol decl), moduleName)) declPairs) (Map.toList declPairs))
 
-                            allNewImports :: Map Name ImportDecl
-                            allNewImports = mapWithKey (\ name decls -> ImportDecl {importLoc = def,
-                                                                                    importModule = ModuleName (moduleName <.> nameString name),
-                                                                                    importQualified = False,
-                                                                                    importSrc = False,
-                                                                                    importPkg = Nothing,
-                                                                                    importAs = Nothing,
-                                                                                    importSpecs = Just (False, nub (map toImportSpec decls))}) declPairs
+                            allNewImports :: Map ModuleName ImportDecl
+                            allNewImports = mapWithKey toImportDecl declPairs
+                            -- allNewImports = mapWithKey  declPairs
                             -- Grab any comment before the module header
                             oldHeader = foldModule (\ _ pre _ _ r -> r <> maybe "" fst pre) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r) (\ s _ r -> r <> s) m comments text ""
                             -- Grab the old imports
                             oldImports = foldModule (\ _ _ _ _ r -> r) (\ _ pre s _ r -> r <> maybe "" fst pre <> s) (\ _ _ _ _ r -> r) (\ _ _ r -> r) m comments text ""
                             -- Build the new modules
-                            newModules :: Map Name String
-                            newModules = mapWithKey (\ name decls ->
+                            newModules :: Map ModuleName String
+                            newModules = mapWithKey (\ mod decls ->
                                                          let newExports = catMaybes (map toExportSpec decls) in
-                                                         -- Build imports for the new modules.  For any given module, we take
-                                                         -- the intersection of the declaration symbols import the modules that
-                                                         -- these, but to avoid circular imports we need to omit any imports
-                                                         -- of declarations that use this symbol.
-                                                         let newImports :: Map Name ImportDecl
-                                                             newImports = undefined -- map (uncurry mkImport) (catMaybes (map (\ s -> fmap (s,) (Map.lookup s declSymbols)) (Set.toList (gFind decls))))
-                                                         in
-
+                                                         -- In this module, we need to import any module that declares a symbol
+                                                         -- referenced here.
+                                                         let referenced = gFind decls :: Set Name in
+                                                         let newImports = mapWithKey toImportDecl (Map.delete mod
+                                                                                                   (Map.filter (\ pairs ->
+                                                                                                                    let declared = Set.fromList (map (fromJust . symbol . fst) pairs) in
+                                                                                                                    not (Set.null (Set.intersection declared referenced))) declPairs)) in
                                                          oldHeader <>
                                                          prettyPrintWithMode defaultMode (Module
                                                                                               loc
-                                                                                              (ModuleName (moduleName <.> nameString name))
+                                                                                              mod
                                                                                               pragmas
                                                                                               warn
                                                                                               (Just newExports)
-                                                                                              (elems (Map.delete name {-newImports-} allNewImports))
+                                                                                              (elems newImports)
                                                                                               []) <>
                                                          "\n\n" <>
                                                          oldImports <>
                                                          concatMap snd decls) declPairs
                             -- Replace the body of the old module with imports
                             newReExporter = oldHeader <>
-                                            prettyPrintWithMode defaultMode (Module loc (ModuleName (moduleName <.> "ReExporter")) pragmas warn (Just exports) (elems allNewImports) [])
+                                            prettyPrintWithMode defaultMode (Module loc (subModuleName moduleName (Symbol "ReExporter")) pragmas warn (Just exports) (elems allNewImports) [])
                         -- Create a subdirectory named after the old module
                         createDirectoryIfMissing True (dropExtension path)
                         -- Write the new modules
-                        mapM_ (\ (name, text) -> writeFile (dropExtension path </> nameString name <.> "hs") text) (Map.toList newModules)
+                        mapM_ (\ (ModuleName mod, text) -> writeFile (map (\ c -> case c of '.' -> '/'; c -> c) mod <.> "hs") text) (Map.toList newModules)
                         -- Write the re-exporter
                         writeFile (dropExtension path <.> "ReExporter" <.> "hs") newReExporter
 {-
@@ -162,6 +152,16 @@ exported (Module _ _ _ _ exports _ _) s =
       exported' :: String -> [ExportSpec] -> Bool
       exported' s exports =
           any (== (Just s)) (map (fmap nameString . symbol) exports)
+
+toImportDecl :: ModuleName -> [(Decl, String)] -> ImportDecl
+toImportDecl mod decls =
+    ImportDecl {importLoc = def,
+                importModule = mod,
+                importQualified = False,
+                importSrc = False,
+                importPkg = Nothing,
+                importAs = Nothing,
+                importSpecs = Just (False, nub (map toImportSpec decls))}
 
 toImportSpec :: (Decl, String) -> ImportSpec
 toImportSpec = IVar . fromJust . symbol . fst
