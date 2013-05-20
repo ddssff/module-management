@@ -5,26 +5,24 @@ module Language.Haskell.Imports.Fold
     , tests
     ) where
 
-import Control.Exception (catch, SomeException, throw, try)
-import Control.Monad.Trans (liftIO)
+import Control.Exception (SomeException, try)
 import qualified Data.ByteString.Lazy.Char8 as B (readFile)
 import Data.Char (isSpace)
 import Data.Default (def, Default)
 import Data.Digest.Pure.MD5 (md5)
 import Data.Function (on)
-import Data.List (groupBy, partition, sortBy)
-import Data.Monoid ((<>))
+import Data.List (partition, sortBy)
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(..))
 import Language.Haskell.Exts.Comments (Comment(..))
-import Language.Haskell.Exts.Parser (parseModule)
-import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (mergeSrcSpan, mkSrcSpan, SrcSpan(..))
-import Language.Haskell.Exts.Syntax (CName, Decl, ImportDecl, ImportSpec(..), Module(..), Name(..), SrcLoc(..))
+import Language.Haskell.Exts.SrcLoc (mergeSrcSpan, SrcSpan(..))
+import Language.Haskell.Exts.Syntax (Decl, ImportDecl, Module(..), SrcLoc(..))
+import Language.Haskell.Imports.Common (untabify, lines', withCurrentDirectory)
 import Language.Haskell.Imports.Params (dryRun, MonadParams)
-import Language.Haskell.Imports.SrcLoc (HasEndLoc(..), HasSrcLoc(..), lines', srcPairText, srcSpan, srcSpanEnd', srcSpanText, srcSpanTriple, textEndLoc, untabify)
-import System.Directory (removeFile, renameFile)
+import Language.Haskell.Imports.SrcLoc (HasEndLoc(..), HasSrcLoc(..), srcPairText, srcSpan, srcSpanEnd', srcSpanText, srcSpanTriple, textEndLoc)
+import Prelude hiding (head)
+import System.Directory (removeFile, renameFile, setCurrentDirectory, getCurrentDirectory)
 import System.IO.Error (isDoesNotExistError)
-import Test.HUnit (assertEqual, Test(TestCase, TestList))
+import Test.HUnit (assertEqual, Test(TestLabel, TestCase, TestList))
 
 data SrcUnion a
     = Head' a Module
@@ -219,8 +217,9 @@ foldModule headf importf declf spacef m comments text r0 =
 -- Other elements, group adjoining elements, and then turn each group
 -- of adjacent elements into a single Space element.
 groupSpace :: String -> [SrcUnion SrcSpan] -> [SrcUnion SrcSpan]
+groupSpace _ [] = []
 groupSpace text items =
-    map makeSpace $ foldr f [[]] items
+    concatMap makeSpace $ foldr f [[]] items
     where
       -- Add an element to the newest list
       f x@(Space' {}) (xs : xss) = (x : xs) : xss
@@ -229,12 +228,13 @@ groupSpace text items =
       f _ ([] : xss) = ([] : xss)
       f _ (xs : xss) = ([] : xs : xss)
       -- Turn a list of elements into a single Space element
-      makeSpace  :: [SrcUnion SrcSpan] -> SrcUnion SrcSpan
-      makeSpace xs =
-          let b = srcLoc (head xs)
+      makeSpace  :: [SrcUnion SrcSpan] -> [SrcUnion SrcSpan]
+      makeSpace [] = []
+      makeSpace xs@(x : _) =
+          let b = srcLoc x
               e = endLoc (last xs)
               sp = srcSpan b e in
-          Space' sp (srcSpanText sp text) b
+          [Space' sp (srcSpanText sp text) b]
 
 insertSpaceItems :: String -> [SrcUnion ()] -> [SrcUnion SrcSpan]
 insertSpaceItems text items =
@@ -281,7 +281,7 @@ tests = TestList [test1, test2a, test2b, test2c, test2d, test2e, test2f, test2g,
 
 testGroupSpace :: Test
 testGroupSpace =
-    TestCase
+    TestLabel "testGroupSpace" $ TestCase $ withCurrentDirectory "testdata" $
       (readFile "Debian/Repo/AptCache.hs" >>= \ text ->
        assertEqual "groupSpace"
                 [Space' (SrcSpan "<unknown>.hs" 114 33 115 11) "-- Flip args to get newest first\n          " (SrcLoc "<unknown>.hs" 114 33)]
@@ -297,7 +297,7 @@ testGroupSpace =
                     Space' (SrcSpan "<unknown>.hs" 114 65 115 11) "\n          " (SrcLoc "<unknown>.hs" 114 65)]))
 
 withTestData :: (Module -> [Comment] -> String -> r) -> IO r
-withTestData f =
+withTestData f = withCurrentDirectory "testdata" $
     do let path = "Debian/Repo/AptCache.hs"
        text <- try (readFile path)
        source <- try (parseFileWithComments defaultParseMode path)
@@ -305,13 +305,13 @@ withTestData f =
          (Right text', Right (ParseOk (m, comments))) ->
              return $ f m comments (untabify text')
          (Right _, Right _) -> error "parse failure"
-         (Left (_ :: SomeException), _) -> error "failure"
-         (_, Left (_ :: SomeException)) -> error "failure"
+         (Left (e :: SomeException), _) -> error $ "failure: " ++ show e
+         (_, Left (e :: SomeException)) -> error $ "failure: " ++ show e
 
 -- Turn these into unit tests, and test for the md5sum of AptCache.hs (3c0c2e7422bfc3c3f39402f3dd4fa5af)
 test1 :: Test
 test1 =
-    TestCase
+    TestLabel "test1" $ TestCase
     (withTestData test >>= \ output ->
      assertEqual
      "foldModule"
@@ -352,7 +352,7 @@ test1 =
 
 test2a :: Test
 test2a =
-    TestCase
+    TestLabel "test2a" $ TestCase
     (withTestData (\ _ x _ -> x) >>= \ comments ->
      assertEqual
      "comments"
@@ -399,7 +399,7 @@ test2a =
 
 test2b :: Test
 test2b =
-    TestCase
+    TestLabel "test2b" $ TestCase
     (withTestData test >>= \ items ->
      assertEqual
      "test2b"
@@ -513,7 +513,7 @@ test2b =
 
 test2c :: Test
 test2c =
-    TestCase
+    TestLabel "test2c" $ TestCase
     (withTestData test >>= \ items ->
      assertEqual
      "moduleDecls"
@@ -525,7 +525,7 @@ test2c =
 
 test2d :: Test
 test2d =
-    TestCase
+    TestLabel "test2d" $ TestCase
     (withTestData test >>= \ items ->
      assertEqual
      "moduleItems"
@@ -537,7 +537,7 @@ test2d =
 
 test2e :: Test
 test2e =
-    TestCase
+    TestLabel "test2e" $ TestCase
     (withTestData test >>= \ items ->
      assertEqual
      "moduleItemGroups"
@@ -639,7 +639,7 @@ test2e =
 
 test2f :: Test
 test2f =
-    TestCase
+    TestLabel "test2f" $ TestCase
     (withTestData test >>= \ items ->
      assertEqual
      "moduleItemGroups filtered"
@@ -741,7 +741,7 @@ test2f =
 
 test2g :: Test
 test2g =
-    TestCase
+    TestLabel "test2g" $ TestCase
     (withTestData test >>= \ items ->
      assertEqual
      "moduleItemsFinal"
@@ -856,11 +856,11 @@ test2g =
           moduleItemsFinal s m comments
 
 test3 :: Test
-test3 = TestCase (assertEqual "textEndLoc" (SrcLoc {srcFilename = "<unknown>.hs", srcLine = 2, srcColumn = 6}) (textEndLoc "hello\nworld\n"))
+test3 = TestLabel "test3" $ TestCase (assertEqual "textEndLoc" (SrcLoc {srcFilename = "<unknown>.hs", srcLine = 2, srcColumn = 6}) (textEndLoc "hello\nworld\n"))
 
 test4 :: Test
 test4 =
-    TestCase
+    TestLabel "test4" $ TestCase $ withCurrentDirectory "testdata" $
     (B.readFile "Debian/Repo/AptCache.hs" >>= return . show . md5 >>= \ checksum ->
      assertEqual
      "Checksum"

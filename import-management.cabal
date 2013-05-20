@@ -29,7 +29,8 @@ Library
                     mtl,
                     pretty,
                     process,
-                    pureMD5
+                    pureMD5,
+                    set-extra
 
 Executable tests
   Main-is: Tests.hs

@@ -12,8 +12,6 @@ module Language.Haskell.Imports.SrcLoc
     , srcSpanText
     , srcPairText
     , srcLocSucc
-    , untabify
-    , lines'
     , tests
     ) where
 
@@ -22,20 +20,66 @@ import Data.List (intercalate, groupBy)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, srcSpanStart)
 import Language.Haskell.Exts.Syntax (ImportDecl(..), Module(..), Match(..), Decl(..))
+import Language.Haskell.Imports.Common (untabify, lines', HasSrcLoc(..), HasSrcSpan(..), Display(..))
 import Test.HUnit
 
-instance Default SrcLoc where
-    def = SrcLoc "<unknown>.hs" 1 1
+data SrcUnion a
+    = Head' a Module
+    | Comment' a Comment
+    | ImportDecl' a ImportDecl
+    | Decl' a Decl
+    -- | Space' String SrcSpan
+    | Space' a String SrcLoc
+    | Other' a String SrcLoc
+    deriving (Eq, Show)
 
--- | Class of values that contain a source location.
-class HasSrcLoc x where
-    srcLoc :: x -> SrcLoc
+instance Display (SrcUnion SrcSpan) where
+    display (Comment' sp _) = "Comment' " ++ display sp
+    display (Other' sp _ _) = "Other' " ++ display sp
+    display (Space' sp _ _) = "Space' " ++ display sp
+    display (ImportDecl' sp _) = "ImportDecl' " ++ display sp
+    display (Decl' sp _) = "Decl' " ++ display sp
+    display (Head' sp _) = "Head' " ++ display sp
 
-instance HasSrcLoc SrcSpan where
-    srcLoc (SrcSpan f b e _ _) = SrcLoc f b e
+instance HasSrcSpan (SrcUnion SrcSpan) where
+    srcSpan' (Comment' sp _) = sp
+    srcSpan' (Other' sp _ _) = sp
+    srcSpan' (Space' sp _ _) = sp
+    srcSpan' (ImportDecl' sp _) = sp
+    srcSpan' (Decl' sp _) = sp
+    srcSpan' (Head' sp _) = sp
 
-instance HasSrcLoc Module where
-    srcLoc (Module s _ _ _ _ _ _) = s
+instance Display (SrcUnion ()) where
+    display (Comment' () c) = display c
+    display (Other' () s l) = "Other' " ++ display l ++ " " ++ show s
+    display (Space' () s l) = "Space' " ++ display l ++ " " ++ show s
+    display (ImportDecl' () x) = display x
+    display (Decl' () x) = display x
+    display (Head' () x) = display x
+
+getA :: SrcUnion a -> a
+getA (Head' x _) = x
+getA (Comment' x _) = x
+getA (ImportDecl' x _) = x
+getA (Decl' x _) = x
+getA (Space' x _ _) = x
+getA (Other' x _ _) = x
+
+mapA :: (a -> b) -> SrcUnion a -> SrcUnion b
+mapA f (Head' x y) = Head' (f x) y
+mapA f (Comment' x y) = Comment' (f x) y
+mapA f (ImportDecl' x y) = ImportDecl' (f x) y
+mapA f (Decl' x y) = Decl' (f x) y
+mapA f (Space' x y z) = Space' (f x) y z
+mapA f (Other' x y z) = Other' (f x) y z
+
+instance HasSrcLoc (SrcUnion a) where
+    srcLoc (Head' _ x) = srcLoc x
+    srcLoc (Comment' _ x) = srcLoc x
+    srcLoc (ImportDecl' _ x) = srcLoc x
+    srcLoc (Decl' _ x) = srcLoc x
+    srcLoc (Space' _ _ l) = l
+    srcLoc (Other' _ _ l) = l
 
 instance HasSrcLoc Decl where
     srcLoc (TypeDecl s _ _ _) = s
@@ -81,21 +125,14 @@ instance HasSrcLoc Comment where
 class HasEndLoc x where
     endLoc :: x -> SrcLoc
 
+instance HasEndLoc (SrcUnion SrcSpan) where
+    endLoc = srcSpanEnd' . getA
+
 instance HasEndLoc SrcSpan where
     endLoc (SrcSpan f _ _ b e) = SrcLoc f b e
 
 instance HasEndLoc Comment where
     endLoc (Comment _ sp _) = srcSpanEnd' sp
-
-untabify :: String -> String
-untabify s =
-    loop 0 s
-    where
-      loop :: Int -> String -> String
-      loop n ('\t' : s') = replicate (8 - mod n 8) ' ' ++ loop 0 s'
-      loop _ ('\n' : s') = '\n' : loop 0 s'
-      loop n (c : s') = c : loop (n + 1) s'
-      loop _ [] = []
 
 textEndLoc :: String -> SrcLoc
 textEndLoc text = def {srcLine = length (lines text), srcColumn = length (last (lines text)) + 1}
@@ -148,24 +185,6 @@ srcLocSucc text pos =
       (x : _) -> case drop (srcColumn pos - 1) x of
                    "" -> pos {srcLine = srcLine pos + 1, srcColumn = 1}
                    _ -> pos {srcColumn = srcColumn pos + 1}
-
--- | A version of lines that preserves the presence or absence of a
--- terminating newline
-lines' :: String -> [String]
-lines' s =
-    bol (groupBy (\ a b -> a /= '\n' && b /= '\n') s)
-    where
-      -- If we are at beginning of line and see a newline, insert an empty
-      bol ("\n" : xs) = "" : bol xs
-      -- If we are at beginning of line and see something else, call end of line
-      bol (x : xs) = x : eol xs
-      -- If we see EOF at bol insert a trailing empty
-      bol [] = [""]
-      -- If we are at end of line and see a newline, go to beginning of line
-      eol ("\n" : xs) = bol xs
-      -- This shouldn't happen
-      eol (x : xs) = x : eol xs
-      eol [] = []
 
 ----------------
 -- UNIT TESTS --
