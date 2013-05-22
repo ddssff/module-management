@@ -20,10 +20,11 @@ import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResu
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.Syntax (Decl, ExportSpec(EVar), ImportDecl(..), ImportSpec(IVar), Module(..), ModuleName(..), Name(..), QName(UnQual))
 import Language.Haskell.Imports.Clean (cleanImports)
+import Language.Haskell.Imports.Common (withCurrentDirectory)
 import Language.Haskell.Imports.Fold (foldModule)
 import Language.Haskell.Imports.Params (runParamsT)
 import Language.Haskell.Imports.Syntax (symbol)
-import System.Directory (createDirectoryIfMissing, setCurrentDirectory)
+import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((<.>), dropExtension)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
@@ -134,7 +135,7 @@ tests = TestList [test1]
 test1 :: Test
 test1 =
     TestCase
-      (setCurrentDirectory "testdata" >>
+      (withCurrentDirectory "testdata" $
        splitModule "Debian/Repo/Package.hs" >>= \ result ->
        assertEqual
          "splitModule"

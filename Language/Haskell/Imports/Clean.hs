@@ -24,10 +24,10 @@ import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Syntax (ImportDecl(..), ImportSpec, Module(..), ModuleName(ModuleName), Name(..))
-import Language.Haskell.Imports.Common (replaceFile, tildeBackup)
+import Language.Haskell.Imports.Common (replaceFile, tildeBackup, withCurrentDirectory)
 import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, putDryRun, putScratchDir, removeEmptyImports, runParamsT, scratchDir, toDelete)
 import Language.Haskell.Imports.Syntax (HasSymbol(symbol), importsSpan, replaceImports)
-import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile, setCurrentDirectory)
+import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Exit (ExitCode(..))
 import System.FilePath ((<.>), (</>))
 import System.IO (hPutStrLn, stderr)
@@ -37,7 +37,7 @@ import Test.HUnit (assertEqual, Test(TestCase))
 test1 :: Test
 test1 =
     TestCase
-      (setCurrentDirectory "testdata" >>
+      (withCurrentDirectory "testdata" $
        runParamsT (putDryRun True >> cleanImports "Debian/Repo/Package.hs") >>= \ result ->
        assertEqual
          "cleanImports"
