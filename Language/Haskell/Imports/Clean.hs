@@ -105,8 +105,6 @@ removeFile' path = hPutStrLn stderr ("removeFile " ++ show path) >> removeFile p
 updateSource :: MonadParams m => Module -> FilePath -> Module -> [Comment] -> String -> m ()
 updateSource _ sourcePath (Module _ _ _ _ Nothing _ _) _ _ =
     error (sourcePath ++ ": Won't modify source file with no explicit export list")
-updateSource _ sourcePath (Module _ _ _ _ _ _ []) _ _ =
-    error (sourcePath ++ ": Won't modify source file with no declarations")
 updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ oldImports _)) comments sourceText =
     removeEmptyImports >>= \ remove ->
     dryRun >>= \ dry ->
