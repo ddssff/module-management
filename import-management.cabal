@@ -1,13 +1,13 @@
 Name:               import-management
 Version:            0.3
-Synopsis:           Functions to call from Setup to minimize imports and move declarations between modules
+Synopsis:           Several functions for modifying source files and managing their imports
 Homepage:           https://src.seereason.com/import-management
 License:            BSD3
 Author:             David Fox
 Maintainer:         David Fox <dsf@seereason.com>
 Category:           haskell
 Build-type:         Simple
-Cabal-version:      >=1.6
+Cabal-version:      >=1.8
 
 Library
   ghc-Options:      -Wall -O2
@@ -37,4 +37,16 @@ Library
                     set-extra
 
 Executable tests
+  Build-Depends:
+    base,
+    bytestring,
+    containers,
+    data-default,
+    directory,
+    HUnit,
+    haskell-src-exts,
+    import-management,
+    mtl,
+    pureMD5,
+    set-extra
   Main-is: Tests.hs
