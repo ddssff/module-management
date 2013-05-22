@@ -112,7 +112,7 @@ updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ old
           (\ text ->
                liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
                liftIO (replaceFile dry tildeBackup sourcePath text))
-          (replaceImports oldImports (fixNewImports remove newImports) sourceText (importsSpan m comments))
+          (replaceImports oldImports (fixNewImports remove newImports) sourceText (importsSpan m comments sourceText))
 
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: Bool -> [ImportDecl] -> [ImportDecl]

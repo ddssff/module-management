@@ -7,29 +7,31 @@ module Language.Haskell.Imports.Syntax
     ) where
 
 import Data.List (nub)
+import Data.Maybe (listToMaybe, fromMaybe)
 import Data.Monoid ((<>))
 import Language.Haskell.Exts (ParseResult(ParseOk))
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Parser (parseModule)
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (mkSrcSpan, SrcSpan)
-import Language.Haskell.Exts.Syntax (CName, Decl(..), ExportSpec(..), ImportDecl, ImportSpec(..), Match(..), Module(..), Name(..), QName(..))
-import Language.Haskell.Imports.SrcLoc (HasSrcLoc(srcLoc), srcSpanTriple)
+import Language.Haskell.Exts.SrcLoc (SrcSpan, mkSrcSpan)
+import Language.Haskell.Exts.Syntax (CName, Decl(..), ExportSpec(..), ImportDecl, ImportSpec(..), Match(..), Module(..), ModuleName(..), Name(..), QName(..))
+import Language.Haskell.Imports.SrcLoc (HasSrcLoc(srcLoc), srcSpanTriple, textEndLoc)
 
 -- | Compute the span of the source file which contains the imports by
 -- examining the SrcLoc values in the parsed source code and the
 -- comments.
-importsSpan :: Module -> [Comment] -> SrcSpan
-importsSpan (Module _ _ _ _ _ imports@(i : _) (d : _)) comments =
+importsSpan :: Module -> [Comment] -> String -> SrcSpan
+importsSpan (Module _ _ _ _ _ imports@(i : _) ds) comments text =
     mkSrcSpan b e
     where
       b = srcLoc i
       -- The imports section ends when the first declaration or
       -- comment following the last import starts
       e = case dropWhile (\ comment -> srcLoc comment <= srcLoc (last imports)) comments of
-            (c : _) -> min (srcLoc c) (srcLoc d)
-            [] -> srcLoc d
-importsSpan _ _ = error "importsSpan"
+            (c : _) -> min (srcLoc c) d
+            [] -> d
+      d = maybe (textEndLoc text) srcLoc (listToMaybe ds)
+importsSpan (Module _ (ModuleName m) _ _ _ _ _) _ _ = error $ "importsSpan " ++ m ++ ": no imports"
 
 -- | Compare the old and new import sets and if they differ clip out
 -- the imports from the sourceText and insert the new ones.
