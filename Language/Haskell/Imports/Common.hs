@@ -18,7 +18,7 @@ module Language.Haskell.Imports.Common
     , lines'
     ) where
 
-import Control.Exception (catch, throw)
+import Control.Exception (catch, throw, bracket)
 import Control.Monad.Trans (liftIO)
 import Data.Default (def, Default)
 import Data.List (groupBy, sortBy)
@@ -89,11 +89,9 @@ instance HasSrcLoc Module where
 
 withCurrentDirectory :: FilePath -> IO a -> IO a
 withCurrentDirectory path action =
-    do save <- getCurrentDirectory
-       setCurrentDirectory path
-       result <- action
-       setCurrentDirectory save
-       return result
+    bracket (getCurrentDirectory >>= \ save -> setCurrentDirectory path >> return save)
+            setCurrentDirectory
+            (const action)
 
 untabify :: String -> String
 untabify s =

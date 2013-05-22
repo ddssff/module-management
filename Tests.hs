@@ -12,11 +12,12 @@ import Language.Haskell.Exts.Annotated.Syntax as Syntax
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Imports.Common (untabify, withCurrentDirectory)
 import Language.Haskell.Imports.Fold as Fold (tests)
+import Language.Haskell.Imports.Split as Split (tests)
 import Language.Haskell.Imports.SrcLoc as SrcLoc (tests)
 import Test.HUnit (runTestTT, Test(TestList, TestCase, TestLabel), assertEqual)
 
 main =
-    do counts <- runTestTT (TestList [Fold.tests, SrcLoc.tests, Main.tests])
+    do counts <- runTestTT (TestList [Fold.tests, SrcLoc.tests, Split.tests, Main.tests])
        putStrLn (show counts)
 
 -- withTestData :: (Module -> [Comment] -> String -> IO r) -> FilePath -> IO r

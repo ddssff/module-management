@@ -24,7 +24,7 @@ import Language.Haskell.Imports.Common (withCurrentDirectory)
 import Language.Haskell.Imports.Fold (foldModule)
 import Language.Haskell.Imports.Params (runParamsT)
 import Language.Haskell.Imports.Syntax (symbol)
-import System.Directory (createDirectoryIfMissing)
+import System.Directory (createDirectoryIfMissing, renameFile)
 import System.FilePath ((<.>), dropExtension)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
@@ -44,14 +44,14 @@ subModuleName (ModuleName moduleName) name =
 -- resulting modules may need to import some of the other split
 -- modules, but we don't know which or how to avoid circular imports,
 -- so a commented out list of imports is added.
-splitModule :: FilePath -> IO ()
+splitModule :: FilePath -> IO String
 splitModule path =
     do source <- liftIO $ try ((,) <$> parseFileWithComments defaultParseMode path <*> readFile path)
        case source of
          Left (e :: SomeException) -> error (path ++ ": " ++ show e)
          Right (ParseOk (m@(Module loc moduleName pragmas warn (Just exports) _imports decls), comments), text) ->
              case decls of
-               [] -> error "splitModule: module only no declarations"
+               [] -> error $ "splitModule: " ++ path ++ " has no declarations"
                [_x] -> error "splitModule: module only has one declaration"
                _ ->  do let -- Build a (new module name, declaration list) map
                             declPairs :: Map ModuleName [(Decl, String)]
@@ -106,7 +106,7 @@ splitModule path =
                             -- The paths and contents of the files we will write
                             newFiles :: Map FilePath String
                             newFiles =
-                                Map.insert path newReExporter $
+                                -- Map.insert path newReExporter $
                                 Map.mapKeys (\ (ModuleName modName) -> map (\ c -> case c of '.' -> '/'; x -> x) modName <.> "hs") newModules
                         -- Create a subdirectory named after the old module
                         createDirectoryIfMissing True (dropExtension path)
@@ -114,6 +114,8 @@ splitModule path =
                         mapM_ (uncurry writeFile) (Map.toList newFiles)
                         -- Clean the new modules
                         mapM_ (runParamsT . cleanImports) (Map.keys newFiles)
+                        -- Return the text of the module to import all the new modules
+                        return newReExporter
 
 toImportDecl :: ModuleName -> [(Decl, String)] -> ImportDecl
 toImportDecl modName decls =
@@ -144,5 +146,50 @@ test1 =
        splitModule "Debian/Repo/Package.hs" >>= \ result ->
        assertEqual
          "splitModule"
-         ()
+         (unlines
+          "{-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}",
+          "{-# OPTIONS -fno-warn-name-shadowing  #-}",
+          "module Debian.Repo.Package.ReExporter",
+          "       (sourceFilePaths, binaryPackageSourceVersion, binarySourceVersion,",
+          "        sourcePackageBinaryNames, sourceBinaryNames, toSourcePackage,",
+          "        toBinaryPackage, binaryPackageSourceID, sourcePackageBinaryIDs,",
+          "        sourcePackagesOfIndex, sourcePackagesOfCachedIndex,",
+          "        binaryPackagesOfIndex, binaryPackagesOfCachedIndex, getPackages,",
+          "        putPackages, releaseSourcePackages, releaseBinaryPackages)",
+          "       where",
+          "import Debian.Repo.Package.BinaryPackageSourceID",
+          "       (binaryPackageSourceID)",
+          "import Debian.Repo.Package.BinaryPackageSourceVersion",
+          "       (binaryPackageSourceVersion)",
+          "import Debian.Repo.Package.BinaryPackagesOfCachedIndex",
+          "       (binaryPackagesOfCachedIndex)",
+          "import Debian.Repo.Package.BinaryPackagesOfIndex",
+          "       (binaryPackagesOfIndex)",
+          "import Debian.Repo.Package.BinarySourceVersion",
+          "       (binarySourceVersion, binarySourceVersion')",
+          "import Debian.Repo.Package.GetPackages (getPackages)",
+          "import Debian.Repo.Package.IndexCacheFile (indexCacheFile)",
+          "import Debian.Repo.Package.IndexPrefix (indexPrefix)",
+          "import Debian.Repo.Package.OtherSymbols ((+?+))",
+          "import Debian.Repo.Package.ParseSourceParagraph",
+          "       (parseSourceParagraph)",
+          "import Debian.Repo.Package.PutPackages (putPackages)",
+          "import Debian.Repo.Package.ReleaseBinaryPackages",
+          "       (releaseBinaryPackages)",
+          "import Debian.Repo.Package.ReleaseSourcePackages",
+          "       (releaseSourcePackages)",
+          "import Debian.Repo.Package.SourceBinaryNames (sourceBinaryNames)",
+          "import Debian.Repo.Package.SourceFilePaths (sourceFilePaths)",
+          "import Debian.Repo.Package.SourcePackageBinaryIDs",
+          "       (sourcePackageBinaryIDs)",
+          "import Debian.Repo.Package.SourcePackageBinaryNames",
+          "       (sourcePackageBinaryNames)",
+          "import Debian.Repo.Package.SourcePackagesOfCachedIndex",
+          "       (sourcePackagesOfCachedIndex)",
+          "import Debian.Repo.Package.SourcePackagesOfIndex",
+          "       (sourcePackagesOfIndex)",
+          "import Debian.Repo.Package.ToBinaryPackage (toBinaryPackage)",
+          "import Debian.Repo.Package.ToSourcePackage (toSourcePackage)",
+          "import Debian.Repo.Package.TryParseRel (tryParseRel)",
+          "import Debian.Repo.Package.UriToString (uriToString')")
          result)
