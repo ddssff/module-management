@@ -96,12 +96,17 @@ splitModule path =
                                                          "\n\n" <>
                                                          oldImports <>
                                                          concatMap snd modDecls) declPairs
-                            -- Replace the body of the old module with imports
-                            newReExporter = oldHeader <> prettyPrintWithMode defaultMode (Module loc (subModuleName moduleName (Symbol "ReExporter")) pragmas warn (Just exports) (elems allNewImports) [])
+
+                            -- The text of the module that replaces
+                            -- the original argument.  Replace the
+                            -- body of the old module with imports.
+                            newReExporter = oldHeader <> prettyPrintWithMode defaultMode
+                                                           (Module loc (subModuleName moduleName (Symbol "ReExporter"))
+                                                                pragmas warn (Just exports) (elems allNewImports) [])
                             -- The paths and contents of the files we will write
                             newFiles :: Map FilePath String
                             newFiles =
-                                Map.insert (dropExtension path <.> "hs") newReExporter $
+                                Map.insert path newReExporter $
                                 Map.mapKeys (\ (ModuleName modName) -> map (\ c -> case c of '.' -> '/'; x -> x) modName <.> "hs") newModules
                         -- Create a subdirectory named after the old module
                         createDirectoryIfMissing True (dropExtension path)
