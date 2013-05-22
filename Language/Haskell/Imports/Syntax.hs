@@ -7,7 +7,7 @@ module Language.Haskell.Imports.Syntax
     ) where
 
 import Data.List (nub)
-import Data.Maybe (listToMaybe, fromMaybe)
+import Data.Maybe (listToMaybe)
 import Data.Monoid ((<>))
 import Language.Haskell.Exts (ParseResult(ParseOk))
 import Language.Haskell.Exts.Comments (Comment(..))

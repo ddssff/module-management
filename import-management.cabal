@@ -40,13 +40,17 @@ Executable tests
   Build-Depends:
     base,
     bytestring,
+    Cabal,
     containers,
     data-default,
     directory,
+    filepath,
     HUnit,
     haskell-src-exts,
     import-management,
+    MonadCatchIO-mtl,
     mtl,
+    process,
     pureMD5,
     set-extra
   Main-is: Tests.hs

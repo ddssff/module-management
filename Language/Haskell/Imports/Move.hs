@@ -43,7 +43,7 @@ moveImports moves sourcePath =
                         dryRun >>= \ dry ->
                         liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
                         liftIO (replaceFile dry tildeBackup sourcePath text))
-                   (replaceImports oldImports (doMoves moves oldImports) sourceText (importsSpan m comments))
+                   (replaceImports oldImports (doMoves moves oldImports) sourceText (importsSpan m comments sourceText))
          Right _ -> error (sourcePath ++ ": could not parse")
 
 doMoves :: [(FQID, FQID)] -> [ImportDecl] -> [ImportDecl]

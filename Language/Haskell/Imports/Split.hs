@@ -76,7 +76,7 @@ splitModule path =
                             -- Build the new modules
                             newModules :: Map ModuleName String
                             newModules = mapWithKey (\ modName modDecls ->
-                                                         let newExports = catMaybes (map toExportSpec modDecls) in
+                                                         let newExports = nub $ catMaybes (map toExportSpec modDecls) in
                                                          -- In this module, we need to import any module that declares a symbol
                                                          -- referenced here.
                                                          let referenced = gFind modDecls :: Set Name in

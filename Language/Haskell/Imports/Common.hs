@@ -11,6 +11,7 @@ module Language.Haskell.Imports.Common
     , tildeBackup
     , noBackup
     , replaceFile
+    , removeFile'
     , groupBy'
     , withCurrentDirectory
     , untabify
@@ -45,6 +46,9 @@ replaceFile dryRun' backup path text =
       remove = maybe (return ()) removeFile (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       rename = maybe (return ()) (renameFile path) (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       write = writeFile path text
+
+removeFile' :: FilePath -> IO ()
+removeFile' path = putStrLn ("removeFile " ++ show path) >> removeFile path
 
 class Display a where
     display :: a -> String

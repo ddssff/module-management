@@ -6,7 +6,6 @@ module Language.Haskell.Imports.Params
     , putDryRun
     , hsFlags
     , putHsFlags
-    , toDelete
     , markForDelete
     , putScratchJunk
     , scratchDir
@@ -17,9 +16,10 @@ module Language.Haskell.Imports.Params
 
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
-import Control.Monad.Trans (MonadIO)
+import Control.Monad.Trans (MonadIO, liftIO)
 import Data.Default (Default(def))
-import Data.Set (empty, insert, Set)
+import Data.Set (empty, insert, Set, toList)
+import Language.Haskell.Imports.Common (removeFile')
 import System.FilePath ((</>))
 
 data Params
@@ -62,9 +62,6 @@ hsFlags = getParams >>= return . hsFlags_
 putHsFlags :: MonadParams m => [String] -> m ()
 putHsFlags x = modifyParams (\ p -> p {hsFlags_ = x})
 
-toDelete :: MonadParams m => m (Set FilePath)
-toDelete = getParams >>= return . junk_
-
 markForDelete :: MonadParams m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk_ = insert x (junk_ p)})
 
@@ -72,7 +69,10 @@ putScratchJunk :: MonadParams m => FilePath -> m ()
 putScratchJunk x = scratchDir >>= \ scratch -> modifyParams (\ p -> p {junk_ = insert (scratch </> x) (junk_ p)})
 
 runParamsT :: MonadIO m => StateT Params m a -> m a
-runParamsT action = runStateT action def >>= return . fst
+runParamsT action =
+    do (result, params) <- runStateT action def
+       mapM_ (liftIO . removeFile') (toList (junk_ params))
+       return result
 
 scratchDir :: MonadParams m => m FilePath
 scratchDir = getParams >>= return . scratchDir_
