@@ -23,7 +23,7 @@ import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, parseFile
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
-import Language.Haskell.Exts.Syntax (ImportDecl(..), ImportSpec, Module(..), ModuleName(ModuleName))
+import Language.Haskell.Exts.Syntax (ImportDecl(..), ImportSpec, Module(..), ModuleName(ModuleName), Name(..))
 import Language.Haskell.Imports.Common (replaceFile, tildeBackup)
 import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, putDryRun, putScratchDir, removeEmptyImports, runParamsT, scratchDir, toDelete)
 import Language.Haskell.Imports.Syntax (HasSymbol(symbol), importsSpan, replaceImports)

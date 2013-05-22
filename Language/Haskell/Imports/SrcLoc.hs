@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleInstances, ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Imports.SrcLoc
     ( HasSrcLoc(..)
     , HasEndLoc(..)

@@ -8,20 +8,25 @@ module Language.Haskell.Imports.Move
 import Control.Applicative ((<$>), (<*>))
 import Control.Exception (SomeException, try)
 import Control.Monad.Trans (liftIO)
+import Data.Char (isAlpha)
 import Data.List (findIndex, tails)
 import Data.Maybe (fromJust)
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk))
-import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..))
+import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..), QName(Qual), Name(..))
 import Language.Haskell.Imports.Common (replaceFile, tildeBackup)
 import Language.Haskell.Imports.Params (dryRun, MonadParams, putDryRun, runParamsT)
 import Language.Haskell.Imports.Syntax (importsSpan, renameSpec, replaceImports)
 
 type FQID = String -- ^ Fully qualified identifier - e.g. Language.Haskell.Imports.Clean.cleanImports
 
-parseFQID :: FQID -> (ModuleName, String)
+parseFQID :: FQID -> QName
 parseFQID s =
     let (m, n) = splitAt (fromJust (findIndex (not . elem '.') (tails s)) - 1) s in
-    (ModuleName m, (tail n))
+    Qual (ModuleName m) (parseName (tail n))
+
+parseName :: String -> Name
+parseName s@(c : _) =
+    if isAlpha c || c == '_' then Ident s else Symbol s
 
 -- | Modify the imports of a source file to reflect the changes
 -- described in the list of FQID pairs.  This function needs to be
@@ -49,8 +54,8 @@ doMoves moves decls =
       moveDecls (src, dst) decls' =
           foldr moveDecl [] decls'
           where
-            (srcM, srcN) = parseFQID src
-            (dstM, dstN) = parseFQID dst
+            Qual srcM srcN = parseFQID src
+            Qual dstM dstN = parseFQID dst
             moveDecl :: ImportDecl -> [ImportDecl] -> [ImportDecl]
             moveDecl decl@(ImportDecl {importSpecs = Nothing}) result = decl : result
             moveDecl decl@(ImportDecl {importModule = m, importSpecs = Just (flag, specs)}) result =

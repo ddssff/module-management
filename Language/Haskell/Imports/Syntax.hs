@@ -117,22 +117,15 @@ instance HasSymbol QName where
 instance HasSymbol Name where
     symbol x = Just x
 
-renameSpec :: String -> ImportSpec -> ImportSpec
+renameSpec :: Name -> ImportSpec -> ImportSpec
 renameSpec s x = mapSpecName (const s) x
 -- | Change the symbol name (but not the module path) of an
 -- ImportSpec.
-mapSpecName :: (String -> String) -> ImportSpec -> ImportSpec
-mapSpecName f = foldSpec (IVar . mapName f) (IAbs . mapName f) (IThingAll . mapName f) (\ n cn -> IThingWith (mapName f n) cn)
-
-mapName :: (String -> String) -> Name -> Name
-mapName f = foldName (Ident . f) (Symbol . f)
+mapSpecName :: (Name -> Name) -> ImportSpec -> ImportSpec
+mapSpecName f = foldSpec (IVar . f) (IAbs . f) (IThingAll . f) (\ n cn -> IThingWith (f n) cn)
 
 foldSpec :: (Name -> a) -> (Name -> a) -> (Name -> a) -> (Name -> [CName] -> a) -> ImportSpec -> a
 foldSpec f _ _ _ (IVar n) = f n
 foldSpec _ f _ _ (IAbs n) = f n
 foldSpec _ _ f _ (IThingAll n) = f n
 foldSpec _ _ _ f (IThingWith n cn) = f n cn
-
-foldName :: (String -> a) -> (String -> a) -> Name -> a
-foldName f _ (Ident s) = f s
-foldName _ f (Symbol s) = f s
