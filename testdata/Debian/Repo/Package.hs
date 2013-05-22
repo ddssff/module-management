@@ -1,7 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package
-    ( -- * Source and binary packages 
+    ( -- * Source and binary packages
       sourceFilePaths
     , binaryPackageSourceVersion
     , binarySourceVersion
@@ -64,7 +64,7 @@ sourceFilePaths package =
     Set.map ((sourceDirectory package) </>) . Set.map sourceFileName . Set.fromList . sourcePackageFiles $ package
 
 -- | Return the name and version number of the source package that
--- generated this binary package.  
+-- generated this binary package.
 binaryPackageSourceVersion :: BinaryPackage -> Maybe (String, DebianVersion)
 binaryPackageSourceVersion package =
     let binaryName = binaryPackageName package
@@ -106,7 +106,7 @@ sourcePackageBinaryNames package =
     sourceBinaryNames (sourceParagraph package)
 
 sourceBinaryNames :: B.Paragraph -> [BinPkgName]
-sourceBinaryNames paragraph = 
+sourceBinaryNames paragraph =
     case B.fieldValue "Binary" paragraph of
       Just names -> List.map BinPkgName (splitRegex (mkRegex "[ ,\t\n]+") (T.unpack names))
       _ -> error ("Source package info has no 'Binary' field:\n" ++ (T.unpack . formatParagraph $ paragraph))
@@ -168,7 +168,7 @@ toBinaryPackage :: Release -> PackageIndex -> B.Paragraph -> BinaryPackage
 toBinaryPackage release index p =
     case (B.fieldValue "Package" p, B.fieldValue "Version" p) of
       (Just name, Just version) ->
-          BinaryPackage 
+          BinaryPackage
           { packageID =
                 makeBinaryPackageID (T.unpack name) (parseDebianVersion (T.unpack version))
           , packageInfo = p
@@ -317,7 +317,7 @@ indexPrefix repo release index =
       '_' -> (init a) +?+ b
       _ -> a ++ "_" ++ b
 
--- FIXME: assuming the index is part of the cache 
+-- FIXME: assuming the index is part of the cache
 binaryPackagesOfCachedIndex :: (MonadApt m, AptCache a) => a -> RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
 binaryPackagesOfCachedIndex cache repo release index =
     do state <- getApt
