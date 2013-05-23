@@ -188,8 +188,8 @@ foldModule :: forall r.
            -> (Decl -> Maybe (String, SrcSpan) -> String -> SrcSpan -> r -> r)
            -> (String -> SrcSpan -> r -> r)
            -> Module -> [Comment] -> String -> r -> r
-foldModule headf importf declf spacef m comments text r0 =
-    doItems Nothing (moduleItemsFinal text' m comments) r0
+foldModule headf importf declf spacef m comments text0 r0 =
+    doItems Nothing (moduleItemsFinal text m comments) r0
     where
       doItems :: Maybe (String, SrcSpan) -> [SrcUnion SrcSpan] -> r -> r
       doItems Nothing (Space' sp s _ : xs) r = doItems (Just (s, sp)) xs r
@@ -207,7 +207,7 @@ foldModule headf importf declf spacef m comments text r0 =
       -- These should have been converted to Space
       doItem _ (Comment' _ _) _ _ _ = error "Unexpected: Comment'"
       doItem _ (Other' _ _ _) _ _ _ = error "Unexpected: Other'"
-      text' = untabify text
+      text = untabify text0
 
 -- | Given a list of Comment, Space and Other elements, discard the
 -- Other elements, group adjoining elements, and then turn each group
