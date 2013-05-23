@@ -6,6 +6,7 @@ module Language.Haskell.Imports.Clean
     , test1
     ) where
 
+import Control.Monad (when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
@@ -107,7 +108,7 @@ updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ old
     maybe (liftIO (putStrLn (sourcePath ++ ": no changes")))
           (\ text ->
                liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
-               liftIO (replaceFile dry tildeBackup sourcePath text))
+               liftIO (when (not dry) (replaceFile tildeBackup sourcePath text)))
           (replaceImports oldImports (fixNewImports remove newImports) sourceText (importsSpan m comments sourceText))
 
 -- | Final touch-ups - sort and merge similar imports.

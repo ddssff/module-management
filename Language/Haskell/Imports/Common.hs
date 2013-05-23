@@ -10,16 +10,20 @@ module Language.Haskell.Imports.Common
     -- , replaceImports
     , tildeBackup
     , noBackup
+    , readFileMaybe
     , replaceFile
+    , replaceFileIfDifferent
     , removeFile'
+    , removeFileIfPresent
     , groupBy'
     , withCurrentDirectory
     , untabify
     , lines'
     ) where
 
+import Control.Applicative ((<$>))
 import Control.Exception (catch, throw, bracket)
-import Control.Monad.Trans (liftIO)
+import Control.Monad (when)
 import Data.Default (def, Default)
 import Data.List (groupBy, sortBy)
 import Language.Haskell.Exts.Comments (Comment(..))
@@ -34,14 +38,23 @@ tildeBackup = Just . (++ "~")
 noBackup :: FilePath -> Maybe FilePath
 noBackup = const Nothing
 
+readFileMaybe :: FilePath -> IO (Maybe String)
+readFileMaybe path = (Just <$> readFile path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return Nothing else throw e)
+
+removeFileIfPresent :: FilePath -> IO ()
+removeFileIfPresent path = removeFile path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+
+replaceFileIfDifferent :: FilePath -> String -> IO ()
+replaceFileIfDifferent path newText =
+    do oldText <- readFileMaybe path
+       when (oldText /= Just newText) (replaceFile tildeBackup path newText)
+
 -- | Replace the file at path with the given text, moving the original
 -- to the location returned by passing path to backup.  If backup is
 -- the identity function you're going to have a bad time.
-replaceFile :: Bool -> (FilePath -> Maybe FilePath) -> FilePath -> String -> IO ()
-replaceFile dryRun' backup path text =
-    case dryRun' of
-      True -> liftIO $ putStrLn ("dryRun: replaceFile " ++ show path ++ " " ++ show text)
-      False -> liftIO $ remove >> rename >> write
+replaceFile :: (FilePath -> Maybe FilePath) -> FilePath -> String -> IO ()
+replaceFile backup path text =
+    remove >> rename >> write
     where
       remove = maybe (return ()) removeFile (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       rename = maybe (return ()) (renameFile path) (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
