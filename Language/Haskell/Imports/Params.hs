@@ -66,7 +66,7 @@ markForDelete :: MonadParams m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk_ = insert x (junk_ p)})
 
 putScratchJunk :: MonadParams m => FilePath -> m ()
-putScratchJunk x = scratchDir >>= \ scratch -> modifyParams (\ p -> p {junk_ = insert (scratch </> x) (junk_ p)})
+putScratchJunk x = scratchDir >>= \ scratch -> markForDelete (scratch </> x)
 
 runParamsT :: MonadIO m => StateT Params m a -> m a
 runParamsT action =
