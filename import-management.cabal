@@ -11,30 +11,33 @@ Cabal-version:      >=1.8
 
 Library
   ghc-Options:      -Wall -O2
-  Exposed-Modules:  Language.Haskell.Imports.Clean,
-                    Language.Haskell.Imports.Common,
-                    Language.Haskell.Imports.Fold,
-                    Language.Haskell.Imports.Move,
-                    Language.Haskell.Imports.Params,
-                    Language.Haskell.Imports.Split,
-                    Language.Haskell.Imports.Syntax,
-                    Language.Haskell.Imports.SrcLoc
-  Build-Depends:    applicative-extras,
-                    base,
-                    bytestring,
-                    Cabal,
-                    containers,
-                    data-default,
-                    directory,
-                    filepath,
-                    haskell-src-exts,
-                    HUnit,
-                    MonadCatchIO-mtl,
-                    mtl,
-                    pretty,
-                    process,
-                    pureMD5,
-                    set-extra
+  Exposed-Modules:
+    Language.Haskell.Imports.Clean,
+    Language.Haskell.Imports.Common,
+    Language.Haskell.Imports.Fold,
+    Language.Haskell.Imports.Move,
+    Language.Haskell.Imports.Params,
+    Language.Haskell.Imports.Split,
+    Language.Haskell.Imports.Syntax,
+    Language.Haskell.Imports.SrcLoc
+  Build-Depends:
+    applicative-extras,
+    base,
+    bytestring,
+    Cabal,
+    containers,
+    data-default,
+    directory,
+    filepath,
+    haskell-src-exts,
+    HUnit,
+    MonadCatchIO-mtl,
+    mtl,
+    pretty,
+    process,
+    pureMD5,
+    set-extra,
+    syb
 
 Executable tests
   Build-Depends:
@@ -52,5 +55,6 @@ Executable tests
     mtl,
     process,
     pureMD5,
-    set-extra
+    set-extra,
+    syb
   Main-is: Tests.hs

@@ -23,7 +23,7 @@ import Language.Haskell.Imports.Common (replaceFileIfDifferent, tildeBackup, wit
 import Language.Haskell.Imports.Fold (foldModule)
 import Language.Haskell.Imports.Params (dryRun, MonadParams, putDryRun, runParamsT)
 import Language.Haskell.Imports.Syntax (importsSpan, renameSpec, replaceImports)
-import System.Command (system)
+import System.Cmd (system)
 import System.FilePath ((<.>))
 import Test.HUnit (Test(TestCase), assertEqual)
 

@@ -23,7 +23,7 @@ import Language.Haskell.Imports.Common (withCurrentDirectory)
 import Language.Haskell.Imports.Fold (foldModule)
 import Language.Haskell.Imports.Params (runParamsT)
 import Language.Haskell.Imports.Syntax (symbol)
-import System.Command (system)
+import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing)
 import System.FilePath ((<.>), dropExtension)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
@@ -66,7 +66,8 @@ splitModule' path (ParseOk (m@(Module loc moduleName pragmas warn (Just exports)
     Map.insert path newReExporter $
     Map.mapKeys (\ (ModuleName modName) -> map (\ c -> case c of '.' -> '/'; x -> x) modName <.> "hs") newModules
     where
-        -- Build a (new module name, declaration list) map
+        -- Build a (new module name, declaration list) map by looking at the
+        -- import list of the argument module.
         declPairs :: Map ModuleName [(Decl, String)]
         declPairs =
             foldl ins Map.empty (foldModule
@@ -80,7 +81,6 @@ splitModule' path (ParseOk (m@(Module loc moduleName pragmas warn (Just exports)
         ins _mp (Nothing, _x) = throw $ userError $ "splitModule: no symbol"
         allNewImports :: Map ModuleName ImportDecl
         allNewImports = mapWithKey toImportDecl declPairs
-        -- allNewImports = mapWithKey  declPairs
         -- Grab any comment before the module header
         oldHeader = foldModule (\ _ pre _ _ r -> r <> maybe "" fst pre) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r) (\ s _ r -> r <> s) m comments text ""
         -- Grab the old imports
@@ -108,7 +108,7 @@ splitModule' path (ParseOk (m@(Module loc moduleName pragmas warn (Just exports)
                                      "\n\n" <>
                                      oldImports <>
                                      concatMap snd modDecls) declPairs
-         -- The text of the module that replaces
+        -- Build the the module that replaces
         -- the original argument.  Replace the
         -- body of the old module with imports.
         newReExporter = oldHeader <> prettyPrintWithMode defaultMode
