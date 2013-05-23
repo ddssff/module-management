@@ -10,14 +10,16 @@ import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Annotated.ExactPrint (exactPrint)
 import Language.Haskell.Exts.Annotated.Syntax as Syntax
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
+import Language.Haskell.Imports.Clean as Clean (test1)
 import Language.Haskell.Imports.Common (untabify, withCurrentDirectory)
 import Language.Haskell.Imports.Fold as Fold (tests)
+import Language.Haskell.Imports.Move as Move (test2)
 import Language.Haskell.Imports.Split as Split (tests)
 import Language.Haskell.Imports.SrcLoc as SrcLoc (tests)
 import Test.HUnit (runTestTT, Test(TestList, TestCase, TestLabel), assertEqual)
 
 main =
-    do counts <- runTestTT (TestList [Fold.tests, SrcLoc.tests, Split.tests, Main.tests])
+    do counts <- runTestTT (TestList [Clean.test1, Fold.tests, Move.test2, Main.tests, SrcLoc.tests, Split.tests])
        putStrLn (show counts)
 
 -- withTestData :: (Module -> [Comment] -> String -> IO r) -> FilePath -> IO r
@@ -42,7 +44,7 @@ foo = withTestModule (return . gFind) "Debian/Repo/Package.hs"
 bar = withTestModule (return . gFind) "Debian/Repo/Package.hs"
 -}
 
-tests = TestList [test1 {-, test2-}]
+tests = TestList [Main.test1 {-, test2-}]
 
 test1 =
     TestLabel "exactPrint" $ TestCase
