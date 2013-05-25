@@ -1,3 +1,9 @@
+haskell-import-management (0.5) unstable; urgency=low
+
+  * Add catModules.
+
+ -- David Fox <dsf@seereason.com>  Sat, 25 May 2013 07:55:50 -0700
+
 haskell-import-management (0.4) unstable; urgency=low
 
   * Now provides cleanImports, moveModule, splitModule, and foldModule.
