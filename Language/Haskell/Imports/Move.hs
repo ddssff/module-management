@@ -7,6 +7,7 @@ module Language.Haskell.Imports.Move
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Exception (try, throw)
+import Control.Monad (void)
 import Control.Monad.Trans (liftIO)
 import Data.Char (isAlpha)
 import Data.Generics (mkT, everywhere)
@@ -19,7 +20,7 @@ import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResu
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpan)
 import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..), QName(Qual), Name(..), ExportSpec(..), ImportSpec(..), Decl)
-import Language.Haskell.Imports.Common (replaceFileIfDifferent, tildeBackup, withCurrentDirectory, removeFileIfPresent, modulePath)
+import Language.Haskell.Imports.Common (replaceFileIfDifferent, tildeBackup, withCurrentDirectory, removeFileIfPresent, modulePath, checkParse)
 import Language.Haskell.Imports.Fold (foldModule)
 import Language.Haskell.Imports.Params (dryRun, MonadParams, putDryRun, runParamsT)
 import Language.Haskell.Imports.Syntax (importsSpan, renameSpec, replaceImports)
@@ -39,13 +40,11 @@ moveModule moves dry paths =
 
 moveModule' :: Map ModuleName ModuleName -> Bool -> FilePath -> IO ()
 moveModule' moves dry path =
-    do (m@(Module _ name _ _ _ _ _), comments) <- liftIO (checkParse <$> parseFileWithComments defaultParseMode path)
+    do ParseOk (m@(Module _ name _ _ _ _ _), comments) <- liftIO (parseFileWithComments defaultParseMode path)
        text <- liftIO $ readFile path
-       let text' = foldModule headf importf declf tailf m comments text "" in
-       let name' = Map.lookup name moves in
-       if dry
-       then putStrLn ("replaceFile " ++ (modulePath (fromMaybe name (Map.lookup name moves))))
-       else replaceFileIfDifferent (modulePath (fromMaybe name (Map.lookup name moves))) (text' <> "\n")
+       let text' = foldModule headf importf declf tailf m comments text ""
+           name' = Map.lookup name moves
+       if dry then putStrLn ("replaceFile " ++ (modulePath (fromMaybe name (Map.lookup name moves)))) else void (replaceFileIfDifferent (modulePath (fromMaybe name (Map.lookup name moves))) (text' <> "\n"))
     where
       headf (Module l name p w e i d) pre s sp r =
           r <> maybe "" fst pre <>

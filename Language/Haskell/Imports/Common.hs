@@ -51,9 +51,7 @@ removeFileIfPresent path = removeFile path `catch` (\ (e :: IOError) -> if isDoe
 replaceFileIfDifferent :: FilePath -> String -> IO Bool
 replaceFileIfDifferent path newText =
     do oldText <- readFileMaybe path
-       if oldText == Just newText
-       then return False
-       else replaceFile tildeBackup path newText >> return True
+       if oldText == Just newText then return False else replaceFile tildeBackup path newText >> return True
 
 -- | Replace the file at path with the given text, moving the original
 -- to the location returned by passing path to backup.  If backup is

@@ -12,6 +12,7 @@ Cabal-version:      >=1.8
 Library
   ghc-Options:      -Wall -O2
   Exposed-Modules:
+    Language.Haskell.Imports.Cat,
     Language.Haskell.Imports.Clean,
     Language.Haskell.Imports.Common,
     Language.Haskell.Imports.Fold,
