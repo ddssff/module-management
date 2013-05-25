@@ -19,7 +19,12 @@ import Language.Haskell.Imports.SrcLoc as SrcLoc (tests)
 import Test.HUnit (runTestTT, Test(TestList, TestCase, TestLabel), assertEqual)
 
 main =
-    do counts <- runTestTT (TestList [Clean.test1, Fold.tests, Move.test2, Main.tests, SrcLoc.tests, Split.tests])
+    do counts <- runTestTT (TestList [TestLabel "Clean" Clean.test1,
+                                      TestLabel "Fold" Fold.tests,
+                                      TestLabel "Move" Move.test2,
+                                      TestLabel "Main" Main.tests,
+                                      TestLabel "SrcLoc" SrcLoc.tests,
+                                      TestLabel "Split" Split.tests])
        putStrLn (show counts)
 
 -- withTestData :: (Module -> [Comment] -> String -> IO r) -> FilePath -> IO r

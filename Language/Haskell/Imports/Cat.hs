@@ -6,22 +6,17 @@ module Language.Haskell.Imports.Cat
 
 import Debug.Trace
 
-import Control.Applicative ((<$>), (<*>))
-import Control.Exception (SomeException, try, throw)
+import Control.Applicative ((<$>))
+import Control.Exception (throw)
 import Control.Monad as List (mapM, mapM_, filterM)
 import Control.Monad.Trans (liftIO)
-import Data.Char (isAlpha)
 import Data.Generics (Data, mkT, everywhere)
-import Data.List as List (findIndex, tails, null, partition, nub, map)
-import Data.Map as Map (Map, lookup, fromList, elems, keys)
-import Data.Maybe (fromJust, fromMaybe)
+import Data.List as List (null, map)
 import Data.Monoid ((<>))
-import Data.Set as Set (Set, toList, fromList, difference, member, insert, union, null, map)
-import Data.Set.Extra as Set (mapM, mapM_)
-import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk, ParseFailed))
+import Data.Set as Set (Set, toList, fromList, member, union, map)
+import Language.Haskell.Exts (defaultParseMode, parseFileWithComments)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (SrcSpan)
 import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..), QName(Qual), Name(..), ExportSpec(..), ImportSpec(..), Decl)
 import Language.Haskell.Imports.Clean (cleanImports)
 import Language.Haskell.Imports.Common (replaceFileIfDifferent, tildeBackup, withCurrentDirectory, removeFileIfPresent, modulePath, checkParse)
@@ -52,13 +47,13 @@ catModules all from to
                 -- Remove the original modules
                 List.mapM_ (removeFileIfPresent . modulePath) from
                 -- Clean up the imports of the new modules
-                runParamsT $ List.mapM_ cleanImports (List.map modulePath (Set.toList changed))
+                runParamsT "dist/scratch" $ List.mapM_ cleanImports (List.map modulePath (Set.toList changed))
 
 -- | Update the module 'name' to reflect the result of the cat operation.
 catModules' :: Set ModuleName -> [(ModuleName, Module, [Comment], String)] -> ModuleName -> ModuleName -> IO Bool
 catModules' all from@((first, _, _, _) : _) to name =
     do text <- liftIO . readFile . modulePath $ name
-       (m@(Module loc _ p w e i d), comments) <- liftIO (checkParse name <$> parseFileWithComments defaultParseMode (modulePath name))
+       (m, comments) <- liftIO (checkParse name <$> parseFileWithComments defaultParseMode (modulePath name))
        let name' = if name == first then to else name
            text' = catModules'' all from to (name, m, comments, text)
        replaceFileIfDifferent (modulePath name') text'

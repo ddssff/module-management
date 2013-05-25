@@ -54,7 +54,7 @@ splitModule path =
        -- Write the new modules
        mapM_ (uncurry writeFile) (Map.toList newFiles)
        -- Clean the new modules
-       runParamsT $ mapM_ cleanImports (Map.keys newFiles)
+       runParamsT "dist/scratch" $ mapM_ cleanImports (Map.keys newFiles)
 
 splitModule' :: FilePath -> ParseResult (Module, [Comment]) -> String -> Map FilePath String
 splitModule' _ (ParseOk (Module _ _ _ _ _ _ [], _)) _ = empty -- No declarations - nothing to split

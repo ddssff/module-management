@@ -5,27 +5,20 @@ module Language.Haskell.Imports.Move
     , test2
     ) where
 
-import Control.Applicative ((<$>), (<*>))
-import Control.Exception (try, throw)
 import Control.Monad (void)
 import Control.Monad.Trans (liftIO)
-import Data.Char (isAlpha)
 import Data.Generics (mkT, everywhere)
-import Data.List (findIndex, tails)
 import Data.Map as Map (Map, lookup, fromList, elems, keys)
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Set as Set (toList, fromList, difference)
-import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk, ParseFailed))
+import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpan)
-import Language.Haskell.Exts.Syntax (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..), QName(Qual), Name(..), ExportSpec(..), ImportSpec(..), Decl)
-import Language.Haskell.Imports.Common (replaceFileIfDifferent, tildeBackup, withCurrentDirectory, removeFileIfPresent, modulePath, checkParse)
+import Language.Haskell.Exts.Syntax (ImportDecl, Module(Module), ModuleName(..), QName(Qual), ExportSpec(..))
+import Language.Haskell.Imports.Common (replaceFileIfDifferent, withCurrentDirectory, removeFileIfPresent, modulePath)
 import Language.Haskell.Imports.Fold (foldModule)
-import Language.Haskell.Imports.Params (dryRun, MonadParams, putDryRun, runParamsT)
-import Language.Haskell.Imports.Syntax (importsSpan, renameSpec, replaceImports)
 import System.Cmd (system)
-import System.FilePath ((<.>))
 import Test.HUnit (Test(TestCase), assertEqual)
 
 -- | Modify the imports of a source file to reflect the changes
@@ -43,20 +36,20 @@ moveModule' moves dry path =
     do ParseOk (m@(Module _ name _ _ _ _ _), comments) <- liftIO (parseFileWithComments defaultParseMode path)
        text <- liftIO $ readFile path
        let text' = foldModule headf importf declf tailf m comments text ""
-           name' = Map.lookup name moves
+           -- name' = Map.lookup name moves
        if dry then putStrLn ("replaceFile " ++ (modulePath (fromMaybe name (Map.lookup name moves)))) else void (replaceFileIfDifferent (modulePath (fromMaybe name (Map.lookup name moves))) (text' <> "\n"))
     where
-      headf (Module l name p w e i d) pre s sp r =
+      headf (Module l name p w e _i _d) pre s _sp r =
           r <> maybe "" fst pre <>
           maybe s (\ name' -> prettyPrintWithMode defaultMode (Module l name' p w (fmap (map (moveExportSpec moves)) e) [] []) <> "\n\n") (Map.lookup name moves)
       importf :: ImportDecl -> Maybe (String, SrcSpan) -> String -> SrcSpan -> String -> String
-      importf x pre s sp r =
+      importf x pre s _sp r =
           r <> maybe "" fst pre <>
           if x /= x'
           then prettyPrintWithMode defaultMode x' <> "\n"
           else s
           where x' = everywhere (mkT (moveModuleName moves)) x
-      declf x pre s sp r =
+      declf x pre s _sp r =
           r <> maybe "" fst pre <>
           if x /= x'
           then prettyPrintWithMode defaultMode x'
@@ -74,8 +67,8 @@ moveQName _ x = x
 moveModuleName :: Map ModuleName ModuleName -> ModuleName -> ModuleName
 moveModuleName moves m = fromMaybe m (Map.lookup m moves)
 
-moveDecl :: Map ModuleName ModuleName -> Decl -> Decl
-moveDecl moves x = everywhere (mkT (moveQName moves)) x
+-- moveDecl :: Map ModuleName ModuleName -> Decl -> Decl
+-- moveDecl moves x = everywhere (mkT (moveQName moves)) x
 
 test2 :: Test
 test2 =

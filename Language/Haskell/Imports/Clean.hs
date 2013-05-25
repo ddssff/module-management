@@ -23,7 +23,7 @@ import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Syntax (ImportDecl(..), ImportSpec, Module(..), ModuleName(ModuleName), Name(..))
 import Language.Haskell.Imports.Common (replaceFile, tildeBackup, withCurrentDirectory)
-import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, putDryRun, putScratchDir, removeEmptyImports, runParamsT, scratchDir)
+import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, {-putDryRun,-} removeEmptyImports, runParamsT, scratchDir)
 import Language.Haskell.Imports.Syntax (HasSymbol(symbol), importsSpan, replaceImports)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
@@ -37,7 +37,7 @@ test1 =
     TestCase
       (do _ <- system "rsync -aHxS --delete testdata/ testcopy"
           let path = "Debian/Repo/Types/PackageIndex.hs"
-          _ <- withCurrentDirectory "testcopy" (runParamsT (cleanImports path))
+          _ <- withCurrentDirectory "testcopy" (runParamsT "dist/scratch" (cleanImports path))
           (ExitFailure 1, diff, _) <- readProcessWithExitCode "diff" ["-ru", "testdata" </> path, "testcopy" </> path] ""
           assertEqual "cleanImports"
                           ["@@ -22,13 +22,13 @@",
@@ -61,11 +61,10 @@ test1 =
 -- | This is designed to be called from the postConf script of your
 -- Setup file, it cleans up the imports of all the source files in the
 -- package.
-cleanBuildImports :: MonadParams m => LocalBuildInfo -> m ()
+cleanBuildImports :: LocalBuildInfo -> IO ()
 cleanBuildImports lbi =
-    putScratchDir (Distribution.Simple.LocalBuildInfo.scratchDir lbi) >>
-    mapM (liftIO . toFilePath srcDirs) (maybe [] exposedModules (library (localPkgDescr lbi))) >>= \ libPaths ->
-    mapM_ clean (libPaths ++ exePaths)
+    mapM (toFilePath srcDirs) (maybe [] exposedModules (library (localPkgDescr lbi))) >>= \ libPaths ->
+    runParamsT (Distribution.Simple.LocalBuildInfo.scratchDir lbi) $ mapM_ clean (libPaths ++ exePaths)
     where
       clean path = cleanImports path >>= liftIO . putStrLn . either show (\ text -> path ++ ": " ++ maybe "no changes" (\ _ -> " updated") text)
       exePaths = map modulePath (executables (localPkgDescr lbi))

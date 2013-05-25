@@ -38,7 +38,8 @@ Library
     process,
     pureMD5,
     set-extra >= 1.3.1,
-    syb
+    syb,
+    system-fileio
 
 Executable tests
   Build-Depends:
@@ -57,5 +58,6 @@ Executable tests
     process,
     pureMD5,
     set-extra,
-    syb
+    syb,
+    system-fileio
   Main-is: Tests.hs
