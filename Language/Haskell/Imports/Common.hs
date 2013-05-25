@@ -19,6 +19,8 @@ module Language.Haskell.Imports.Common
     , withCurrentDirectory
     , untabify
     , lines'
+    , checkParse
+    , modulePath
     ) where
 
 import Control.Applicative ((<$>))
@@ -26,10 +28,12 @@ import Control.Exception (catch, throw, bracket)
 import Control.Monad (when)
 import Data.Default (def, Default)
 import Data.List (groupBy, sortBy)
+import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcSpan(SrcSpan))
-import Language.Haskell.Exts.Syntax (Decl, ImportDecl, Module(..), SrcLoc(SrcLoc))
+import Language.Haskell.Exts.Syntax (Decl, ImportDecl, Module(..), SrcLoc(SrcLoc), ModuleName(..))
 import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
+import System.FilePath ((<.>))
 import System.IO.Error (isDoesNotExistError)
 
 tildeBackup :: FilePath -> Maybe FilePath
@@ -44,10 +48,12 @@ readFileMaybe path = (Just <$> readFile path) `catch` (\ (e :: IOError) -> if is
 removeFileIfPresent :: FilePath -> IO ()
 removeFileIfPresent path = removeFile path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
 
-replaceFileIfDifferent :: FilePath -> String -> IO ()
+replaceFileIfDifferent :: FilePath -> String -> IO Bool
 replaceFileIfDifferent path newText =
     do oldText <- readFileMaybe path
-       when (oldText /= Just newText) (replaceFile tildeBackup path newText)
+       if oldText == Just newText
+       then return False
+       else replaceFile tildeBackup path newText >> return True
 
 -- | Replace the file at path with the given text, moving the original
 -- to the location returned by passing path to backup.  If backup is
@@ -144,3 +150,13 @@ lines' s =
       -- This shouldn't happen
       eol (x : xs) = x : eol xs
       eol [] = []
+
+checkParse :: ModuleName -> ParseResult a -> a
+checkParse (ModuleName name) (ParseFailed loc msg) = throw $ userError $ "Parse Failure in " ++ name ++ " at " ++ show loc ++ ": " ++ msg
+checkParse _ (ParseOk x) = x
+
+modulePath :: ModuleName -> FilePath
+modulePath (ModuleName name) =
+    map f name <.> "hs"
+        where f '.' = '/'
+              f c = c

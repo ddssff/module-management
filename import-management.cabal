@@ -36,7 +36,7 @@ Library
     pretty,
     process,
     pureMD5,
-    set-extra,
+    set-extra >= 1.3.1,
     syb
 
 Executable tests
