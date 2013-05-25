@@ -27,10 +27,10 @@ import System.Process.Progress (qPutStrLn, quieter, runProcessF)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 prepareAptEnv :: MonadApt m =>
-                 FilePath		-- Put environment in a subdirectory of this
-              -> SourcesChangedAction	-- What to do if environment already exists and sources.list is different
-              -> NamedSliceList		-- The sources.list
-              -> m AptImage		-- The resulting environment
+                 FilePath               -- Put environment in a subdirectory of this
+              -> SourcesChangedAction   -- What to do if environment already exists and sources.list is different
+              -> NamedSliceList         -- The sources.list
+              -> m AptImage             -- The resulting environment
 prepareAptEnv cacheDir sourcesChangedAction sources =
     (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (sliceName (sliceListName sources))) >> quieter 2 x) $
     getApt >>= return . lookupAptImage (sliceListName sources) >>=
@@ -83,7 +83,7 @@ updateAptEnv os =
       cmp = flip (compare `on` (packageVersion . sourcePackageID))
 {-
       cmp p1 p2 =
-          compare v2 v1		-- Flip args to get newest first
+          compare v2 v1         -- Flip args to get newest first
           where
             v1 = packageVersion . sourcePackageID $ p1
             v2 = packageVersion . sourcePackageID $ p2

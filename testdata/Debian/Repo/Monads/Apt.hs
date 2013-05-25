@@ -70,9 +70,9 @@ type AptIO = AptIOT IO
 -- | This represents the state of the IO system.
 data AptState
     = AptState
-      { repoMap :: Map.Map RepoKey Repository		-- ^ Map to look up known Repository objects
+      { repoMap :: Map.Map RepoKey Repository           -- ^ Map to look up known Repository objects
       , releaseMap :: Map.Map (RepoKey, ReleaseName) Release -- ^ Map to look up known Release objects
-      , aptImageMap :: Map.Map SliceName AptImage	-- ^ Map to look up prepared AptImage objects
+      , aptImageMap :: Map.Map SliceName AptImage       -- ^ Map to look up prepared AptImage objects
       , sourcePackageMap :: Map.Map FilePath (FileStatus, [SourcePackage]) -- ^ The contents of a package index, and status of local cache of index file
       , binaryPackageMap :: Map.Map FilePath (FileStatus, [BinaryPackage])
       }
@@ -154,11 +154,11 @@ insertBinaryPackages key packages state =
 
 readParagraphs :: FilePath -> IO [B.Paragraph]
 readParagraphs path =
-    do --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path)			-- Debugging output
+    do --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path)                 -- Debugging output
        h <- IO.openBinaryFile path IO.ReadMode
        B.Control paragraphs <- B.parseControlFromHandle path h >>= return . (either (error . show) id)
        IO.hClose h
-       --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path ++ " done.")	-- Debugging output
+       --IO.hPutStrLn IO.stderr ("OSImage.paragraphsFromFile " ++ path ++ " done.")     -- Debugging output
        return paragraphs
 
 findRelease :: Repository -> ReleaseName -> AptState -> Maybe Release

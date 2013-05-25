@@ -111,7 +111,7 @@ aptSourcePackagesSorted os names =
       filterNames names' packages =
           filter (flip elem names' . sourcePackageName) packages
       cmp p1 p2 =
-          compare v2 v1		-- Flip args to get newest first
+          compare v2 v1         -- Flip args to get newest first
           where
             v1 = packageVersion . sourcePackageID $ p1
             v2 = packageVersion . sourcePackageID $ p2
@@ -284,18 +284,18 @@ updateCacheSources sourcesChangedAction distro =
       case distExists of
         True ->
             do
-	      fileSources <- liftIO (readFile (Debian.Repo.AptCache.sourcesPath distro)) >>= verifySourcesList Nothing . parseSourcesList
-	      case (fileSources == baseSources, sourcesChangedAction) of
-	        (True, _) -> return ()
-	        (False, SourcesChangedError) ->
+              fileSources <- liftIO (readFile (Debian.Repo.AptCache.sourcesPath distro)) >>= verifySourcesList Nothing . parseSourcesList
+              case (fileSources == baseSources, sourcesChangedAction) of
+                (True, _) -> return ()
+                (False, SourcesChangedError) ->
                     do
                       ePutStrLn ("The sources.list in the existing '" ++ relName (aptReleaseName distro) ++
                                  "' build environment doesn't match the parameters passed to the autobuilder" ++
-			         ":\n\n" ++ Debian.Repo.AptCache.sourcesPath distro ++ ":\n\n" ++
+                                 ":\n\n" ++ Debian.Repo.AptCache.sourcesPath distro ++ ":\n\n" ++
                                  show (pretty fileSources) ++
-			         "\nRun-time parameters:\n\n" ++
+                                 "\nRun-time parameters:\n\n" ++
                                  show (pretty baseSources) ++ "\n" ++
-			         "It is likely that the build environment in\n" ++
+                                 "It is likely that the build environment in\n" ++
                                  dir ++ " is invalid and should be rebuilt.")
                       ePutStr $ "Remove it and continue (or exit)?  [y/n]: "
                       result <- liftIO $ hGetLine stdin
@@ -321,9 +321,9 @@ updateCacheSources sourcesChangedAction distro =
                       liftIO $ removeFile (Debian.Repo.AptCache.sourcesPath distro)
                       liftIO $ replaceFile (Debian.Repo.AptCache.sourcesPath distro) (show (pretty baseSources))
         False ->
-	    do
+            do
               liftIO $ createDirectoryIfMissing True dir
-	      liftIO $ replaceFile (Debian.Repo.AptCache.sourcesPath distro) (show (pretty baseSources))
+              liftIO $ replaceFile (Debian.Repo.AptCache.sourcesPath distro) (show (pretty baseSources))
       return distro
 
 -- | Return a sorted list of available source packages, newest version first.
@@ -335,7 +335,7 @@ sourcePackages os names =
       filterNames packages =
           filter (flip elem names . sourcePackageName) packages
       cmp p1 p2 =
-          compare v2 v1		-- Flip args to get newest first
+          compare v2 v1         -- Flip args to get newest first
           where
             v1 = packageVersion . sourcePackageID $ p1
             v2 = packageVersion . sourcePackageID $ p2
@@ -348,7 +348,7 @@ binaryPackages os names =
       filterNames packages =
           filter (flip elem names . binaryPackageName) packages
       cmp p1 p2 =
-          compare v2 v1		-- Flip args to get newest first
+          compare v2 v1         -- Flip args to get newest first
           where
             v1 = packageVersion . packageID $ p1
             v2 = packageVersion . packageID $ p2

@@ -2,10 +2,10 @@
 --- | A DebSource represents a release of a remote repository and a
 --- method for accessing that repository.
 module Debian.Repo.SourcesList
-    (parseSourceLine,	-- String -> DebSource
-     parseSourceLine',	-- String -> Maybe DebSource
-     parseSourcesList,	-- String -> [DebSource]
-     quoteWords	-- String -> [String]
+    (parseSourceLine,   -- String -> DebSource
+     parseSourceLine',  -- String -> Maybe DebSource
+     parseSourcesList,  -- String -> [DebSource]
+     quoteWords -- String -> [String]
     )
     where
 
