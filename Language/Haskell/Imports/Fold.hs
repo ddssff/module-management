@@ -860,5 +860,5 @@ test4 =
     (B.readFile "Debian/Repo/AptCache.hs" >>= return . show . md5 >>= \ checksum ->
      assertEqual
      "Checksum"
-     "3c0c2e7422bfc3c3f39402f3dd4fa5af"
+     "520a43405fbc25fda0788a2f4607ffdc"
      checksum)

@@ -22,7 +22,7 @@ module Debian.Repo.Types.PackageIndex
     , prettyPkgVersion
     ) where
 
-import Data.Text (Text)
+import Data.Text (Text, map)
 import Debian.Arch (Arch(..))
 import qualified Debian.Control.Text as T (Paragraph)
 import Debian.Relation (BinPkgName(..), SrcPkgName(..))

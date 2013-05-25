@@ -7,12 +7,12 @@ module Language.Haskell.Imports.Clean
     ) where
 
 import Control.Monad (when)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (try, catch, throw)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
 import Data.Default (def, Default)
 import Data.Function (on)
-import Data.List (groupBy, intercalate, nub, sortBy)
+import Data.List (groupBy, intercalate, nub, sortBy, find)
 import Data.Maybe (catMaybes)
 import qualified Distribution.ModuleName as D (components, ModuleName)
 import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Executable(modulePath), Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
@@ -25,22 +25,38 @@ import Language.Haskell.Exts.Syntax (ImportDecl(..), ImportSpec, Module(..), Mod
 import Language.Haskell.Imports.Common (replaceFile, tildeBackup, withCurrentDirectory)
 import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, putDryRun, putScratchDir, removeEmptyImports, runParamsT, scratchDir)
 import Language.Haskell.Imports.Syntax (HasSymbol(symbol), importsSpan, replaceImports)
-import System.Directory (createDirectoryIfMissing, doesFileExist)
+import System.Cmd (system)
+import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath ((<.>), (</>))
-import System.IO (hPutStrLn, stderr)
 import System.Process (readProcessWithExitCode, showCommandForUser)
 import Test.HUnit (assertEqual, Test(TestCase))
 
 test1 :: Test
 test1 =
     TestCase
-      (withCurrentDirectory "testdata" $
-       runParamsT (putDryRun True >> cleanImports "Debian/Repo/Package.hs") >>= \ result ->
-       assertEqual
-         "cleanImports"
-         ()
-         result)
+      (do _ <- system "rsync -aHxS --delete testdata/ testcopy"
+          let path = "Debian/Repo/Types/PackageIndex.hs"
+          _ <- withCurrentDirectory "testcopy" (runParamsT (cleanImports path))
+          (ExitFailure 1, diff, _) <- readProcessWithExitCode "diff" ["-ru", "testdata" </> path, "testcopy" </> path] ""
+          assertEqual "cleanImports"
+                          ["@@ -22,13 +22,13 @@",
+                           "     , prettyPkgVersion",
+                           "     ) where",
+                           " ",
+                           "-import Data.Text (Text, map)",
+                           "+import Data.Text (Text)",
+                           " import Debian.Arch (Arch(..))",
+                           " import qualified Debian.Control.Text as T (Paragraph)",
+                           " import Debian.Relation (BinPkgName(..), SrcPkgName(..))",
+                           " import qualified Debian.Relation as B (PkgName, Relations)",
+                           " import Debian.Release (Section(..))",
+                           "-import Debian.Repo.Orphans ({- instances -})",
+                           "+import Debian.Repo.Orphans ()",
+                           " import Debian.Version (DebianVersion, prettyDebianVersion)",
+                           " import System.Posix.Types (FileOffset)",
+                           " import Text.PrettyPrint.ANSI.Leijen ((<>), Doc, Pretty(pretty), text)"]
+                          (drop 2 (lines diff)))
 
 -- | This is designed to be called from the postConf script of your
 -- Setup file, it cleans up the imports of all the source files in the
@@ -49,8 +65,9 @@ cleanBuildImports :: MonadParams m => LocalBuildInfo -> m ()
 cleanBuildImports lbi =
     putScratchDir (Distribution.Simple.LocalBuildInfo.scratchDir lbi) >>
     mapM (liftIO . toFilePath srcDirs) (maybe [] exposedModules (library (localPkgDescr lbi))) >>= \ libPaths ->
-    mapM_ cleanImports (libPaths ++ exePaths)
+    mapM_ clean (libPaths ++ exePaths)
     where
+      clean path = cleanImports path >>= liftIO . putStrLn . either show (\ text -> path ++ ": " ++ maybe "no changes" (\ _ -> " updated") text)
       exePaths = map modulePath (executables (localPkgDescr lbi))
       srcDirs = case (maybe [] hsSourceDirs . fmap libBuildInfo . library . localPkgDescr $ lbi) of
                   [] -> ["."]
@@ -63,10 +80,10 @@ cleanBuildImports lbi =
           if exists then return path else toFilePath dirs m
 
 -- | Clean up the imports of a source file.
-cleanImports :: MonadParams m => FilePath -> m ()
+cleanImports :: MonadParams m => FilePath -> m (Either IOError (Maybe String))
 cleanImports sourcePath =
-    (dumpImports sourcePath >> checkImports sourcePath)
-      `catch` (\ (e :: IOError) -> liftIO (hPutStrLn stderr (show e)))
+    try (dumpImports sourcePath >> checkImports sourcePath)
+      -- `catch` (\ (e :: IOError) -> liftIO (hPutStrLn stderr (show e)))
 
 
 dumpImports :: MonadParams m => FilePath -> m ()
@@ -77,13 +94,13 @@ dumpImports sourcePath =
        args' <- hsFlags >>= return . (["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, sourcePath] ++)
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
-         ExitSuccess -> return ()
+         ExitSuccess -> return () -- liftIO $ putStrLn $ showCommandForUser cmd args' ++ " -> Ok"
          ExitFailure _ -> error (sourcePath ++ ": compile failed\n " ++ showCommandForUser cmd args' ++ " ->\n" ++ err)
 
 -- | Parse the import list generated by GHC, parse the original source
 -- file, and if all goes well insert the new imports into the old
 -- source file.
-checkImports :: MonadParams m => FilePath -> m ()
+checkImports :: MonadParams m => FilePath -> m (Maybe String)
 checkImports sourcePath =
     do source <- liftIO $ parseFileWithComments defaultParseMode sourcePath
        sourceText <- liftIO $ readFile sourcePath
@@ -91,7 +108,7 @@ checkImports sourcePath =
          ParseOk (m@(Module _ (ModuleName name) _ _ _ _ _), comments) ->
              do let importsPath = name <.> ".imports"
                 markForDelete importsPath
-                result <- liftIO (parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath)
+                result <- liftIO (parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath) `catch` (\ (e :: IOError) -> liftIO getCurrentDirectory >>= \ here -> liftIO . throw . userError $ here ++ ": " ++ show e)
                 case result of
                   ParseOk newImports -> updateSource newImports sourcePath m comments sourceText
                   _ -> error (importsPath ++ ": parse failed")
@@ -99,21 +116,22 @@ checkImports sourcePath =
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: MonadParams m => Module -> FilePath -> Module -> [Comment] -> String -> m ()
+updateSource :: MonadParams m => Module -> FilePath -> Module -> [Comment] -> String -> m (Maybe String)
 updateSource _ sourcePath (Module _ _ _ _ Nothing _ _) _ _ =
     error (sourcePath ++ ": Won't modify source file with no explicit export list")
 updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ oldImports _)) comments sourceText =
     removeEmptyImports >>= \ remove ->
     dryRun >>= \ dry ->
-    maybe (liftIO (putStrLn (sourcePath ++ ": no changes")))
+    maybe (liftIO (putStrLn (sourcePath ++ ": no changes")) >> return Nothing)
           (\ text ->
                liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
-               liftIO (when (not dry) (replaceFile tildeBackup sourcePath text)))
-          (replaceImports oldImports (fixNewImports remove newImports) sourceText (importsSpan m comments sourceText))
+               liftIO (when (not dry) (replaceFile tildeBackup sourcePath text)) >>
+               return (Just text))
+          (replaceImports oldImports (fixNewImports remove oldImports newImports) sourceText (importsSpan m comments sourceText))
 
 -- | Final touch-ups - sort and merge similar imports.
-fixNewImports :: Bool -> [ImportDecl] -> [ImportDecl]
-fixNewImports remove imports =
+fixNewImports :: Bool -> [ImportDecl] -> [ImportDecl] -> [ImportDecl]
+fixNewImports remove oldImports imports =
     filter filterDecls $ map mergeDecls $ groupBy ((==) `on` noSpecs) $ sortBy importCompare imports
     where
       importCompare a b =
@@ -129,8 +147,10 @@ fixNewImports remove imports =
       mergeSpecs (x : xs) = Just (fst x, sortBy compareSpecs (nub (concat (snd x : map snd xs))))
       mergeSpecs [] = error "mergeSpecs"
       filterDecls :: ImportDecl -> Bool
-      filterDecls (ImportDecl _ _ _ _ _ _ (Just (_, []))) = not remove
+      filterDecls (ImportDecl _ m _ _ _ _ (Just (_, []))) = not remove || maybe False (isEmptyImport . importSpecs) (find ((== m) . importModule) oldImports)
       filterDecls _ = True
+      isEmptyImport (Just (_, [])) = True
+      isEmptyImport _ = False
 
 -- Not sure why this is case insensitive
 compareSpecs :: ImportSpec -> ImportSpec -> Ordering

@@ -41,7 +41,8 @@ replaceImports oldImports newImports sourceText sp =
     then let (hd, _, tl) = srcSpanTriple sp sourceText
              -- Instead of inserting this newline we should figure out what was
              -- between the last import and the first declaration, but not sure
-             -- how to locate the end of an import.
+             -- how to locate the end of an import.  (Now I know how, use
+             -- foldModule, but I wrote that after this.)
              new = hd <> newPretty <> "\n" <> tl in
          if new /= sourceText then Just new else Nothing
     else Nothing
