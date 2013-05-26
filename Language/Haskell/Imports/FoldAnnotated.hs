@@ -289,7 +289,11 @@ instance HasEndLoc SrcUnion where
 mapA :: (SrcSpan -> SrcSpan) -> SrcUnion -> SrcUnion
 mapA f u = putSrcSpan (f (srcSpan u)) u
 
--- Note that comments will overlap with the other elements
+-- | Given the result of parseModuleWithComments and the original
+-- module text, this does a fold over the parsed module contents,
+-- calling the seven argument functions in order.  Each function is
+-- passed the AST value, the text of the space and comments leading up
+-- to the element, and the text for the element.
 foldModule :: forall r.
               (ModulePragma SrcSpanInfo -> String -> String -> r -> r)
            -> (ModuleName SrcSpanInfo -> String -> String -> r -> r)
@@ -323,11 +327,10 @@ foldModule pragmaf namef warningf exportf importf declf spacef m comments text0 
       doItem _ (Other' _ _) _ _ _ = error "Unexpected: Other'"
       text = untabify text0
 
--- | If two elements have the same end position, one will be space and
--- one will be code.  Move the end of the code element to just before
--- the beginning of the space element.  Finally, remove any space
--- items that start after their successor, these are embedded comments
--- which we can't do anything with.
+-- | Given the result of a parse, generate the corresponding list of
+-- SrcUnion elements.  The list items are instances of HasSrcSpan, and
+-- they are guaranteed to exactly cover the characters of the source
+-- file text.
 moduleItemsFinal :: String -> Module SrcSpanInfo -> [Comment] -> [SrcUnion]
 moduleItemsFinal text m comments =
     sortBy (compare `on` srcSpan) $ concatMap (adjust . sortBy (compare `on` srcLoc)) groups
@@ -349,8 +352,10 @@ moduleItemsFinal text m comments =
           where
             sp = foldr1 mergeSrcSpan (map srcSpan xs)
 
--- | Zip the decls and space together sorted by end position.  Collect overlapping items into groups.
--- To collect overlaps, we first sort by endLoc and reverse the list.  As we scan this list, items whose start location precedes 
+-- | Zip the decls and space together sorted by end position.  Collect
+-- overlapping items into groups.  To collect overlaps, we first sort
+-- by endLoc and reverse the list.  As we scan this list, items whose
+-- start location precedes
 moduleItemGroups :: String -> Module SrcSpanInfo -> [Comment] -> [[SrcUnion]]
 moduleItemGroups text m comments =
     reverse $ groups
@@ -371,6 +376,8 @@ moduleItemGroups text m comments =
       decls = moduleDecls text m
       space = moduleSpace text comments
 
+-- | If an element begins after and ends before some other element,
+-- discard it.
 filterEmbedded :: [SrcUnion] -> [SrcUnion]
 filterEmbedded xs =
     filter (not . embedded) xs
@@ -378,7 +385,8 @@ filterEmbedded xs =
       embedded x = srcLoc sp < srcLoc x && endLoc x < endLoc sp
       sp = foldr1 mergeSrcSpan (map srcSpan xs)
 
--- | Wrap the source code elements in SrcUnion constructors, sort, and elements to cover any spaces
+-- | Wrap the source code elements in SrcUnion constructors, sort, and
+-- elements to cover any spaces.
 moduleDecls :: String -> Module SrcSpanInfo -> [SrcUnion]
 moduleDecls text (Module _ mh ps imps decls) =
     case insertSpaceItems text
@@ -394,11 +402,12 @@ moduleDecls text (Module _ mh ps imps decls) =
       Other' {} : xs -> xs
       xs -> xs
 
--- | Same for comments, then group runs of Comment or Space, these are guaranteed to be adjacent
+-- | Group runs of Comment or Space.
 moduleSpace :: String -> [Comment] -> [SrcUnion]
 moduleSpace text comments =
     groupSpace text $ insertSpaceItems text $ sortBy (compare `on` srcLoc) (map Comment' comments)
 
+-- | Insert space items so the text is fully covered.
 insertSpaceItems :: String -> [SrcUnion] -> [SrcUnion]
 insertSpaceItems text items =
     loop def items
