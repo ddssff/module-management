@@ -39,12 +39,12 @@ instance Display (SrcUnion SrcSpan) where
     display (Head' sp _) = "Head' " ++ display sp
 
 instance HasSrcSpan (SrcUnion SrcSpan) where
-    srcSpan' (Comment' sp _) = sp
-    srcSpan' (Other' sp _ _) = sp
-    srcSpan' (Space' sp _ _) = sp
-    srcSpan' (ImportDecl' sp _) = sp
-    srcSpan' (Decl' sp _) = sp
-    srcSpan' (Head' sp _) = sp
+    srcSpan (Comment' sp _) = sp
+    srcSpan (Other' sp _ _) = sp
+    srcSpan (Space' sp _ _) = sp
+    srcSpan (ImportDecl' sp _) = sp
+    srcSpan (Decl' sp _) = sp
+    srcSpan (Head' sp _) = sp
 
 instance Display (SrcUnion ()) where
     display (Comment' () c) = display c
@@ -129,7 +129,7 @@ filterEmbedded xs =
     filter (not . embedded) xs
     where
       embedded x = srcLoc sp < srcLoc x && endLoc x < endLoc sp
-      sp = foldr1 mergeSrcSpan (map srcSpan' xs)
+      sp = foldr1 mergeSrcSpan (map srcSpan xs)
 
 -- | If two elements have the same end position, one will be space and
 -- one will be code.  Move the end of the code element to just before
@@ -138,24 +138,24 @@ filterEmbedded xs =
 -- which we can't do anything with.
 moduleItemsFinal :: String -> Module -> [Comment] -> [SrcUnion SrcSpan]
 moduleItemsFinal text m comments =
-    sortBy (compare `on` srcSpan') $ concatMap (adjust . sortBy (compare `on` srcLoc)) groups
+    sortBy (compare `on` srcSpan) $ concatMap (adjust . sortBy (compare `on` srcLoc)) groups
     where
       -- Remove embedded spans from the list - those that begin after
       -- and end before the union of all the spans.
       groups = map filterEmbedded (moduleItemGroups text m comments)
       -- Adjust the remaining elements so they don't overlap.
       adjust xs =
-          case partition ((== sp) . srcSpan') xs of
+          case partition ((== sp) . srcSpan) xs of
             ([x], ys) ->
                 case ys of
                   [y] ->
-                      [mapA (const (srcSpan' (srcLoc x, srcLoc y))) x,
-                       mapA (const (srcSpan' (srcLoc y, endLoc x))) y]
+                      [mapA (const (srcSpan (srcLoc x, srcLoc y))) x,
+                       mapA (const (srcSpan (srcLoc y, endLoc x))) y]
                   [] -> [x]
             ([], _) -> error "adjust: No covering element"
             _ -> error "adjust: multiple spanning elements"
           where
-            sp = foldr1 mergeSrcSpan (map srcSpan' xs)
+            sp = foldr1 mergeSrcSpan (map srcSpan xs)
 
 -- Note that comments will overlap with the other elements
 foldModule :: forall r.
@@ -178,7 +178,7 @@ foldModule headf importf declf spacef m comments text0 r0 =
       doItem pre (Head' sp x) b e r = headf x pre (srcPairText b e text) sp r
       doItem pre (ImportDecl' sp x) b e r = importf x pre (srcPairText b e text) sp r
       doItem pre (Decl' sp x) b e r = declf x pre (srcPairText b e text) sp r
-      doItem Nothing (Space' _ _ _) b e r = spacef (srcPairText b e text) (srcSpan' (b, e)) r
+      doItem Nothing (Space' _ _ _) b e r = spacef (srcPairText b e text) (srcSpan (b, e)) r
       doItem _ (Space' _ _ _) _ _ _ = error "Unexpected pair of Space' constructors"
       -- These should have been converted to Space
       doItem _ (Comment' _ _) _ _ _ = error "Unexpected: Comment'"
@@ -205,7 +205,7 @@ groupSpace text items =
       makeSpace xs@(x : _) =
           let b = srcLoc x
               e = endLoc (last xs)
-              sp = srcSpan' (b, e) in
+              sp = srcSpan (b, e) in
           [Space' sp (srcSpanText sp text) b]
 
 insertSpaceItems :: String -> [SrcUnion ()] -> [SrcUnion SrcSpan]
@@ -220,19 +220,19 @@ insertSpaceItems text items =
           case x of
             Comment' () c@(Comment _ sp _) ->
                 Comment' sp c : loop (endLoc c) xs
-            _ -> mapA (const (srcSpan' (loc, end))) x : loop end xs
+            _ -> mapA (const (srcSpan (loc, end))) x : loop end xs
       gap :: SrcLoc -> SrcLoc -> [SrcUnion SrcSpan]
       gap b e =
           let s = srcPairText b e text
-              sp = srcSpan' (b, e) in
+              sp = srcSpan (b, e) in
           case span isSpace s of
             ("", "") -> []
             ("", _) -> [Other' sp s b]
             (_, "") -> [Space' sp s b]
             (s', t) ->
                 let b' = appendLoc s' b in
-                [Space' (srcSpan' (b, b')) s' b,
-                 Other' (srcSpan' (b', (srcSpanEnd' sp))) t b']
+                [Space' (srcSpan (b, b')) s' b,
+                 Other' (srcSpan (b', (srcSpanEnd' sp))) t b']
 
       next :: [SrcUnion ()] -> SrcLoc
       next [] = textEndLoc text

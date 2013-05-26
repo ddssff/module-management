@@ -30,7 +30,7 @@ instance HasSrcLoc (ImportDecl SrcSpanInfo) where
     srcLoc = srcLoc . importAnn
 
 instance HasSrcLoc (Decl SrcSpanInfo) where
-    srcLoc = srcLoc . srcSpan'
+    srcLoc = srcLoc . srcSpan
 
 instance HasSrcLoc (Module SrcSpanInfo) where
     srcLoc (Module l _ _ _ _) = srcLoc l
@@ -41,13 +41,13 @@ instance HasSrcLoc (ModuleHead SrcSpanInfo) where
     srcLoc (ModuleHead x _ _ _) = srcLoc x
 
 instance HasSrcSpan (ModuleHead SrcSpanInfo) where
-    srcSpan' (ModuleHead x _ _ _) = srcSpan' x
+    srcSpan (ModuleHead x _ _ _) = srcSpan x
 
 instance HasSrcSpan SrcSpanInfo where
-    srcSpan' = srcInfoSpan
+    srcSpan = srcInfoSpan
 
 instance HasEndLoc (ModuleHead SrcSpanInfo) where
-    endLoc = endLoc . srcSpan'
+    endLoc = endLoc . srcSpan
 
 instance PutSrcSpan SrcSpanInfo where
     putSrcSpan sp x = x {srcInfoSpan = sp} -- what should we do about srcInfoPoints?
@@ -67,51 +67,51 @@ instance PutSrcSpan (ImportDecl SrcSpanInfo) where
     putSrcSpan sp (ImportDecl x a b c d e f) = ImportDecl (putSrcSpan sp x) a b c d e f
 
 instance HasEndLoc (ImportDecl SrcSpanInfo) where
-    endLoc = endLoc . srcSpan'
+    endLoc = endLoc . srcSpan
 
 instance HasEndLoc (Decl SrcSpanInfo) where
-    endLoc = endLoc . srcSpan'
+    endLoc = endLoc . srcSpan
 
 instance HasSrcSpan Comment where
-    srcSpan' (Comment _ sp _) = sp
+    srcSpan (Comment _ sp _) = sp
 
 instance HasSrcSpan (ImportDecl SrcSpanInfo) where
-    srcSpan' = srcSpan' . importAnn
+    srcSpan = srcSpan . importAnn
 
 instance HasSrcSpan (ModulePragma SrcSpanInfo) where
-    srcSpan' (LanguagePragma l _) = srcSpan' l
-    srcSpan' (OptionsPragma l _ _) = srcSpan' l
-    srcSpan' (AnnModulePragma l _) = srcSpan' l
+    srcSpan (LanguagePragma l _) = srcSpan l
+    srcSpan (OptionsPragma l _ _) = srcSpan l
+    srcSpan (AnnModulePragma l _) = srcSpan l
 
 instance HasSrcSpan (Decl SrcSpanInfo) where
-    srcSpan' (TypeDecl l _ _) = srcSpan' l
-    srcSpan' (TypeFamDecl l _ _) = srcSpan' l
-    srcSpan' (DataDecl l _ _ _ _ _) = srcSpan' l
-    srcSpan' (GDataDecl l _ _ _ _ _ _) = srcSpan' l
-    srcSpan' (DataFamDecl l _ _ _) = srcSpan' l
-    srcSpan' (TypeInsDecl l _ _) = srcSpan' l
-    srcSpan' (DataInsDecl l _ _ _ _) = srcSpan' l
-    srcSpan' (GDataInsDecl l _ _ _ _ _) = srcSpan' l
-    srcSpan' (ClassDecl l _ _ _ _) = srcSpan' l
-    srcSpan' (InstDecl l  _ _ _) = srcSpan' l
-    srcSpan' (DerivDecl l _ _) = srcSpan' l
-    srcSpan' (InfixDecl l _ _ _) = srcSpan' l
-    srcSpan' (DefaultDecl l _) = srcSpan' l
-    srcSpan' (SpliceDecl l _) = srcSpan' l
-    srcSpan' (TypeSig l _ _) = srcSpan' l
-    srcSpan' (FunBind l _) = srcSpan' l
-    srcSpan' (PatBind l _ _ _ _) = srcSpan' l
-    srcSpan' (ForImp l _ _ _ _ _) = srcSpan' l
-    srcSpan' (ForExp l _ _ _ _) = srcSpan' l
-    srcSpan' (RulePragmaDecl l _) = srcSpan' l
-    srcSpan' (DeprPragmaDecl l _) = srcSpan' l
-    srcSpan' (WarnPragmaDecl l _) = srcSpan' l
-    srcSpan' (InlineSig l _ _ _) = srcSpan' l
-    srcSpan' (InlineConlikeSig l _ _) = srcSpan' l
-    srcSpan' (SpecSig l _ _) = srcSpan' l
-    srcSpan' (SpecInlineSig l _ _ _ _) = srcSpan' l
-    srcSpan' (InstSig l _ _) = srcSpan' l
-    srcSpan' (AnnPragma l _) = srcSpan' l
+    srcSpan (TypeDecl l _ _) = srcSpan l
+    srcSpan (TypeFamDecl l _ _) = srcSpan l
+    srcSpan (DataDecl l _ _ _ _ _) = srcSpan l
+    srcSpan (GDataDecl l _ _ _ _ _ _) = srcSpan l
+    srcSpan (DataFamDecl l _ _ _) = srcSpan l
+    srcSpan (TypeInsDecl l _ _) = srcSpan l
+    srcSpan (DataInsDecl l _ _ _ _) = srcSpan l
+    srcSpan (GDataInsDecl l _ _ _ _ _) = srcSpan l
+    srcSpan (ClassDecl l _ _ _ _) = srcSpan l
+    srcSpan (InstDecl l  _ _ _) = srcSpan l
+    srcSpan (DerivDecl l _ _) = srcSpan l
+    srcSpan (InfixDecl l _ _ _) = srcSpan l
+    srcSpan (DefaultDecl l _) = srcSpan l
+    srcSpan (SpliceDecl l _) = srcSpan l
+    srcSpan (TypeSig l _ _) = srcSpan l
+    srcSpan (FunBind l _) = srcSpan l
+    srcSpan (PatBind l _ _ _ _) = srcSpan l
+    srcSpan (ForImp l _ _ _ _ _) = srcSpan l
+    srcSpan (ForExp l _ _ _ _) = srcSpan l
+    srcSpan (RulePragmaDecl l _) = srcSpan l
+    srcSpan (DeprPragmaDecl l _) = srcSpan l
+    srcSpan (WarnPragmaDecl l _) = srcSpan l
+    srcSpan (InlineSig l _ _ _) = srcSpan l
+    srcSpan (InlineConlikeSig l _ _) = srcSpan l
+    srcSpan (SpecSig l _ _) = srcSpan l
+    srcSpan (SpecInlineSig l _ _ _ _) = srcSpan l
+    srcSpan (InstSig l _ _) = srcSpan l
+    srcSpan (AnnPragma l _) = srcSpan l
 
 instance PutSrcSpan (Decl SrcSpanInfo) where
     putSrcSpan sp (TypeDecl l a b) = TypeDecl (putSrcSpan sp l) a b
@@ -190,13 +190,13 @@ data SrcUnion
     deriving (Eq, Show)
 
 instance Display SrcUnion where
-    display (Comment' c) = "Comment' " ++ display (srcSpan' c)
+    display (Comment' c) = "Comment' " ++ display (srcSpan c)
     display (Other' _s l) = "Other' " ++ display l
     display (Space' _s l) = "Space' " ++ display l
-    display (ImportDecl' x) = "ImportDecl' " ++ display (srcSpan' x)
-    display (Decl' x) = "Decl' " ++ display (srcSpan' x)
-    display (Head' x) = "Head' " ++ display (srcSpan' x)
-    display (Pragma' x) = "Pragma' " ++ display (srcSpan' x)
+    display (ImportDecl' x) = "ImportDecl' " ++ display (srcSpan x)
+    display (Decl' x) = "Decl' " ++ display (srcSpan x)
+    display (Head' x) = "Head' " ++ display (srcSpan x)
+    display (Pragma' x) = "Pragma' " ++ display (srcSpan x)
 
 {-
 instance Display (ImportDecl SrcSpanInfo) where
@@ -213,13 +213,13 @@ instance Display (ModulePragma SrcSpanInfo) where
 -}
 
 instance HasSrcSpan SrcUnion where
-    srcSpan' (Head' x) = srcSpan' x
-    srcSpan' (Pragma' x) = srcSpan' x
-    srcSpan' (Comment' x) = srcSpan' x
-    srcSpan' (ImportDecl' x) = srcSpan' x
-    srcSpan' (Decl' x) = srcSpan' x
-    srcSpan' (Space' _ sp) = sp
-    srcSpan' (Other' _ sp) = sp
+    srcSpan (Head' x) = srcSpan x
+    srcSpan (Pragma' x) = srcSpan x
+    srcSpan (Comment' x) = srcSpan x
+    srcSpan (ImportDecl' x) = srcSpan x
+    srcSpan (Decl' x) = srcSpan x
+    srcSpan (Space' _ sp) = sp
+    srcSpan (Other' _ sp) = sp
 
 instance PutSrcSpan SrcUnion where
     putSrcSpan sp (Head' x) = Head' (putSrcSpan sp x)
@@ -231,13 +231,13 @@ instance PutSrcSpan SrcUnion where
     putSrcSpan sp (Other' s _) = Other' s sp
 
 instance HasSrcLoc SrcUnion where
-    srcLoc = srcLoc . srcSpan'
+    srcLoc = srcLoc . srcSpan
 
 instance HasEndLoc SrcUnion where
-    endLoc = endLoc . srcSpan'
+    endLoc = endLoc . srcSpan
 
 mapA :: (SrcSpan -> SrcSpan) -> SrcUnion -> SrcUnion
-mapA f u = putSrcSpan (f (srcSpan' u)) u
+mapA f u = putSrcSpan (f (srcSpan u)) u
 {-
 mapA :: (a -> b) -> SrcUnion -> SrcUnion
 mapA f (Head' x y) = Head' (f x) y
@@ -285,24 +285,24 @@ foldModule pragmaf headf importf declf spacef m comments text0 r0 =
 -- which we can't do anything with.
 moduleItemsFinal :: String -> Module SrcSpanInfo -> [Comment] -> [SrcUnion]
 moduleItemsFinal text m comments =
-    sortBy (compare `on` srcSpan') $ concatMap (adjust . sortBy (compare `on` srcLoc)) groups
+    sortBy (compare `on` srcSpan) $ concatMap (adjust . sortBy (compare `on` srcLoc)) groups
     where
       -- Remove embedded spans from the list - those that begin after
       -- and end before the union of all the spans.
       groups = map filterEmbedded (moduleItemGroups text m comments)
       -- Adjust the remaining elements so they don't overlap.
       adjust xs =
-          case partition ((== sp) . srcSpan') xs of
+          case partition ((== sp) . srcSpan) xs of
             ([x], ys) ->
                 case ys of
                   [y] ->
-                      [mapA (const (srcSpan' (srcLoc x, srcLoc y))) x,
-                       mapA (const (srcSpan' (srcLoc y, endLoc x))) y]
+                      [mapA (const (srcSpan (srcLoc x, srcLoc y))) x,
+                       mapA (const (srcSpan (srcLoc y, endLoc x))) y]
                   [] -> [x]
             ([], _) -> error "adjust: No covering element"
             _ -> error "adjust: multiple spanning elements"
           where
-            sp = foldr1 mergeSrcSpan (map srcSpan' xs)
+            sp = foldr1 mergeSrcSpan (map srcSpan xs)
 
 -- | Zip the decls and space together sorted by end position.  Collect overlapping items into groups.
 -- To collect overlaps, we first sort by endLoc and reverse the list.  As we scan this list, items whose start location precedes 
@@ -331,7 +331,7 @@ filterEmbedded xs =
     filter (not . embedded) xs
     where
       embedded x = srcLoc sp < srcLoc x && endLoc x < endLoc sp
-      sp = foldr1 mergeSrcSpan (map srcSpan' xs)
+      sp = foldr1 mergeSrcSpan (map srcSpan xs)
 
 -- | Wrap the source code elements in SrcUnion constructors, sort, and elements to cover any spaces
 moduleDecls :: String -> Module SrcSpanInfo -> [SrcUnion]
@@ -357,19 +357,19 @@ insertSpaceItems text items =
           case x of
             Comment' c@(Comment _ _ _) ->
                 Comment' c : loop (endLoc c) xs
-            _ -> mapA (const (srcSpan' (loc, end))) x : loop end xs
+            _ -> mapA (const (srcSpan (loc, end))) x : loop end xs
       gap :: SrcLoc -> SrcLoc -> [SrcUnion]
       gap b e =
           let s = srcPairText b e text
-              sp = srcSpan' (b, e) in
+              sp = srcSpan (b, e) in
           case span isSpace s of
             ("", "") -> []
             ("", _) -> [Other' s sp]
             (_, "") -> [Space' s sp]
             (s', t) ->
                 let b' = appendLoc s' b in
-                [Space' s' (srcSpan' (b, b')),
-                 Other' t (srcSpan' (b', (srcSpanEnd' sp)))]
+                [Space' s' (srcSpan (b, b')),
+                 Other' t (srcSpan (b', (srcSpanEnd' sp)))]
 
       next :: [SrcUnion] -> SrcLoc
       next [] = textEndLoc text
@@ -396,7 +396,7 @@ groupSpace text items =
       makeSpace xs@(x : _) =
           let b = srcLoc x
               e = endLoc (last xs)
-              sp = srcSpan' (b, e) in
+              sp = srcSpan (b, e) in
           [Space' (srcSpanText sp text) sp]
 
 appendLoc :: String -> SrcLoc -> SrcLoc
@@ -471,13 +471,13 @@ test1a =
           foldModule pragmaf headf importf declf spacef m comments text []
           where
             pragmaf :: ModulePragma SrcSpanInfo -> String -> String -> [String] -> [String]
-            pragmaf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["pragma: " ++ display (srcSpan' x)]
+            pragmaf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["pragma: " ++ display (srcSpan x)]
             headf :: ModuleHead SrcSpanInfo -> String -> String -> [String] -> [String]
-            headf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["head: " ++ display (srcSpan' x)]
+            headf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["head: " ++ display (srcSpan x)]
             importf :: ImportDecl SrcSpanInfo -> String -> String -> [String] -> [String]
-            importf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["import: " ++ display (srcSpan' x)]
+            importf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["import: " ++ display (srcSpan x)]
             declf :: Decl SrcSpanInfo -> String -> String -> [String] -> [String]
-            declf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["decl: " ++ display (srcSpan' x)]
+            declf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["decl: " ++ display (srcSpan x)]
             spacef :: String -> [String] -> [String]
             spacef _s r = r ++ ["space"]
 

@@ -42,12 +42,12 @@ instance Display (SrcUnion SrcSpan) where
     display (Head' sp _) = "Head' " ++ display sp
 
 instance HasSrcSpan (SrcUnion SrcSpan) where
-    srcSpan' (Comment' sp _) = sp
-    srcSpan' (Other' sp _ _) = sp
-    srcSpan' (Space' sp _ _) = sp
-    srcSpan' (ImportDecl' sp _) = sp
-    srcSpan' (Decl' sp _) = sp
-    srcSpan' (Head' sp _) = sp
+    srcSpan (Comment' sp _) = sp
+    srcSpan (Other' sp _ _) = sp
+    srcSpan (Space' sp _ _) = sp
+    srcSpan (ImportDecl' sp _) = sp
+    srcSpan (Decl' sp _) = sp
+    srcSpan (Head' sp _) = sp
 
 instance Display (SrcUnion ()) where
     display (Comment' () c) = display c
@@ -148,8 +148,8 @@ srcSpanEnd' :: SrcSpan -> SrcLoc
 srcSpanEnd' sp = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanEnd sp)
 
 instance HasSrcSpan (SrcLoc, SrcLoc) where
-    srcSpan' (b, e) | srcLine b > srcLine e || (srcLine b == srcLine e && srcColumn b > srcColumn e) = error $ "srcSpan " ++ show b ++ " > " ++ show e
-    srcSpan' (b, e) = SrcSpan {srcSpanFilename = srcFilename b,
+    srcSpan (b, e) | srcLine b > srcLine e || (srcLine b == srcLine e && srcColumn b > srcColumn e) = error $ "srcSpan " ++ show b ++ " > " ++ show e
+    srcSpan (b, e) = SrcSpan {srcSpanFilename = srcFilename b,
                                srcSpanStartLine = srcLine b,
                                srcSpanStartColumn = srcColumn b,
                                srcSpanEndLine = srcLine e,

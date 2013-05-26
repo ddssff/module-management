@@ -70,7 +70,7 @@ removeFile' :: FilePath -> IO ()
 removeFile' path = putStrLn ("removeFile " ++ show path) >> removeFile path
 
 class HasSrcSpan a where
-    srcSpan' :: a -> SrcSpan
+    srcSpan :: a -> SrcSpan
 
 instance Display Comment where
     display (Comment _ sp _) = "Comment " ++ display sp
