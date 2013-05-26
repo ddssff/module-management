@@ -13,7 +13,7 @@ import Data.Digest.Pure.MD5 (md5)
 import Data.Function (on)
 import Data.List (partition, sortBy)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, ParseResult(..))
-import Language.Haskell.Exts.Annotated.Syntax (ImportDecl(..), Module(..), ModulePragma(..), Decl(..), ModuleHead(..), ModuleName(..), WarningText(..), ExportSpecList(..))
+import Language.Haskell.Exts.Annotated.Syntax (ImportDecl(..), Module(..), ModulePragma(..), Decl(..), ModuleHead(..), ModuleName(..), WarningText(..), ExportSpecList(..), ExportSpec(..))
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc
 import Language.Haskell.Imports.Common (Display(..), untabify, lines', withCurrentDirectory)
@@ -52,6 +52,13 @@ instance HasSrcSpan (WarningText SrcSpanInfo) where
 instance HasSrcSpan (ExportSpecList SrcSpanInfo) where
     srcSpan (ExportSpecList x _) = srcSpan x
 
+instance HasSrcSpan (ExportSpec SrcSpanInfo) where
+    srcSpan (EVar x _) = srcSpan x
+    srcSpan (EAbs x _) = srcSpan x
+    srcSpan (EThingAll x _) = srcSpan x
+    srcSpan (EThingWith x _ _) = srcSpan x
+    srcSpan (EModuleContents x _) = srcSpan x
+
 instance HasSrcSpan SrcSpanInfo where
     srcSpan = srcInfoSpan
 
@@ -72,6 +79,13 @@ instance PutSrcSpan (WarningText SrcSpanInfo) where
 
 instance PutSrcSpan (ExportSpecList SrcSpanInfo) where
     putSrcSpan sp (ExportSpecList x a) = ExportSpecList (putSrcSpan sp x) a
+
+instance PutSrcSpan (ExportSpec SrcSpanInfo) where
+    putSrcSpan sp (EVar x a) = EVar (putSrcSpan sp x) a
+    putSrcSpan sp (EAbs x a) = EAbs (putSrcSpan sp x) a
+    putSrcSpan sp (EThingAll x a) = EThingAll (putSrcSpan sp x) a
+    putSrcSpan sp (EThingWith x a b) = EThingWith (putSrcSpan sp x) a b
+    putSrcSpan sp (EModuleContents x a) = EModuleContents (putSrcSpan sp x) a
 
 instance PutSrcSpan (ModulePragma SrcSpanInfo) where
     putSrcSpan sp (LanguagePragma l a) = LanguagePragma (putSrcSpan sp l) a
@@ -195,12 +209,22 @@ data ModulePragma l
 data SrcSpanInfo
   = SrcSpanInfo {srcInfoSpan :: SrcSpan, srcInfoPoints :: [SrcSpan]}
   	-- Defined in `Language.Haskell.Exts.SrcLoc'
+
+data ExportSpecList l = ExportSpecList l [ExportSpec l]
+  	-- Defined in `Language.Haskell.Exts.Annotated.Syntax'
+
+data ExportSpec l
+  = EVar l (QName l)
+  | EAbs l (QName l)
+  | EThingAll l (QName l)
+  | EThingWith l (QName l) [CName l]
+  | EModuleContents l (ModuleName l)
 -}
 
 data SrcUnion
     = Name' (ModuleName SrcSpanInfo)
     | Warning' (WarningText SrcSpanInfo)
-    | Exports' (ExportSpecList SrcSpanInfo)
+    | Export' (ExportSpec SrcSpanInfo)
     | Comment' Comment
     | Pragma' (ModulePragma SrcSpanInfo)
     | ImportDecl' (ImportDecl SrcSpanInfo)
@@ -217,7 +241,7 @@ instance Display SrcUnion where
     display (Decl' x) = "Decl' " ++ display (srcSpan x)
     display (Name' x) = "Name' " ++ display (srcSpan x)
     display (Warning' x) = "Warning' " ++ display (srcSpan x)
-    display (Exports' x) = "Exports' " ++ display (srcSpan x)
+    display (Export' x) = "Export' " ++ display (srcSpan x)
     display (Pragma' x) = "Pragma' " ++ display (srcSpan x)
 
 {-
@@ -237,7 +261,7 @@ instance Display (ModulePragma SrcSpanInfo) where
 instance HasSrcSpan SrcUnion where
     srcSpan (Name' x) = srcSpan x
     srcSpan (Warning' x) = srcSpan x
-    srcSpan (Exports' x) = srcSpan x
+    srcSpan (Export' x) = srcSpan x
     srcSpan (Pragma' x) = srcSpan x
     srcSpan (Comment' x) = srcSpan x
     srcSpan (ImportDecl' x) = srcSpan x
@@ -248,7 +272,7 @@ instance HasSrcSpan SrcUnion where
 instance PutSrcSpan SrcUnion where
     putSrcSpan sp (Name' x) = Name' (putSrcSpan sp x)
     putSrcSpan sp (Warning' x) = Warning' (putSrcSpan sp x)
-    putSrcSpan sp (Exports' x) = Exports' (putSrcSpan sp x)
+    putSrcSpan sp (Export' x) = Export' (putSrcSpan sp x)
     putSrcSpan sp (Pragma' x) = Pragma' (putSrcSpan sp x)
     putSrcSpan sp (Comment' x) = Comment' (putSrcSpan sp x)
     putSrcSpan sp (ImportDecl' x) = ImportDecl' (putSrcSpan sp x)
@@ -270,12 +294,12 @@ foldModule :: forall r.
               (ModulePragma SrcSpanInfo -> String -> String -> r -> r)
            -> (ModuleName SrcSpanInfo -> String -> String -> r -> r)
            -> (WarningText SrcSpanInfo -> String -> String -> r -> r)
-           -> (ExportSpecList SrcSpanInfo -> String -> String -> r -> r)
+           -> (ExportSpec SrcSpanInfo -> String -> String -> r -> r)
            -> (ImportDecl SrcSpanInfo -> String -> String -> r -> r)
            -> (Decl SrcSpanInfo -> String -> String -> r -> r)
            -> (String -> r -> r)
            -> Module SrcSpanInfo -> [Comment] -> String -> r -> r
-foldModule pragmaf namef warningf exportsf importf declf spacef m comments text0 r0 =
+foldModule pragmaf namef warningf exportf importf declf spacef m comments text0 r0 =
     doItems Nothing (moduleItemsFinal text m comments) r0
     where
       doItems :: Maybe (String, SrcSpan) -> [SrcUnion] -> r -> r
@@ -289,7 +313,7 @@ foldModule pragmaf namef warningf exportsf importf declf spacef m comments text0
       doItem pre (Pragma' x) b e r = pragmaf x (maybe "" fst pre) (srcPairText b e text) r
       doItem pre (Name' x) b e r = namef x (maybe "" fst pre) (srcPairText b e text) r
       doItem pre (Warning' x) b e r = warningf x (maybe "" fst pre) (srcPairText b e text) r
-      doItem pre (Exports' x) b e r = exportsf x (maybe "" fst pre) (srcPairText b e text) r
+      doItem pre (Export' x) b e r = exportf x (maybe "" fst pre) (srcPairText b e text) r
       doItem pre (ImportDecl' x) b e r = importf x (maybe "" fst pre) (srcPairText b e text) r
       doItem pre (Decl' x) b e r = declf x (maybe "" fst pre) (srcPairText b e text) r
       doItem Nothing (Space' _ _) b e r = spacef (srcPairText b e text) {-(srcSpan b e)-} r
@@ -364,7 +388,7 @@ moduleDecls text (Module _ mh ps imps decls) =
                  maybe [] (\ h@(ModuleHead _ n w e) ->
                                [Name' n] ++
                                (maybe [] (\ x -> [Warning' x]) w) ++
-                               (maybe [] (\ x -> [Exports' x]) e)) mh ++
+                               (maybe [] (\ (ExportSpecList _ xs) -> map Export' xs) e)) mh ++
                  map ImportDecl' imps ++
                  map Decl' decls)) of
       Other' {} : xs -> xs
@@ -473,7 +497,8 @@ test1a =
     (withTestData test >>= \ output ->
      assertEqual
      "foldModule"
-     ["pre","pragma: [2:1 - 3:1]","pragma: [3:1 - 7:8]","name: [7:8 - 7:29]","warning: [7:29 - 8:5]","exports: [8:5 - 34:1]",
+     ["pre","pragma: [2:1 - 3:1]","pragma: [3:1 - 7:8]","name: [7:8 - 7:29]","warning: [7:29 - 8:7]",
+      "export: [8:7 - 9:7]","export: [9:7 - 10:7]","export: [10:7 - 11:7]","export: [11:7 - 12:7]","export: [12:7 - 13:7]","export: [13:7 - 14:7]","export: [14:7 - 15:7]","export: [15:7 - 16:7]","export: [16:7 - 17:7]","export: [17:7 - 18:7]","export: [18:7 - 19:7]","export: [19:7 - 20:7]","export: [20:7 - 21:7]","export: [21:7 - 22:7]","export: [22:7 - 23:7]","export: [23:7 - 24:7]","export: [24:7 - 25:7]","export: [25:7 - 26:7]","export: [26:7 - 27:7]","export: [27:7 - 28:7]","export: [28:7 - 29:7]","export: [29:7 - 30:7]","export: [30:7 - 31:7]","export: [31:7 - 34:1]",
       "import: [34:1 - 35:1]","import: [35:1 - 36:1]","import: [36:1 - 37:1]","import: [37:1 - 38:1]",
       "import: [38:1 - 39:1]","import: [39:1 - 40:1]","import: [40:1 - 41:1]","import: [41:1 - 42:1]","import: [42:1 - 43:1]",
       "import: [43:1 - 44:1]","import: [44:1 - 45:1]","import: [45:1 - 46:1]","import: [46:1 - 47:1]","import: [47:1 - 48:1]",
@@ -498,7 +523,7 @@ test1a =
     where
       test :: Module SrcSpanInfo -> [Comment] -> String -> [String]
       test m comments text =
-          foldModule pragmaf namef warningf exportsf importf declf spacef m comments text []
+          foldModule pragmaf namef warningf exportf importf declf spacef m comments text []
           where
             pragmaf :: ModulePragma SrcSpanInfo -> String -> String -> [String] -> [String]
             pragmaf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["pragma: " ++ display (srcSpan x)]
@@ -506,8 +531,8 @@ test1a =
             namef x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["name: " ++ display (srcSpan x)]
             warningf :: WarningText SrcSpanInfo -> String -> String -> [String] -> [String]
             warningf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["warning: " ++ display (srcSpan x)]
-            exportsf :: ExportSpecList SrcSpanInfo -> String -> String -> [String] -> [String]
-            exportsf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["exports: " ++ display (srcSpan x)]
+            exportf :: ExportSpec SrcSpanInfo -> String -> String -> [String] -> [String]
+            exportf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["export: " ++ display (srcSpan x)]
             importf :: ImportDecl SrcSpanInfo -> String -> String -> [String] -> [String]
             importf x pre _s r = r ++ (if pre /= "" then ["pre"] else []) ++ ["import: " ++ display (srcSpan x)]
             declf :: Decl SrcSpanInfo -> String -> String -> [String] -> [String]
@@ -521,13 +546,13 @@ test1b =
     TestLabel "test1b" $ TestCase
     (withTestData test >>= \ (output, original) ->
      assertEqual
-     "foldModule"
+     "echo"
      original
      output)
     where
       test :: Module SrcSpanInfo -> [Comment] -> String -> (String, String)
       test m comments text =
-          (foldModule pragmaf namef warningf exportsf importf declf spacef m comments text [], text)
+          (foldModule pragmaf namef warningf exportf importf declf spacef m comments text [], text)
           where
             pragmaf :: ModulePragma SrcSpanInfo -> String -> String -> String -> String
             pragmaf _x pre s r = r ++ pre ++ s
@@ -535,8 +560,8 @@ test1b =
             namef _x pre s r = r ++ pre ++ s
             warningf :: WarningText SrcSpanInfo -> String -> String -> String -> String
             warningf _x pre s r = r ++ pre ++ s
-            exportsf :: ExportSpecList SrcSpanInfo -> String -> String -> String -> String
-            exportsf _x pre s r = r ++ pre ++ s
+            exportf :: ExportSpec SrcSpanInfo -> String -> String -> String -> String
+            exportf _x pre s r = r ++ pre ++ s
             importf :: ImportDecl SrcSpanInfo -> String -> String -> String -> String
             importf _x pre s r = r ++ pre ++ s
             declf :: Decl SrcSpanInfo -> String -> String -> String -> String
@@ -711,7 +736,7 @@ test2c =
     (withTestData test >>= \ items ->
      assertEqual
      "moduleDecls"
-     ["Pragma' [2:1 - 3:1]","Pragma' [3:1 - 7:8]", "Name' [7:8 - 7:29]", "Warning' [7:29 - 8:5]", "Exports' [8:5 - 34:1]","ImportDecl' [34:1 - 35:1]","ImportDecl' [35:1 - 36:1]","ImportDecl' [36:1 - 37:1]","ImportDecl' [37:1 - 38:1]","ImportDecl' [38:1 - 39:1]","ImportDecl' [39:1 - 40:1]","ImportDecl' [40:1 - 41:1]","ImportDecl' [41:1 - 42:1]","ImportDecl' [42:1 - 43:1]","ImportDecl' [43:1 - 44:1]","ImportDecl' [44:1 - 45:1]","ImportDecl' [45:1 - 46:1]","ImportDecl' [46:1 - 47:1]","ImportDecl' [47:1 - 48:1]","ImportDecl' [48:1 - 49:1]","ImportDecl' [49:1 - 50:1]","ImportDecl' [50:1 - 51:1]","ImportDecl' [51:1 - 52:1]","ImportDecl' [52:1 - 53:1]","ImportDecl' [53:1 - 54:1]","ImportDecl' [54:1 - 55:1]","ImportDecl' [55:1 - 56:1]","ImportDecl' [56:1 - 57:1]","ImportDecl' [57:1 - 58:1]","ImportDecl' [58:1 - 59:1]","ImportDecl' [59:1 - 60:1]","ImportDecl' [60:1 - 61:1]","ImportDecl' [61:1 - 62:1]","ImportDecl' [62:1 - 63:1]","ImportDecl' [63:1 - 64:1]","ImportDecl' [64:1 - 65:1]","ImportDecl' [65:1 - 66:1]","ImportDecl' [66:1 - 67:1]","ImportDecl' [67:1 - 68:1]","ImportDecl' [68:1 - 70:1]","Decl' [70:1 - 79:1]","Decl' [79:1 - 80:1]","Decl' [80:1 - 82:1]","Decl' [82:1 - 83:1]","Decl' [83:1 - 85:1]","Decl' [85:1 - 86:1]","Decl' [86:1 - 88:1]","Decl' [88:1 - 89:1]","Decl' [89:1 - 92:1]","Decl' [92:1 - 93:1]","Decl' [93:1 - 95:1]","Decl' [95:1 - 96:1]","Decl' [96:1 - 103:1]","Decl' [103:1 - 104:1]","Decl' [104:1 - 107:1]","Decl' [107:1 - 108:1]","Decl' [108:1 - 121:1]","Decl' [121:1 - 122:1]","Decl' [122:1 - 147:1]","Decl' [147:1 - 148:1]","Decl' [148:1 - 151:1]","Decl' [151:1 - 152:1]","Decl' [152:1 - 156:1]","Decl' [156:1 - 157:1]","Decl' [157:1 - 165:1]","Decl' [165:1 - 166:1]","Decl' [166:1 - 207:1]","Decl' [207:1 - 208:1]","Decl' [208:1 - 228:1]","Decl' [228:1 - 229:1]","Decl' [229:1 - 253:1]","Decl' [253:1 - 254:1]","Decl' [254:1 - 261:1]","Decl' [261:1 - 262:1]","Decl' [262:1 - 267:1]","Decl' [267:1 - 275:1]","Decl' [275:1 - 276:1]","Decl' [276:1 - 330:1]","Decl' [330:1 - 331:1]","Decl' [331:1 - 343:1]","Decl' [343:1 - 344:1]","Decl' [344:1 - 356:1]","Decl' [356:1 - 357:1]","Decl' [357:1 - 361:1]","Decl' [361:1 - 362:1]","Decl' [362:1 - 366:1]","Decl' [366:1 - 367:1]","Decl' [367:1 - 371:1]","Decl' [371:1 - 372:1]","Decl' [372:1 - 377:1]","Decl' [377:1 - 378:1]","Decl' [378:1 - 385:1]","Decl' [385:1 - 386:1]","Decl' [386:1 - 393:1]"]
+     ["Pragma' [2:1 - 3:1]","Pragma' [3:1 - 7:8]", "Name' [7:8 - 7:29]", "Warning' [7:29 - 8:7]","Export' [8:7 - 9:7]","Export' [9:7 - 10:7]","Export' [10:7 - 11:7]","Export' [11:7 - 12:7]","Export' [12:7 - 13:7]","Export' [13:7 - 14:7]","Export' [14:7 - 15:7]","Export' [15:7 - 16:7]","Export' [16:7 - 17:7]","Export' [17:7 - 18:7]","Export' [18:7 - 19:7]","Export' [19:7 - 20:7]","Export' [20:7 - 21:7]","Export' [21:7 - 22:7]","Export' [22:7 - 23:7]","Export' [23:7 - 24:7]","Export' [24:7 - 25:7]","Export' [25:7 - 26:7]","Export' [26:7 - 27:7]","Export' [27:7 - 28:7]","Export' [28:7 - 29:7]","Export' [29:7 - 30:7]","Export' [30:7 - 31:7]","Export' [31:7 - 34:1]","ImportDecl' [34:1 - 35:1]","ImportDecl' [35:1 - 36:1]","ImportDecl' [36:1 - 37:1]","ImportDecl' [37:1 - 38:1]","ImportDecl' [38:1 - 39:1]","ImportDecl' [39:1 - 40:1]","ImportDecl' [40:1 - 41:1]","ImportDecl' [41:1 - 42:1]","ImportDecl' [42:1 - 43:1]","ImportDecl' [43:1 - 44:1]","ImportDecl' [44:1 - 45:1]","ImportDecl' [45:1 - 46:1]","ImportDecl' [46:1 - 47:1]","ImportDecl' [47:1 - 48:1]","ImportDecl' [48:1 - 49:1]","ImportDecl' [49:1 - 50:1]","ImportDecl' [50:1 - 51:1]","ImportDecl' [51:1 - 52:1]","ImportDecl' [52:1 - 53:1]","ImportDecl' [53:1 - 54:1]","ImportDecl' [54:1 - 55:1]","ImportDecl' [55:1 - 56:1]","ImportDecl' [56:1 - 57:1]","ImportDecl' [57:1 - 58:1]","ImportDecl' [58:1 - 59:1]","ImportDecl' [59:1 - 60:1]","ImportDecl' [60:1 - 61:1]","ImportDecl' [61:1 - 62:1]","ImportDecl' [62:1 - 63:1]","ImportDecl' [63:1 - 64:1]","ImportDecl' [64:1 - 65:1]","ImportDecl' [65:1 - 66:1]","ImportDecl' [66:1 - 67:1]","ImportDecl' [67:1 - 68:1]","ImportDecl' [68:1 - 70:1]","Decl' [70:1 - 79:1]","Decl' [79:1 - 80:1]","Decl' [80:1 - 82:1]","Decl' [82:1 - 83:1]","Decl' [83:1 - 85:1]","Decl' [85:1 - 86:1]","Decl' [86:1 - 88:1]","Decl' [88:1 - 89:1]","Decl' [89:1 - 92:1]","Decl' [92:1 - 93:1]","Decl' [93:1 - 95:1]","Decl' [95:1 - 96:1]","Decl' [96:1 - 103:1]","Decl' [103:1 - 104:1]","Decl' [104:1 - 107:1]","Decl' [107:1 - 108:1]","Decl' [108:1 - 121:1]","Decl' [121:1 - 122:1]","Decl' [122:1 - 147:1]","Decl' [147:1 - 148:1]","Decl' [148:1 - 151:1]","Decl' [151:1 - 152:1]","Decl' [152:1 - 156:1]","Decl' [156:1 - 157:1]","Decl' [157:1 - 165:1]","Decl' [165:1 - 166:1]","Decl' [166:1 - 207:1]","Decl' [207:1 - 208:1]","Decl' [208:1 - 228:1]","Decl' [228:1 - 229:1]","Decl' [229:1 - 253:1]","Decl' [253:1 - 254:1]","Decl' [254:1 - 261:1]","Decl' [261:1 - 262:1]","Decl' [262:1 - 267:1]","Decl' [267:1 - 275:1]","Decl' [275:1 - 276:1]","Decl' [276:1 - 330:1]","Decl' [330:1 - 331:1]","Decl' [331:1 - 343:1]","Decl' [343:1 - 344:1]","Decl' [344:1 - 356:1]","Decl' [356:1 - 357:1]","Decl' [357:1 - 361:1]","Decl' [361:1 - 362:1]","Decl' [362:1 - 366:1]","Decl' [366:1 - 367:1]","Decl' [367:1 - 371:1]","Decl' [371:1 - 372:1]","Decl' [372:1 - 377:1]","Decl' [377:1 - 378:1]","Decl' [378:1 - 385:1]","Decl' [385:1 - 386:1]","Decl' [386:1 - 393:1]"]
      (map display items))
     where
       test :: Module SrcSpanInfo -> [Comment] -> String -> [SrcUnion]
@@ -723,7 +748,7 @@ test2d =
     (withTestData test >>= \ items ->
      assertEqual
      "moduleItems"
-     ["Decl' [386:1 - 393:1]","Decl' [385:1 - 386:1]","Decl' [378:1 - 385:1]","Decl' [377:1 - 378:1]","Space' [376:1 - 377:1]","Decl' [372:1 - 377:1]","Decl' [371:1 - 372:1]","Decl' [367:1 - 371:1]","Decl' [366:1 - 367:1]","Decl' [362:1 - 366:1]","Decl' [361:1 - 362:1]","Decl' [357:1 - 361:1]","Decl' [356:1 - 357:1]","Decl' [344:1 - 356:1]","Space' [351:33 - 352:11]","Decl' [343:1 - 344:1]","Decl' [331:1 - 343:1]","Space' [338:33 - 339:11]","Decl' [330:1 - 331:1]","Space' [329:1 - 330:1]","Decl' [276:1 - 330:1]","Space' [318:23 - 320:23]","Space' [281:7 - 282:7]","Space' [277:5 - 278:5]","Decl' [275:1 - 276:1]","Space' [273:1 - 275:1]","Decl' [267:1 - 275:1]","Decl' [262:1 - 267:1]","Decl' [261:1 - 262:1]","Decl' [254:1 - 261:1]","Decl' [253:1 - 254:1]","Space' [241:1 - 253:1]","Decl' [229:1 - 253:1]","Decl' [228:1 - 229:1]","Space' [216:1 - 228:1]","Decl' [208:1 - 228:1]","Space' [209:37 - 210:8]","Decl' [207:1 - 208:1]","Decl' [166:1 - 207:1]","Space' [188:7 - 190:7]","Space' [179:5 - 180:5]","Decl' [165:1 - 166:1]","Decl' [157:1 - 165:1]","Decl' [156:1 - 157:1]","Space' [154:1 - 156:1]","Decl' [152:1 - 156:1]","Decl' [151:1 - 152:1]","Space' [150:1 - 151:1]","Decl' [148:1 - 151:1]","Decl' [147:1 - 148:1]","Space' [146:1 - 147:1]","Decl' [122:1 - 147:1]","Decl' [121:1 - 122:1]","Space' [119:1 - 121:1]","Decl' [108:1 - 121:1]","Space' [114:33 - 115:11]","Decl' [107:1 - 108:1]","Space' [106:1 - 107:1]","Decl' [104:1 - 107:1]","Decl' [103:1 - 104:1]","Space' [98:1 - 103:1]","Decl' [96:1 - 103:1]","Decl' [95:1 - 96:1]","Decl' [93:1 - 95:1]","Decl' [92:1 - 93:1]","Space' [91:1 - 92:1]","Decl' [89:1 - 92:1]","Decl' [88:1 - 89:1]","Decl' [86:1 - 88:1]","Decl' [85:1 - 86:1]","Decl' [83:1 - 85:1]","Decl' [82:1 - 83:1]","Decl' [80:1 - 82:1]","Decl' [79:1 - 80:1]","Space' [72:1 - 79:1]","Decl' [70:1 - 79:1]","ImportDecl' [68:1 - 70:1]","ImportDecl' [67:1 - 68:1]","ImportDecl' [66:1 - 67:1]","ImportDecl' [65:1 - 66:1]","ImportDecl' [64:1 - 65:1]","ImportDecl' [63:1 - 64:1]","ImportDecl' [62:1 - 63:1]","ImportDecl' [61:1 - 62:1]","ImportDecl' [60:1 - 61:1]","ImportDecl' [59:1 - 60:1]","ImportDecl' [58:1 - 59:1]","ImportDecl' [57:1 - 58:1]","ImportDecl' [56:1 - 57:1]","ImportDecl' [55:1 - 56:1]","ImportDecl' [54:1 - 55:1]","ImportDecl' [53:1 - 54:1]","ImportDecl' [52:1 - 53:1]","ImportDecl' [51:1 - 52:1]","ImportDecl' [50:1 - 51:1]","ImportDecl' [49:1 - 50:1]","ImportDecl' [48:1 - 49:1]","ImportDecl' [47:1 - 48:1]","ImportDecl' [46:1 - 47:1]","ImportDecl' [45:1 - 46:1]","ImportDecl' [44:1 - 45:1]","ImportDecl' [43:1 - 44:1]","ImportDecl' [42:1 - 43:1]","ImportDecl' [41:1 - 42:1]","ImportDecl' [40:1 - 41:1]","ImportDecl' [39:1 - 40:1]","ImportDecl' [38:1 - 39:1]","ImportDecl' [37:1 - 38:1]","ImportDecl' [36:1 - 37:1]","ImportDecl' [35:1 - 36:1]","ImportDecl' [34:1 - 35:1]","Exports' [8:5 - 34:1]","Warning' [7:29 - 8:5]","Name' [7:8 - 7:29]","Pragma' [3:1 - 7:8]","Space' [4:1 - 7:1]","Pragma' [2:1 - 3:1]","Space' [1:1 - 2:1]"]
+     ["Decl' [386:1 - 393:1]","Decl' [385:1 - 386:1]","Decl' [378:1 - 385:1]","Decl' [377:1 - 378:1]","Space' [376:1 - 377:1]","Decl' [372:1 - 377:1]","Decl' [371:1 - 372:1]","Decl' [367:1 - 371:1]","Decl' [366:1 - 367:1]","Decl' [362:1 - 366:1]","Decl' [361:1 - 362:1]","Decl' [357:1 - 361:1]","Decl' [356:1 - 357:1]","Decl' [344:1 - 356:1]","Space' [351:33 - 352:11]","Decl' [343:1 - 344:1]","Decl' [331:1 - 343:1]","Space' [338:33 - 339:11]","Decl' [330:1 - 331:1]","Space' [329:1 - 330:1]","Decl' [276:1 - 330:1]","Space' [318:23 - 320:23]","Space' [281:7 - 282:7]","Space' [277:5 - 278:5]","Decl' [275:1 - 276:1]","Space' [273:1 - 275:1]","Decl' [267:1 - 275:1]","Decl' [262:1 - 267:1]","Decl' [261:1 - 262:1]","Decl' [254:1 - 261:1]","Decl' [253:1 - 254:1]","Space' [241:1 - 253:1]","Decl' [229:1 - 253:1]","Decl' [228:1 - 229:1]","Space' [216:1 - 228:1]","Decl' [208:1 - 228:1]","Space' [209:37 - 210:8]","Decl' [207:1 - 208:1]","Decl' [166:1 - 207:1]","Space' [188:7 - 190:7]","Space' [179:5 - 180:5]","Decl' [165:1 - 166:1]","Decl' [157:1 - 165:1]","Decl' [156:1 - 157:1]","Space' [154:1 - 156:1]","Decl' [152:1 - 156:1]","Decl' [151:1 - 152:1]","Space' [150:1 - 151:1]","Decl' [148:1 - 151:1]","Decl' [147:1 - 148:1]","Space' [146:1 - 147:1]","Decl' [122:1 - 147:1]","Decl' [121:1 - 122:1]","Space' [119:1 - 121:1]","Decl' [108:1 - 121:1]","Space' [114:33 - 115:11]","Decl' [107:1 - 108:1]","Space' [106:1 - 107:1]","Decl' [104:1 - 107:1]","Decl' [103:1 - 104:1]","Space' [98:1 - 103:1]","Decl' [96:1 - 103:1]","Decl' [95:1 - 96:1]","Decl' [93:1 - 95:1]","Decl' [92:1 - 93:1]","Space' [91:1 - 92:1]","Decl' [89:1 - 92:1]","Decl' [88:1 - 89:1]","Decl' [86:1 - 88:1]","Decl' [85:1 - 86:1]","Decl' [83:1 - 85:1]","Decl' [82:1 - 83:1]","Decl' [80:1 - 82:1]","Decl' [79:1 - 80:1]","Space' [72:1 - 79:1]","Decl' [70:1 - 79:1]","ImportDecl' [68:1 - 70:1]","ImportDecl' [67:1 - 68:1]","ImportDecl' [66:1 - 67:1]","ImportDecl' [65:1 - 66:1]","ImportDecl' [64:1 - 65:1]","ImportDecl' [63:1 - 64:1]","ImportDecl' [62:1 - 63:1]","ImportDecl' [61:1 - 62:1]","ImportDecl' [60:1 - 61:1]","ImportDecl' [59:1 - 60:1]","ImportDecl' [58:1 - 59:1]","ImportDecl' [57:1 - 58:1]","ImportDecl' [56:1 - 57:1]","ImportDecl' [55:1 - 56:1]","ImportDecl' [54:1 - 55:1]","ImportDecl' [53:1 - 54:1]","ImportDecl' [52:1 - 53:1]","ImportDecl' [51:1 - 52:1]","ImportDecl' [50:1 - 51:1]","ImportDecl' [49:1 - 50:1]","ImportDecl' [48:1 - 49:1]","ImportDecl' [47:1 - 48:1]","ImportDecl' [46:1 - 47:1]","ImportDecl' [45:1 - 46:1]","ImportDecl' [44:1 - 45:1]","ImportDecl' [43:1 - 44:1]","ImportDecl' [42:1 - 43:1]","ImportDecl' [41:1 - 42:1]","ImportDecl' [40:1 - 41:1]","ImportDecl' [39:1 - 40:1]","ImportDecl' [38:1 - 39:1]","ImportDecl' [37:1 - 38:1]","ImportDecl' [36:1 - 37:1]","ImportDecl' [35:1 - 36:1]","ImportDecl' [34:1 - 35:1]","Export' [31:7 - 34:1]","Export' [30:7 - 31:7]","Export' [29:7 - 30:7]","Export' [28:7 - 29:7]","Export' [27:7 - 28:7]","Export' [26:7 - 27:7]","Export' [25:7 - 26:7]","Export' [24:7 - 25:7]","Export' [23:7 - 24:7]","Export' [22:7 - 23:7]","Export' [21:7 - 22:7]","Export' [20:7 - 21:7]","Export' [19:7 - 20:7]","Export' [18:7 - 19:7]","Export' [17:7 - 18:7]","Export' [16:7 - 17:7]","Export' [15:7 - 16:7]","Export' [14:7 - 15:7]","Export' [13:7 - 14:7]","Export' [12:7 - 13:7]","Export' [11:7 - 12:7]","Export' [10:7 - 11:7]","Export' [9:7 - 10:7]","Export' [8:7 - 9:7]","Warning' [7:29 - 8:7]","Name' [7:8 - 7:29]","Pragma' [3:1 - 7:8]","Space' [4:1 - 7:1]","Pragma' [2:1 - 3:1]","Space' [1:1 - 2:1]"]
      (map display items))
     where
       test :: Module SrcSpanInfo -> [Comment] -> String -> [SrcUnion]
@@ -831,8 +856,8 @@ test2e =
       ["ImportDecl' [36:1 - 37:1]"],
       ["ImportDecl' [35:1 - 36:1]"],
       ["ImportDecl' [34:1 - 35:1]"],
-      ["Exports' [8:5 - 34:1]"],
-      ["Warning' [7:29 - 8:5]"],
+      ["Export' [31:7 - 34:1]"],["Export' [30:7 - 31:7]"],["Export' [29:7 - 30:7]"],["Export' [28:7 - 29:7]"],["Export' [27:7 - 28:7]"],["Export' [26:7 - 27:7]"],["Export' [25:7 - 26:7]"],["Export' [24:7 - 25:7]"],["Export' [23:7 - 24:7]"],["Export' [22:7 - 23:7]"],["Export' [21:7 - 22:7]"],["Export' [20:7 - 21:7]"],["Export' [19:7 - 20:7]"],["Export' [18:7 - 19:7]"],["Export' [17:7 - 18:7]"],["Export' [16:7 - 17:7]"],["Export' [15:7 - 16:7]"],["Export' [14:7 - 15:7]"],["Export' [13:7 - 14:7]"],["Export' [12:7 - 13:7]"],["Export' [11:7 - 12:7]"],["Export' [10:7 - 11:7]"],["Export' [9:7 - 10:7]"],["Export' [8:7 - 9:7]"],
+      ["Warning' [7:29 - 8:7]"],
       ["Name' [7:8 - 7:29]"],
       ["Space' [4:1 - 7:1]","Pragma' [3:1 - 7:8]"],
       ["Pragma' [2:1 - 3:1]"],
@@ -938,8 +963,8 @@ test2f =
       ["ImportDecl' [36:1 - 37:1]"],
       ["ImportDecl' [35:1 - 36:1]"],
       ["ImportDecl' [34:1 - 35:1]"],
-      ["Exports' [8:5 - 34:1]"],
-      ["Warning' [7:29 - 8:5]"],
+      ["Export' [31:7 - 34:1]"],["Export' [30:7 - 31:7]"],["Export' [29:7 - 30:7]"],["Export' [28:7 - 29:7]"],["Export' [27:7 - 28:7]"],["Export' [26:7 - 27:7]"],["Export' [25:7 - 26:7]"],["Export' [24:7 - 25:7]"],["Export' [23:7 - 24:7]"],["Export' [22:7 - 23:7]"],["Export' [21:7 - 22:7]"],["Export' [20:7 - 21:7]"],["Export' [19:7 - 20:7]"],["Export' [18:7 - 19:7]"],["Export' [17:7 - 18:7]"],["Export' [16:7 - 17:7]"],["Export' [15:7 - 16:7]"],["Export' [14:7 - 15:7]"],["Export' [13:7 - 14:7]"],["Export' [12:7 - 13:7]"],["Export' [11:7 - 12:7]"],["Export' [10:7 - 11:7]"],["Export' [9:7 - 10:7]"],["Export' [8:7 - 9:7]"],
+      ["Warning' [7:29 - 8:7]"],
       ["Name' [7:8 - 7:29]"],
       ["Pragma' [3:1 - 7:8]"],
       ["Pragma' [2:1 - 3:1]"],
@@ -961,8 +986,8 @@ test2g =
       "Pragma' [2:1 - 3:1]",
       "Pragma' [3:1 - 7:8]",
       "Name' [7:8 - 7:29]",
-      "Warning' [7:29 - 8:5]",
-      "Exports' [8:5 - 34:1]",
+      "Warning' [7:29 - 8:7]",
+      "Export' [8:7 - 9:7]","Export' [9:7 - 10:7]","Export' [10:7 - 11:7]","Export' [11:7 - 12:7]","Export' [12:7 - 13:7]","Export' [13:7 - 14:7]","Export' [14:7 - 15:7]","Export' [15:7 - 16:7]","Export' [16:7 - 17:7]","Export' [17:7 - 18:7]","Export' [18:7 - 19:7]","Export' [19:7 - 20:7]","Export' [20:7 - 21:7]","Export' [21:7 - 22:7]","Export' [22:7 - 23:7]","Export' [23:7 - 24:7]","Export' [24:7 - 25:7]","Export' [25:7 - 26:7]","Export' [26:7 - 27:7]","Export' [27:7 - 28:7]","Export' [28:7 - 29:7]","Export' [29:7 - 30:7]","Export' [30:7 - 31:7]","Export' [31:7 - 34:1]",
       "ImportDecl' [34:1 - 35:1]",
       "ImportDecl' [35:1 - 36:1]",
       "ImportDecl' [36:1 - 37:1]",
