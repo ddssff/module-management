@@ -13,19 +13,25 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Imports.Clean as Clean (test1)
 import Language.Haskell.Imports.Common (untabify, withCurrentDirectory)
 import Language.Haskell.Imports.Fold as Fold (tests)
+import Language.Haskell.Imports.FoldAnnotated as FoldAnnotated (tests)
 import Language.Haskell.Imports.Move as Move (test2)
 import Language.Haskell.Imports.Split as Split (tests)
 import Language.Haskell.Imports.SrcLoc as SrcLoc (tests)
-import Test.HUnit (runTestTT, Test(TestList, TestCase, TestLabel), assertEqual)
+import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
+import Test.HUnit (runTestTT, Test(TestList, TestCase, TestLabel), assertEqual, Counts(..))
 
 main =
     do counts <- runTestTT (TestList [TestLabel "Clean" Clean.test1,
                                       TestLabel "Fold" Fold.tests,
+                                      TestLabel "FoldAnnotated" FoldAnnotated.tests,
                                       TestLabel "Move" Move.test2,
                                       TestLabel "Main" Main.tests,
                                       TestLabel "SrcLoc" SrcLoc.tests,
                                       TestLabel "Split" Split.tests])
        putStrLn (show counts)
+       case (errors counts + failures counts) of
+         0 -> exitWith ExitSuccess
+         _ -> exitWith (ExitFailure 1)
 
 -- withTestData :: (Module -> [Comment] -> String -> IO r) -> FilePath -> IO r
 withTestData f path = withCurrentDirectory "testdata" $

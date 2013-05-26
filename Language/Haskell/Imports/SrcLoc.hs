@@ -1,11 +1,11 @@
 {-# LANGUAGE FlexibleInstances, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Imports.SrcLoc
-    ( HasSrcLoc(..)
+    ( HasSrcSpan(..)
+    , HasSrcLoc(..)
     , HasEndLoc(..)
     , srcSpanStart'
     , srcSpanEnd'
-    , srcSpan
     , textEndLoc
     , srcSpanTriple
     , srcLocPairTriple
@@ -137,7 +137,9 @@ instance HasEndLoc Comment where
     endLoc (Comment _ sp _) = srcSpanEnd' sp
 
 textEndLoc :: String -> SrcLoc
-textEndLoc text = def {srcLine = length (lines text), srcColumn = length (last (lines text)) + 1}
+textEndLoc text = def {srcLine = length ls, srcColumn = length (last ls) + 1}
+    where
+      ls = lines' text
 
 srcSpanStart' :: SrcSpan -> SrcLoc
 srcSpanStart' sp = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanStart sp)
@@ -145,13 +147,13 @@ srcSpanStart' sp = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanStart sp)
 srcSpanEnd' :: SrcSpan -> SrcLoc
 srcSpanEnd' sp = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanEnd sp)
 
-srcSpan :: SrcLoc -> SrcLoc -> SrcSpan
-srcSpan b e | srcLine b > srcLine e || (srcLine b == srcLine e && srcColumn b > srcColumn e) = error $ "srcSpan " ++ show b ++ " > " ++ show e
-srcSpan b e = SrcSpan {srcSpanFilename = srcFilename b,
-                       srcSpanStartLine = srcLine b,
-                       srcSpanStartColumn = srcColumn b,
-                       srcSpanEndLine = srcLine e,
-                       srcSpanEndColumn = srcColumn e}
+instance HasSrcSpan (SrcLoc, SrcLoc) where
+    srcSpan' (b, e) | srcLine b > srcLine e || (srcLine b == srcLine e && srcColumn b > srcColumn e) = error $ "srcSpan " ++ show b ++ " > " ++ show e
+    srcSpan' (b, e) = SrcSpan {srcSpanFilename = srcFilename b,
+                               srcSpanStartLine = srcLine b,
+                               srcSpanStartColumn = srcColumn b,
+                               srcSpanEndLine = srcLine e,
+                               srcSpanEndColumn = srcColumn e}
 
 -- | Split text into two regions, before and after the given location
 cutSrcLoc :: SrcLoc -> String -> (String, String)

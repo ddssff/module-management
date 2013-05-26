@@ -25,7 +25,6 @@ module Language.Haskell.Imports.Common
 
 import Control.Applicative ((<$>))
 import Control.Exception (catch, throw, bracket)
-import Control.Monad (when)
 import Data.Default (def, Default)
 import Data.List (groupBy, sortBy)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
@@ -35,6 +34,9 @@ import Language.Haskell.Exts.Syntax (Decl, ImportDecl, Module(..), SrcLoc(SrcLoc
 import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
 import System.FilePath ((<.>))
 import System.IO.Error (isDoesNotExistError)
+
+class Display a where
+    display :: a -> String
 
 tildeBackup :: FilePath -> Maybe FilePath
 tildeBackup = Just . (++ "~")
@@ -66,9 +68,6 @@ replaceFile backup path text =
 
 removeFile' :: FilePath -> IO ()
 removeFile' path = putStrLn ("removeFile " ++ show path) >> removeFile path
-
-class Display a where
-    display :: a -> String
 
 class HasSrcSpan a where
     srcSpan' :: a -> SrcSpan
