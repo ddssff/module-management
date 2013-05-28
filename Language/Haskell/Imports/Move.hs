@@ -5,7 +5,7 @@ module Language.Haskell.Imports.Move
     , test2
     ) where
 
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Control.Monad.Trans (liftIO)
 import Data.Generics (mkT, everywhere)
 import Data.Map as Map (Map, lookup, fromList, elems, keys)
@@ -14,8 +14,9 @@ import Data.Monoid ((<>))
 import Data.Set as Set (toList, fromList, difference)
 import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (SrcSpan)
+import Language.Haskell.Exts.SrcLoc (SrcSpan, SrcSpanInfo)
 import Language.Haskell.Exts.Syntax (ImportDecl, Module(Module), ModuleName(..), QName(Qual), ExportSpec(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A
 import Language.Haskell.Imports.Common (replaceFileIfDifferent, withCurrentDirectory, removeFileIfPresent, modulePath)
 import Language.Haskell.Imports.Fold (foldModule)
 import System.Cmd (system)
@@ -35,15 +36,26 @@ moveModule' :: Map ModuleName ModuleName -> Bool -> FilePath -> IO ()
 moveModule' moves dry path =
     do ParseOk (m@(Module _ name _ _ _ _ _), comments) <- liftIO (parseFileWithComments defaultParseMode path)
        text <- liftIO $ readFile path
-       let text' = foldModule headf importf declf tailf m comments text ""
+       let text' = foldModule pragmaf namef warningf exportf importf' declf' tailf' m comments text ""
            -- name' = Map.lookup name moves
        if dry then putStrLn ("replaceFile " ++ (modulePath (fromMaybe name (Map.lookup name moves)))) else void (replaceFileIfDifferent (modulePath (fromMaybe name (Map.lookup name moves))) (text' <> "\n"))
     where
+      pragmaf x pre s r = r <> s
+      namef x pre s r = r <> maybe s (prettyPrintWithMode defaultMode) (Map.lookup x moves)
+      warningf x pre s r = r <> s
+      exportf x pre s r = let x' = moveExportSpec x in r <> (if x' /= x then prettyPrintWithMode defaultMode x' else s)
       headf (Module l name p w e _i _d) pre s _sp r =
           r <> maybe "" fst pre <>
           maybe s (\ name' -> prettyPrintWithMode defaultMode (Module l name' p w (fmap (map (moveExportSpec moves)) e) [] []) <> "\n\n") (Map.lookup name moves)
       importf :: ImportDecl -> Maybe (String, SrcSpan) -> String -> SrcSpan -> String -> String
       importf x pre s _sp r =
+          r <> maybe "" fst pre <>
+          if x /= x'
+          then prettyPrintWithMode defaultMode x' <> "\n"
+          else s
+          where x' = everywhere (mkT (moveModuleName moves)) x
+      importf' :: A.ImportDecl SrcSpanInfo -> String -> String -> String
+      importf' x pre s r =
           r <> maybe "" fst pre <>
           if x /= x'
           then prettyPrintWithMode defaultMode x' <> "\n"
@@ -55,7 +67,14 @@ moveModule' moves dry path =
           then prettyPrintWithMode defaultMode x'
           else s
           where x' = everywhere (mkT (moveQName moves)) x
+      declf' x pre s r =
+          r <> pre <>
+          if x /= x'
+          then prettyPrintWithMode defaultMode x'
+          else s
+          where x' = everywhere (mkT (moveQName moves)) x
       tailf s _ r = r <> s
+      tailf' s r = r <> s
 
 moveExportSpec :: Map ModuleName ModuleName -> ExportSpec -> ExportSpec
 moveExportSpec moves x = everywhere (mkT (moveQName moves)) x

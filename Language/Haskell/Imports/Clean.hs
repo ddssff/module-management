@@ -3,7 +3,7 @@
 module Language.Haskell.Imports.Clean
     ( cleanImports
     , cleanBuildImports
-    , test1
+    , tests
     ) where
 
 import Control.Monad (when)
@@ -14,23 +14,28 @@ import Data.Default (def, Default)
 import Data.Function (on)
 import Data.List (groupBy, intercalate, nub, sortBy, find)
 import Data.Maybe (catMaybes)
+import Data.Monoid ((<>))
 import qualified Distribution.ModuleName as D (components, ModuleName)
 import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Executable(modulePath), Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
-import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
+import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A -- (ImportDecl(..), ImportSpec(..), Module(..), ModuleName(..), ModuleHead(..), Name(..))
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
-import Language.Haskell.Exts.Syntax (ImportDecl(..), ImportSpec, Module(..), ModuleName(ModuleName), Name(..))
-import Language.Haskell.Imports.Common (replaceFile, tildeBackup, withCurrentDirectory)
+import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
+import Language.Haskell.Imports.Common (replaceFile, tildeBackup, withCurrentDirectory, HasSymbols(symbols),
+                                        Module, ModuleHead, ImportDecl, ImportSpecList, ImportSpec, ModuleName, Name)
+import Language.Haskell.Imports.Fold (foldModule)
 import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, {-putDryRun,-} removeEmptyImports, runParamsT, scratchDir)
-import Language.Haskell.Imports.Syntax (HasSymbol(symbol), importsSpan, replaceImports)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath ((<.>), (</>))
 import System.Process (readProcessWithExitCode, showCommandForUser)
-import Test.HUnit (assertEqual, Test(TestCase))
+import Test.HUnit (assertEqual, Test(..))
+
+tests = TestLabel "Clean" (TestList [test1, test2])
 
 test1 :: Test
 test1 =
@@ -57,6 +62,15 @@ test1 =
                            " import System.Posix.Types (FileOffset)",
                            " import Text.PrettyPrint.ANSI.Leijen ((<>), Doc, Pretty(pretty), text)"]
                           (drop 2 (lines diff)))
+
+test2 :: Test
+test2 =
+    TestCase
+      (do _ <- system "rsync -aHxS --delete testdata/ testcopy"
+          let path = "Debian/Repo/PackageIndex.hs"
+          _ <- withCurrentDirectory "testcopy" (runParamsT "dist/scratch" (cleanImports path))
+          (ExitSuccess, diff, _) <- readProcessWithExitCode "diff" ["-ru", "testdata" </> path, "testcopy" </> path] ""
+          assertEqual "cleanImports" "" diff)
 
 -- | This is designed to be called from the postConf script of your
 -- Setup file, it cleans up the imports of all the source files in the
@@ -104,7 +118,7 @@ checkImports sourcePath =
     do source <- liftIO $ parseFileWithComments defaultParseMode sourcePath
        sourceText <- liftIO $ readFile sourcePath
        case source of
-         ParseOk (m@(Module _ (ModuleName name) _ _ _ _ _), comments) ->
+         ParseOk (m@(A.Module _ h@(Just (A.ModuleHead _ (A.ModuleName _ name) _ _)) _ _ _), comments) ->
              do let importsPath = name <.> ".imports"
                 markForDelete importsPath
                 result <- liftIO (parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath) `catch` (\ (e :: IOError) -> liftIO getCurrentDirectory >>= \ here -> liftIO . throw . userError $ here ++ ": " ++ show e)
@@ -116,9 +130,11 @@ checkImports sourcePath =
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
 updateSource :: MonadParams m => Module -> FilePath -> Module -> [Comment] -> String -> m (Maybe String)
-updateSource _ sourcePath (Module _ _ _ _ Nothing _ _) _ _ =
+updateSource _ sourcePath (A.Module _ Nothing _ _ _) _ _ =
     error (sourcePath ++ ": Won't modify source file with no explicit export list")
-updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ oldImports _)) comments sourceText =
+updateSource _ sourcePath (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _) _ _ =
+    error (sourcePath ++ ": Won't modify source file with no explicit export list")
+updateSource (A.Module _ _ _ newImports _) sourcePath (m@(A.Module _ _ _ oldImports _)) comments sourceText =
     removeEmptyImports >>= \ remove ->
     dryRun >>= \ dry ->
     maybe (liftIO (putStrLn (sourcePath ++ ": no changes")) >> return Nothing)
@@ -126,7 +142,23 @@ updateSource (Module _ _ _ _ _ newImports _) sourcePath (m@(Module _ _ _ _ _ old
                liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
                liftIO (when (not dry) (replaceFile tildeBackup sourcePath text)) >>
                return (Just text))
-          (replaceImports oldImports (fixNewImports remove oldImports newImports) sourceText (importsSpan m comments sourceText))
+          (replaceImports oldImports (fixNewImports remove oldImports newImports) m sourceText {-(importsSpan m comments sourceText)-})
+
+-- | Compare the old and new import sets and if they differ clip out
+-- the imports from the sourceText and insert the new ones.
+replaceImports :: [ImportDecl] -> [ImportDecl] -> Module -> String -> Maybe String
+replaceImports oldImports newImports m sourceText =
+    let newPretty = intercalate "\n" (map (prettyPrintWithMode (defaultMode {layout = PPInLine})) newImports)
+        (before, before' : oldPretty, after) =
+            foldModule (\ _ pre s (l, i, r) -> (l <> pre <> s, i, r))
+                       (\ _ pre s (l, i, r) -> (l <> pre <> s, i, r))
+                       (\ _ pre s (l, i, r) -> (l <> pre <> s, i, r))
+                       (\ _ pre s (l, i, r) -> (l <> pre <> s, i, r))
+                       (\ _ pre s (l, i, r) -> (l, i <> [pre, s], r))
+                       (\ _ pre s (l, i, r) -> (l, i, r <> pre <> s))
+                       (\ s (l, i, r) -> (l, i, r <> s))
+                       m sourceText ("", [], "") in
+    if newPretty /= concat oldPretty then Just (before <> before' <> newPretty <> after) else Nothing
 
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: Bool -> [ImportDecl] -> [ImportDecl] -> [ImportDecl]
@@ -134,27 +166,31 @@ fixNewImports remove oldImports imports =
     filter filterDecls $ map mergeDecls $ groupBy ((==) `on` noSpecs) $ sortBy importCompare imports
     where
       importCompare a b =
-          case (compare `on` importModule) a b of
+          case (compare `on` A.importModule) a b of
             EQ -> (compare `on` noSpecs) a b
             x -> x
       noSpecs :: ImportDecl -> ImportDecl
-      noSpecs x = x {importLoc = def, importSpecs = fmap (\ (flag, _) -> (flag, [])) (importSpecs x)}
+      noSpecs x = x {A.importAnn = def, A.importSpecs = fmap (\ (A.ImportSpecList loc flag _) -> (A.ImportSpecList loc flag [])) (A.importSpecs x)}
       mergeDecls :: [ImportDecl] -> ImportDecl
-      mergeDecls xs@(x : _) = x {importSpecs = mergeSpecs (catMaybes (map importSpecs xs))}
+      mergeDecls xs@(x : _) = x {A.importSpecs = mergeSpecs (catMaybes (map A.importSpecs xs))}
       mergeDecls [] = error "mergeDecls"
-      mergeSpecs :: [(Bool, [ImportSpec])] -> Maybe (Bool, [ImportSpec])
-      mergeSpecs (x : xs) = Just (fst x, sortBy compareSpecs (nub (concat (snd x : map snd xs))))
+      mergeSpecs :: [ImportSpecList] -> Maybe ImportSpecList
+      mergeSpecs (A.ImportSpecList loc flag specs : xs) = Just (A.ImportSpecList loc flag (sortBy compareSpecs (nub (concat (specs : map (\ (A.ImportSpecList _ _ specs) -> specs) xs)))))
       mergeSpecs [] = error "mergeSpecs"
       filterDecls :: ImportDecl -> Bool
-      filterDecls (ImportDecl _ m _ _ _ _ (Just (_, []))) = not remove || maybe False (isEmptyImport . importSpecs) (find ((== m) . importModule) oldImports)
+      filterDecls (A.ImportDecl _ m _ _ _ _ (Just (A.ImportSpecList loc _ []))) = not remove || maybe False (isEmptyImport . A.importSpecs) (find ((== (unModuleName m)) . unModuleName . A.importModule) oldImports)
       filterDecls _ = True
-      isEmptyImport (Just (_, [])) = True
+      isEmptyImport (Just (A.ImportSpecList loc _ [])) = True
       isEmptyImport _ = False
 
--- Not sure why this is case insensitive
+-- | Be careful not to try to compare objects with embeded SrcSpanInfo.
+unModuleName :: ModuleName -> String
+unModuleName (A.ModuleName _ x) = x
+
+-- Compare function used to sort the symbols within an import.
 compareSpecs :: ImportSpec -> ImportSpec -> Ordering
 compareSpecs a b =
-    case compare (fmap (map toLower . nameString) $ symbol a) (fmap (map toLower . nameString) $ symbol b) of
+    case compare (map (map toLower . nameString) $ symbols a) (map (map toLower . nameString) $ symbols b) of
       EQ -> compare a b
       x -> x
 
@@ -165,5 +201,5 @@ compareSpecs a b =
 -- dropPrefix pre x = if isPrefixOf pre x then drop (length x) x else x
 
 nameString :: Name -> String
-nameString (Ident s) = s
-nameString (Symbol s) = s
+nameString (A.Ident _ s) = s
+nameString (A.Symbol _ s) = s

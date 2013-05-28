@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Imports.FoldAnnotated
     ( foldModule
+    , HasSymbols(symbols)
     , tests
     ) where
 
@@ -13,12 +14,67 @@ import Data.Digest.Pure.MD5 (md5)
 import Data.Function (on)
 import Data.List (partition, sortBy)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, ParseResult(..))
-import Language.Haskell.Exts.Annotated.Syntax (ImportDecl(..), Module(..), ModulePragma(..), Decl(..), ModuleHead(..), ModuleName(..), WarningText(..), ExportSpecList(..), ExportSpec(..))
+import Language.Haskell.Exts.Annotated.Syntax (ImportDecl(..), Module(..), ModulePragma(..), Decl(..), ModuleHead(..), ModuleName(..), WarningText(..), ExportSpecList(..), ExportSpec(..), DeclHead(..), InstHead(..), QName(..), Name(..), Match(..))
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc
 import Language.Haskell.Imports.Common (Display(..), untabify, lines', withCurrentDirectory)
 import Language.Haskell.Imports.SrcLoc (HasSrcSpan(..), HasEndLoc(..), HasSrcLoc(..), srcPairText, srcSpanEnd', srcSpanText, textEndLoc)
 import Test.HUnit (assertEqual, Test(TestLabel, TestCase, TestList))
+
+class HasSymbols a where
+    symbols :: a -> [Name SrcSpanInfo]
+
+instance HasSymbols (Decl SrcSpanInfo) where
+    symbols (TypeDecl _ x _) = symbols x
+    symbols (TypeFamDecl _ x _) = symbols x
+    symbols (DataDecl _ _ _ x _ _) = symbols x
+    symbols (GDataDecl _ _ _ x _ _ _) = symbols x
+    symbols (DataFamDecl _ _ x _) = symbols x
+    symbols (TypeInsDecl _ _ _) = error "TypeInsDecl"
+    symbols (DataInsDecl _ _ _ _ _) = error "DataInsDecl"
+    symbols (GDataInsDecl _ _ _ _ _ _) = error "GDataInsDecl"
+    symbols (ClassDecl _ _ x _ _) = symbols x
+    symbols (InstDecl _ _ x _) = symbols x
+    symbols (DerivDecl _ _ x) = symbols x
+    symbols (InfixDecl _ _ _ _) = error "InfixDecl"
+    symbols (DefaultDecl _ _) = error "DefaultDecl"
+    symbols (SpliceDecl _ _) = error "SpliceDecl"
+    symbols (TypeSig _ x _) = x
+    symbols x@(FunBind _ matches) = concatMap symbols matches
+    symbols (PatBind _ _ _ _ _) = error "PatBind"
+    symbols (ForImp _ _ _ _ _ _) = error "ForImp"
+    symbols (ForExp _ _ _ _ _) = error "ForExp"
+    symbols (RulePragmaDecl _ _) = error "RulePragmaDecl"
+    symbols (DeprPragmaDecl _ _) = error "DeprPragmaDecl"
+    symbols (WarnPragmaDecl _ _) = error "WarnPragmaDecl"
+    symbols (InlineSig _ _ _ x) = symbols x
+    symbols (InlineConlikeSig _ _ x) = symbols x
+    symbols (SpecSig _ x _) = symbols x
+    symbols (SpecInlineSig _ _ _ x _) = symbols x
+    symbols (InstSig _ _ x) = symbols x
+    symbols (AnnPragma _ _) = error "AnnPragma"
+
+instance HasSymbols (DeclHead SrcSpanInfo) where
+    symbols (DHead _ x _) = symbols x
+    symbols (DHInfix _ _ x _) = symbols x
+    symbols (DHParen _ x) = symbols x
+
+instance HasSymbols (InstHead SrcSpanInfo) where
+    symbols (IHead _ x _) = symbols x
+    symbols (IHInfix _ _ x _) = symbols x
+    symbols (IHParen _ x) = symbols x
+
+instance HasSymbols (QName SrcSpanInfo) where
+    symbols (Qual _ _ x) = symbols x
+    symbols (UnQual _ x) = symbols x
+    symbols (Special _ _) = error "Special"
+
+instance HasSymbols (Name SrcSpanInfo) where
+    symbols x = [x]
+
+instance HasSymbols (Match SrcSpanInfo) where
+    symbols (Match _ x _ _ _) = [x]
+    symbols (InfixMatch _ _ x _ _ _) = [x]
 
 class PutSrcSpan a where
     putSrcSpan :: SrcSpan -> a -> a
@@ -48,6 +104,7 @@ instance HasSrcSpan (ModuleName SrcSpanInfo) where
 
 instance HasSrcSpan (WarningText SrcSpanInfo) where
     srcSpan (WarnText x _) = srcSpan x
+    srcSpan (DeprText x _) = srcSpan x
 
 instance HasSrcSpan (ExportSpecList SrcSpanInfo) where
     srcSpan (ExportSpecList x _) = srcSpan x
@@ -76,6 +133,7 @@ instance PutSrcSpan (ModuleName SrcSpanInfo) where
 
 instance PutSrcSpan (WarningText SrcSpanInfo) where
     putSrcSpan sp (WarnText x a) = WarnText (putSrcSpan sp x) a
+    putSrcSpan sp (DeprText x a) = DeprText (putSrcSpan sp x) a
 
 instance PutSrcSpan (ExportSpecList SrcSpanInfo) where
     putSrcSpan sp (ExportSpecList x a) = ExportSpecList (putSrcSpan sp x) a
@@ -549,7 +607,6 @@ test1a =
             spacef :: String -> [String] -> [String]
             spacef _s r = r ++ ["space"]
 
--- Turn these into unit tests, and test for the md5sum of AptCache.hs (3c0c2e7422bfc3c3f39402f3dd4fa5af)
 test1b :: Test
 test1b =
     TestLabel "test1b" $ TestCase
@@ -1125,3 +1182,31 @@ test4 =
      "Checksum"
      "520a43405fbc25fda0788a2f4607ffdc"
      checksum)
+
+test5 :: Test
+test5 =
+    TestLabel "test5" $ TestCase
+    (withTestData test >>= \ (output, original) ->
+     assertEqual
+     "module keyword"
+     original
+     output)
+    where
+      test :: Module SrcSpanInfo -> [Comment] -> String -> (String, String)
+      test m comments text =
+          (foldModule pragmaf namef warningf exportf importf declf spacef m comments text [], text)
+          where
+            pragmaf :: ModulePragma SrcSpanInfo -> String -> String -> String -> String
+            pragmaf _x pre s r = r ++ "pragmaf - pre=" ++ show pre ++ ", s=" ++ show s ++ "\n"
+            namef :: ModuleName SrcSpanInfo -> String -> String -> String -> String
+            namef _x pre s r = r ++ "namef - pre=" ++ show pre ++ ", s=" ++ show s ++ "\n"
+            warningf :: WarningText SrcSpanInfo -> String -> String -> String -> String
+            warningf _x pre s r = r ++ "warningf - pre=" ++ show pre ++ ", s=" ++ show s ++ "\n"
+            exportf :: ExportSpec SrcSpanInfo -> String -> String -> String -> String
+            exportf _x pre s r = r ++ "exportf - pre=" ++ show pre ++ ", s=" ++ show s ++ "\n"
+            importf :: ImportDecl SrcSpanInfo -> String -> String -> String -> String
+            importf _x pre s r = r ++ "importf - pre=" ++ show pre ++ ", s=" ++ show s ++ "\n"
+            declf :: Decl SrcSpanInfo -> String -> String -> String -> String
+            declf _x pre s r = r ++ "declf - pre=" ++ show pre ++ ", s=" ++ show s ++ "\n"
+            spacef :: String -> String -> String
+            spacef s r = r ++ "spacef: " ++ show s ++ "\n"
