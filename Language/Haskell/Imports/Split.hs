@@ -140,8 +140,8 @@ tests = TestList [test1]
 test1 :: Test
 test1 =
     TestCase
-      (system "rsync -aHxS --delete testdata/ testcopy" >>
-       withCurrentDirectory "testcopy"
+      (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
+       withCurrentDirectory "testdata/copy"
          (splitModule "Debian/Repo/Package.hs" >>= \ () ->
           readFile "Debian/Repo/Package.hs" >>= \ result ->
           assertEqual

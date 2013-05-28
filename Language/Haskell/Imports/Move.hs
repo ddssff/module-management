@@ -73,8 +73,8 @@ moveModuleName moves m = fromMaybe m (Map.lookup m moves)
 test2 :: Test
 test2 =
     TestCase
-      (system "rsync -aHxS --delete testdata/ testcopy" >>
-       withCurrentDirectory "testcopy"
+      (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
+       withCurrentDirectory "testdata/copy"
          (moveModule
            (Map.fromList [(ModuleName "Debian.Repo.Types.AptBuildCache", ModuleName "Debian.Repo.Types.BuildCache")])
            False

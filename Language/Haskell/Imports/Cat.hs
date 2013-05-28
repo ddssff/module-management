@@ -131,8 +131,8 @@ fixImports from to x =
 test1 :: Test
 test1 =
     TestCase
-      (system "rsync -aHxS --delete testdata/ testcopy" >>
-       withCurrentDirectory "testcopy"
+      (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
+       withCurrentDirectory "testdata/copy"
          (catModules
            (Set.fromList testModules)
            [(ModuleName "Debian.Repo.AptCache"), (ModuleName "Debian.Repo.AptImage")]
@@ -145,8 +145,8 @@ test1 =
 test2 :: Test
 test2 =
     TestCase
-      (system "rsync -aHxS --delete testdata/ testcopy" >>
-       withCurrentDirectory "testcopy"
+      (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
+       withCurrentDirectory "testdata/copy"
          (catModules
            (Set.fromList testModules)
            [ModuleName "Debian.Repo.Types.Slice", ModuleName "Debian.Repo.Types.Repo", ModuleName "Debian.Repo.Types.EnvPath"]

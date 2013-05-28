@@ -35,10 +35,10 @@ import Test.HUnit (assertEqual, Test(TestCase))
 test1 :: Test
 test1 =
     TestCase
-      (do _ <- system "rsync -aHxS --delete testdata/ testcopy"
+      (do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
           let path = "Debian/Repo/Types/PackageIndex.hs"
-          _ <- withCurrentDirectory "testcopy" (runParamsT "dist/scratch" (cleanImports path))
-          (ExitFailure 1, diff, _) <- readProcessWithExitCode "diff" ["-ru", "testdata" </> path, "testcopy" </> path] ""
+          _ <- withCurrentDirectory "testdata/copy" (runParamsT "dist/scratch" (cleanImports path))
+          (ExitFailure 1, diff, _) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> path, "testdata/copy" </> path] ""
           assertEqual "cleanImports"
                           ["@@ -22,13 +22,13 @@",
                            "     , prettyPkgVersion",

@@ -34,7 +34,7 @@ main =
          _ -> exitWith (ExitFailure 1)
 
 -- withTestData :: (Module -> [Comment] -> String -> IO r) -> FilePath -> IO r
-withTestData f path = withCurrentDirectory "testdata" $
+withTestData f path = withCurrentDirectory "testdata/original" $
     do text <- try (readFile path)
        source <- try (parseFileWithComments defaultParseMode path)
        case (text, source) of

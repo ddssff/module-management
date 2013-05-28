@@ -253,7 +253,7 @@ tests = TestList [test1, test2a, test2b, test2c, test2d, test2e, test2f, test2g,
 
 testGroupSpace :: Test
 testGroupSpace =
-    TestLabel "testGroupSpace" $ TestCase $ withCurrentDirectory "testdata" $
+    TestLabel "testGroupSpace" $ TestCase $ withCurrentDirectory "testdata/original" $
       (readFile "Debian/Repo/AptCache.hs" >>= \ text ->
        assertEqual "groupSpace"
                 [Space' (SrcSpan "<unknown>.hs" 114 33 115 11) "-- Flip args to get newest first\n          " (SrcLoc "<unknown>.hs" 114 33)]
@@ -269,7 +269,7 @@ testGroupSpace =
                     Space' (SrcSpan "<unknown>.hs" 114 65 115 11) "\n          " (SrcLoc "<unknown>.hs" 114 65)]))
 
 withTestData :: (Module -> [Comment] -> String -> r) -> IO r
-withTestData f = withCurrentDirectory "testdata" $
+withTestData f = withCurrentDirectory "testdata/original" $
     do let path = "Debian/Repo/AptCache.hs"
        text <- try (readFile path)
        source <- try (parseFileWithComments defaultParseMode path)
@@ -832,7 +832,7 @@ test3 = TestLabel "test3" $ TestCase (assertEqual "textEndLoc" (SrcLoc {srcFilen
 
 test4 :: Test
 test4 =
-    TestLabel "test4" $ TestCase $ withCurrentDirectory "testdata" $
+    TestLabel "test4" $ TestCase $ withCurrentDirectory "testdata/original" $
     (B.readFile "Debian/Repo/AptCache.hs" >>= return . show . md5 >>= \ checksum ->
      assertEqual
      "Checksum"
