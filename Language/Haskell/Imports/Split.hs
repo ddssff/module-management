@@ -8,7 +8,7 @@ module Language.Haskell.Imports.Split
 import Control.Exception (throw)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (def)
-import Data.List as List (filter, nub)
+import Data.List as List (filter, nub, isPrefixOf)
 import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, keys, Map, mapKeys, mapWithKey, toList)
 import Data.Maybe (catMaybes, fromJust)
 import Data.Monoid ((<>))
@@ -25,7 +25,9 @@ import Language.Haskell.Imports.Params (runParamsT)
 import Language.Haskell.Imports.Syntax (symbol)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing)
+import System.Exit (ExitCode(ExitFailure))
 import System.FilePath ((<.>), dropExtension)
+import System.Process (readProcessWithExitCode)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 -- Should be QName -> Name -> QName or something
@@ -143,36 +145,8 @@ test1 =
       (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
        withCurrentDirectory "testdata/copy"
          (splitModule "Debian/Repo/Package.hs" >>= \ () ->
-          readFile "Debian/Repo/Package.hs" >>= \ result ->
+          readProcessWithExitCode "diff" ["-ru", "../splitresult", "."] "" >>= \ (code, out, err) ->
           assertEqual
             "splitModule"
-            (unlines
-             ["{-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}",
-              "{-# OPTIONS -fno-warn-name-shadowing  #-}",
-              "module Debian.Repo.Package.ReExporter",
-              "       (sourceFilePaths, binaryPackageSourceVersion, binarySourceVersion,",
-              "        sourcePackageBinaryNames, sourceBinaryNames, toSourcePackage,",
-              "        toBinaryPackage, binaryPackageSourceID, sourcePackageBinaryIDs,",
-              "        sourcePackagesOfIndex, sourcePackagesOfCachedIndex,",
-              "        binaryPackagesOfIndex, binaryPackagesOfCachedIndex, getPackages,",
-              "        putPackages, releaseSourcePackages, releaseBinaryPackages)",
-              "       where",
-              "import Debian.Repo.Package.BinaryPackageSourceID (binaryPackageSourceID)",
-              "import Debian.Repo.Package.BinaryPackageSourceVersion (binaryPackageSourceVersion)",
-              "import Debian.Repo.Package.BinaryPackagesOfCachedIndex (binaryPackagesOfCachedIndex)",
-              "import Debian.Repo.Package.BinaryPackagesOfIndex (binaryPackagesOfIndex)",
-              "import Debian.Repo.Package.BinarySourceVersion (binarySourceVersion)",
-              "import Debian.Repo.Package.GetPackages (getPackages)",
-              "import Debian.Repo.Package.PutPackages (putPackages)",
-              "import Debian.Repo.Package.ReleaseBinaryPackages (releaseBinaryPackages)",
-              "import Debian.Repo.Package.ReleaseSourcePackages (releaseSourcePackages)",
-              "import Debian.Repo.Package.SourceBinaryNames (sourceBinaryNames)",
-              "import Debian.Repo.Package.SourceFilePaths (sourceFilePaths)",
-              "import Debian.Repo.Package.SourcePackageBinaryIDs (sourcePackageBinaryIDs)",
-              "import Debian.Repo.Package.SourcePackageBinaryNames (sourcePackageBinaryNames)",
-              "import Debian.Repo.Package.SourcePackagesOfCachedIndex (sourcePackagesOfCachedIndex)",
-              "import Debian.Repo.Package.SourcePackagesOfIndex (sourcePackagesOfIndex)",
-              "import Debian.Repo.Package.ToBinaryPackage (toBinaryPackage)",
-              "import Debian.Repo.Package.ToSourcePackage (toSourcePackage)",
-              ""])
-          result))
+            (ExitFailure 1, "", "")
+            (code, unlines (List.filter (not . isPrefixOf "Only") (lines out)), err)))
