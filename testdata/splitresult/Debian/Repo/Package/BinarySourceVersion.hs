@@ -1,7 +1,10 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
-{-# OPTIONS -fno-warn-name-shadowing  #-}
+{-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.BinarySourceVersion
-       (binarySourceVersion, binarySourceVersion') where
+    ( -- * Source and binary packages
+      binarySourceVersion', binarySourceVersion
+    -- * Deprecated stuff for interfacing with Debian.Relation
+    ) where
 
 import qualified Data.Text as T (Text, unpack)
 import Debian.Control (ControlFunctions(asString), Paragraph')
@@ -10,6 +13,8 @@ import Debian.Relation (BinPkgName(..))
 import Debian.Version (DebianVersion, parseDebianVersion)
 import qualified Debian.Version as V (buildDebianVersion, epoch, revision, version)
 import Text.Regex (matchRegex, mkRegex)
+
+
 
 -- |Return the name and version number of the source package that
 -- generated this binary package.
@@ -40,4 +45,5 @@ binarySourceVersion' binaryName binaryVersion paragraph =
       -- the epoch number stripped off.  I don't know why - I should search
       -- the Debian policy manual for this.  This puts it back on.
       copyEpoch src dst = V.buildDebianVersion (V.epoch src) (V.version dst) (V.revision dst)
+
 

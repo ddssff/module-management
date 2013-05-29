@@ -1,12 +1,17 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
-{-# OPTIONS -fno-warn-name-shadowing  #-}
-module Debian.Repo.Package.ToSourcePackage (toSourcePackage) where
+{-# OPTIONS -fno-warn-name-shadowing #-}
+module Debian.Repo.Package.ToSourcePackage
+    ( -- * Source and binary packages
+      toSourcePackage
+    -- * Deprecated stuff for interfacing with Debian.Relation
+    ) where
+
+import Debian.Repo.Package.ParseSourceParagraph (parseSourceParagraph)
 import Data.List as List (intercalate, map, partition)
 import Data.Maybe (catMaybes)
 import qualified Data.Text as T (Text, unpack)
 import Debian.Control (formatParagraph)
 import qualified Debian.Control.Text as B (fieldValue, Paragraph)
-import Debian.Repo.Package.ParseSourceParagraph (parseSourceParagraph)
 import Debian.Repo.Types.PackageIndex (makeSourcePackageID, PackageIndex, SourceFileSpec(SourceFileSpec), SourcePackage(..))
 import Debian.Version (parseDebianVersion)
 
@@ -41,4 +46,5 @@ toSourcePackage index package =
       merge x = case partition (either (const True) (const False)) x of
                   (a, []) -> Left . catMaybes . List.map (either Just (const Nothing )) $ a
                   (_, a) -> Right . catMaybes . List.map (either (const Nothing) Just) $ a
+
 

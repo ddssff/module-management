@@ -1,7 +1,10 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
-{-# OPTIONS -fno-warn-name-shadowing  #-}
+{-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.SourcePackageBinaryIDs
-       (sourcePackageBinaryIDs) where
+    ( -- * Source and binary packages
+      sourcePackageBinaryIDs
+    -- * Deprecated stuff for interfacing with Debian.Relation
+    ) where
 
 import Data.List as List (map)
 import qualified Data.Text as T (unpack)
@@ -25,4 +28,20 @@ sourcePackageBinaryIDs arch sourceIndex package =
       binaryID version name = makeBinaryPackageID name version
       -- binaryIndex = sourceIndex { packageIndexArch = arch }
       info = sourceParagraph package
+
+-- | Get the contents of a package index
+
+sourcePackageBinaryIDs Source _ _ = error "invalid argument"
+sourcePackageBinaryIDs arch sourceIndex package =
+    case (B.fieldValue "Version" info, B.fieldValue "Binary" info) of
+      (Just version, Just names) -> List.map (binaryID (parseDebianVersion (T.unpack version))) $ splitRegex (mkRegex "[ ,]+") (T.unpack names)
+      _ -> error ("Source package info has no 'Binary' field:\n" ++ (T.unpack . formatParagraph $ info))
+    where
+      -- Note that this version number may be wrong - we need to
+      -- look at the Source field of the binary package info.
+      binaryID version name = makeBinaryPackageID name version
+      -- binaryIndex = sourceIndex { packageIndexArch = arch }
+      info = sourceParagraph package
+
+-- | Get the contents of a package index
 

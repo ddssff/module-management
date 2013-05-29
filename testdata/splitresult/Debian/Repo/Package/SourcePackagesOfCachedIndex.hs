@@ -1,13 +1,17 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
-{-# OPTIONS -fno-warn-name-shadowing  #-}
+{-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.SourcePackagesOfCachedIndex
-       (sourcePackagesOfCachedIndex) where
+    ( -- * Source and binary packages
+      sourcePackagesOfCachedIndex
+    -- * Deprecated stuff for interfacing with Debian.Relation
+    ) where
+
+import Debian.Repo.Package.IndexCacheFile (indexCacheFile)
+import Debian.Repo.Package.ToSourcePackage (toSourcePackage)
 import Control.Exception as E (catch)
 import "mtl" Control.Monad.Trans (MonadIO(..))
 import Data.List as List (map)
 import Debian.Repo.Monads.Apt (insertSourcePackages, lookupSourcePackages, MonadApt(..), readParagraphs)
-import Debian.Repo.Package.IndexCacheFile (indexCacheFile)
-import Debian.Repo.Package.ToSourcePackage (toSourcePackage)
 import Debian.Repo.Types.AptCache (AptCache(rootDir))
 import Debian.Repo.Types.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.Types.PackageIndex (PackageIndex, SourcePackage)
@@ -17,7 +21,6 @@ import System.FilePath (takeDirectory)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
 
--- FIXME: assuming the index is part of the cache
 sourcePackagesOfCachedIndex :: (AptCache a, MonadApt m) => a -> RepoKey -> Release -> PackageIndex -> m [SourcePackage]
 sourcePackagesOfCachedIndex cache repo release index =
     do state <- getApt
@@ -31,4 +34,5 @@ sourcePackagesOfCachedIndex cache repo release index =
                  return packages
     where
       path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
+
 

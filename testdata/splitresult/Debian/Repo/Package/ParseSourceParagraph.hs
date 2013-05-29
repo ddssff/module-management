@@ -1,7 +1,10 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
-{-# OPTIONS -fno-warn-name-shadowing  #-}
+{-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.ParseSourceParagraph
-       (parseSourceParagraph) where
+    ( -- * Source and binary packages
+      parseSourceParagraph
+    -- * Deprecated stuff for interfacing with Debian.Relation
+    ) where
 
 import Debian.Control (ControlFunctions(stripWS))
 import qualified Debian.Control.Text as B (fieldValue, Paragraph)
@@ -27,4 +30,5 @@ parseSourceParagraph p =
                   , standardsVersion = fmap stripWS $ B.fieldValue "Standards-Version" p
                   , homepage = fmap stripWS $ B.fieldValue "Homepage" p })
       _x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
+
 

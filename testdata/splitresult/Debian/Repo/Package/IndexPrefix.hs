@@ -1,10 +1,15 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
-{-# OPTIONS -fno-warn-name-shadowing  #-}
-module Debian.Repo.Package.IndexPrefix (indexPrefix) where
-import Data.List as List (intercalate)
-import Debian.Release (releaseName', sectionName')
+{-# OPTIONS -fno-warn-name-shadowing #-}
+module Debian.Repo.Package.IndexPrefix
+    ( -- * Source and binary packages
+      indexPrefix
+    -- * Deprecated stuff for interfacing with Debian.Relation
+    ) where
+
 import Debian.Repo.Package.OtherSymbols ((+?+))
 import Debian.Repo.Package.UriToString (uriToString')
+import Data.List as List (intercalate)
+import Debian.Release (releaseName', sectionName')
 import Debian.Repo.Types.PackageIndex (PackageIndex(packageIndexComponent))
 import Debian.Repo.Types.Release (Release(releaseName))
 import Debian.Repo.Types.Repo (RepoKey, repoKeyURI)
@@ -51,4 +56,5 @@ indexPrefix repo release index =
           case (break p s) of
             (s, []) -> [s]
             (h, t) -> h : wordsBy p (drop 1 t)
+
 

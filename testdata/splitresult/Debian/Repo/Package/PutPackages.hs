@@ -1,6 +1,10 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
-{-# OPTIONS -fno-warn-name-shadowing  #-}
-module Debian.Repo.Package.PutPackages (putPackages) where
+{-# OPTIONS -fno-warn-name-shadowing #-}
+module Debian.Repo.Package.PutPackages
+    ( -- * Source and binary packages
+      putPackages
+    -- * Deprecated stuff for interfacing with Debian.Relation
+    ) where
 
 import qualified Data.ByteString.Lazy.Char8 as L (fromChunks)
 import Data.List as List (intercalate, intersperse, map)
@@ -15,9 +19,9 @@ import Debian.Repo.Types.Repository (LocalRepository, repoRoot)
 import Extra.Files (writeAndZipFileWithBackup)
 import System.FilePath ((</>))
 
--- | Write a set of packages into a package index.
 putPackages :: LocalRepository -> Release -> PackageIndexLocal ->  [BinaryPackageLocal] -> IO ()
 putPackages repo release index packages =
     writeAndZipFileWithBackup (outsidePath (repoRoot repo) </> packageIndexPath release index) (L.fromChunks [encodeUtf8 text]) >>= either (fail . intercalate "\n") return
     where
       text = T.concat (intersperse (T.pack "\n") . List.map formatParagraph . List.map packageInfo $ packages)
+

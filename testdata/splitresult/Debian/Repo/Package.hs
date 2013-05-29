@@ -1,13 +1,27 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
-{-# OPTIONS -fno-warn-name-shadowing  #-}
-module Debian.Repo.Package.ReExporter
-       (sourceFilePaths, binaryPackageSourceVersion, binarySourceVersion,
-        sourcePackageBinaryNames, sourceBinaryNames, toSourcePackage,
-        toBinaryPackage, binaryPackageSourceID, sourcePackageBinaryIDs,
-        sourcePackagesOfIndex, sourcePackagesOfCachedIndex,
-        binaryPackagesOfIndex, binaryPackagesOfCachedIndex, getPackages,
-        putPackages, releaseSourcePackages, releaseBinaryPackages)
-       where
+{-# OPTIONS -fno-warn-name-shadowing #-}
+module Debian.Repo.Package
+    ( -- * Source and binary packages
+      sourceFilePaths
+    , binaryPackageSourceVersion
+    , binarySourceVersion
+    , sourcePackageBinaryNames
+    , sourceBinaryNames
+    , toSourcePackage
+    , toBinaryPackage
+    , binaryPackageSourceID
+    , sourcePackageBinaryIDs
+    , sourcePackagesOfIndex
+    , sourcePackagesOfCachedIndex
+    , binaryPackagesOfIndex
+    , binaryPackagesOfCachedIndex
+    , getPackages
+    , putPackages
+    , releaseSourcePackages
+    , releaseBinaryPackages
+    -- * Deprecated stuff for interfacing with Debian.Relation
+    ) where
+
 import Debian.Repo.Package.BinaryPackageSourceID (binaryPackageSourceID)
 import Debian.Repo.Package.BinaryPackageSourceVersion (binaryPackageSourceVersion)
 import Debian.Repo.Package.BinaryPackagesOfCachedIndex (binaryPackagesOfCachedIndex)
@@ -25,4 +39,3 @@ import Debian.Repo.Package.SourcePackagesOfCachedIndex (sourcePackagesOfCachedIn
 import Debian.Repo.Package.SourcePackagesOfIndex (sourcePackagesOfIndex)
 import Debian.Repo.Package.ToBinaryPackage (toBinaryPackage)
 import Debian.Repo.Package.ToSourcePackage (toSourcePackage)
-
