@@ -25,7 +25,7 @@ import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Imports.Common (replaceFile, tildeBackup, withCurrentDirectory, HasSymbols(symbols),
-                                        Module, ModuleHead, ImportDecl, ImportSpecList, ImportSpec, ModuleName, Name)
+                                        Module, ImportDecl, ImportSpecList, ImportSpec, ModuleName)
 import Language.Haskell.Imports.Fold (foldModule)
 import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, {-putDryRun,-} removeEmptyImports, runParamsT, scratchDir)
 import System.Cmd (system)
@@ -35,6 +35,7 @@ import System.FilePath ((<.>), (</>))
 import System.Process (readProcessWithExitCode, showCommandForUser)
 import Test.HUnit (assertEqual, Test(..))
 
+tests :: Test
 tests = TestLabel "Clean" (TestList [test1, test2])
 
 test1 :: Test
@@ -200,6 +201,6 @@ compareSpecs a b =
 -- dropPrefix :: Eq a => [a] -> [a] -> [a]
 -- dropPrefix pre x = if isPrefixOf pre x then drop (length x) x else x
 
-nameString :: Name -> String
+nameString :: A.Name () -> String
 nameString (A.Ident _ s) = s
 nameString (A.Symbol _ s) = s
