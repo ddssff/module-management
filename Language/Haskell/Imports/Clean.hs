@@ -119,7 +119,7 @@ checkImports sourcePath =
     do source <- liftIO $ parseFileWithComments defaultParseMode sourcePath
        sourceText <- liftIO $ readFile sourcePath
        case source of
-         ParseOk (m@(A.Module _ h@(Just (A.ModuleHead _ (A.ModuleName _ name) _ _)) _ _ _), comments) ->
+         ParseOk (m@(A.Module _ (Just (A.ModuleHead _ (A.ModuleName _ name) _ _)) _ _ _), comments) ->
              do let importsPath = name <.> ".imports"
                 markForDelete importsPath
                 result <- liftIO (parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath) `catch` (\ (e :: IOError) -> liftIO getCurrentDirectory >>= \ here -> liftIO . throw . userError $ here ++ ": " ++ show e)
@@ -135,7 +135,7 @@ updateSource _ sourcePath (A.Module _ Nothing _ _ _) _ _ =
     error (sourcePath ++ ": Won't modify source file with no explicit export list")
 updateSource _ sourcePath (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _) _ _ =
     error (sourcePath ++ ": Won't modify source file with no explicit export list")
-updateSource (A.Module _ _ _ newImports _) sourcePath (m@(A.Module _ _ _ oldImports _)) comments sourceText =
+updateSource (A.Module _ _ _ newImports _) sourcePath (m@(A.Module _ _ _ oldImports _)) _ sourceText =
     removeEmptyImports >>= \ remove ->
     dryRun >>= \ dry ->
     maybe (liftIO (putStrLn (sourcePath ++ ": no changes")) >> return Nothing)
@@ -143,12 +143,12 @@ updateSource (A.Module _ _ _ newImports _) sourcePath (m@(A.Module _ _ _ oldImpo
                liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
                liftIO (when (not dry) (replaceFile tildeBackup sourcePath text)) >>
                return (Just text))
-          (replaceImports oldImports (fixNewImports remove oldImports newImports) m sourceText {-(importsSpan m comments sourceText)-})
+          (replaceImports (fixNewImports remove oldImports newImports) m sourceText {-(importsSpan m comments sourceText)-})
 
 -- | Compare the old and new import sets and if they differ clip out
 -- the imports from the sourceText and insert the new ones.
-replaceImports :: [ImportDecl] -> [ImportDecl] -> Module -> String -> Maybe String
-replaceImports oldImports newImports m sourceText =
+replaceImports :: [ImportDecl] -> Module -> String -> Maybe String
+replaceImports newImports m sourceText =
     let newPretty = intercalate "\n" (map (prettyPrintWithMode (defaultMode {layout = PPInLine})) newImports)
         (before, before' : oldPretty, after) =
             foldModule (\ _ pre s (l, i, r) -> (l <> pre <> s, i, r))
@@ -176,12 +176,12 @@ fixNewImports remove oldImports imports =
       mergeDecls xs@(x : _) = x {A.importSpecs = mergeSpecs (catMaybes (map A.importSpecs xs))}
       mergeDecls [] = error "mergeDecls"
       mergeSpecs :: [ImportSpecList] -> Maybe ImportSpecList
-      mergeSpecs (A.ImportSpecList loc flag specs : xs) = Just (A.ImportSpecList loc flag (sortBy compareSpecs (nub (concat (specs : map (\ (A.ImportSpecList _ _ specs) -> specs) xs)))))
+      mergeSpecs (A.ImportSpecList loc flag specs : xs) = Just (A.ImportSpecList loc flag (sortBy compareSpecs (nub (concat (specs : map (\ (A.ImportSpecList _ _ specs') -> specs') xs)))))
       mergeSpecs [] = error "mergeSpecs"
       filterDecls :: ImportDecl -> Bool
-      filterDecls (A.ImportDecl _ m _ _ _ _ (Just (A.ImportSpecList loc _ []))) = not remove || maybe False (isEmptyImport . A.importSpecs) (find ((== (unModuleName m)) . unModuleName . A.importModule) oldImports)
+      filterDecls (A.ImportDecl _ m _ _ _ _ (Just (A.ImportSpecList _ _ []))) = not remove || maybe False (isEmptyImport . A.importSpecs) (find ((== (unModuleName m)) . unModuleName . A.importModule) oldImports)
       filterDecls _ = True
-      isEmptyImport (Just (A.ImportSpecList loc _ [])) = True
+      isEmptyImport (Just (A.ImportSpecList _ _ [])) = True
       isEmptyImport _ = False
 
 -- | Be careful not to try to compare objects with embeded SrcSpanInfo.

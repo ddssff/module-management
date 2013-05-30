@@ -11,8 +11,8 @@ import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments,
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.SrcLoc (SrcLoc)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A
-import Language.Haskell.Imports.Common (Display(..), untabify, lines', withCurrentDirectory,
-                                        PutSrcSpan(..), HasSrcSpan(..), HasSrcLoc(..), HasEndLoc(..),
+import Language.Haskell.Imports.Common (untabify, withCurrentDirectory,
+                                        HasSrcSpan(..), HasSrcLoc(..), HasEndLoc(..),
                                         Module, ModuleHead, ModulePragma, ModuleName, WarningText, ExportSpec, ImportDecl, Decl,
                                         textEndLoc, srcPairText)
 import Test.HUnit (assertEqual, Test(TestLabel, TestCase, TestList))
@@ -98,12 +98,12 @@ foldModule :: forall r.
            -> Module -> String -> r -> r
 foldModule _ _ _ _ _ _ _ (A.XmlPage _ _ _ _ _ _ _) _ _ = error "XmlPage: unsupported"
 foldModule _ _ _ _ _ _ _ (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ = error "XmlHybrid: unsupported"
-foldModule pragmaf namef warnf exportf importf declf tailf m@(A.Module _ mh ps is ds) text0 r0 =
+foldModule pragmaf namef warnf exportf importf declf tailf (A.Module _ mh ps is ds) text0 r0 =
     let text = untabify text0
         (r1, l1) = doList text pragmaf ps (r0, def)
         (r2, l2) = case mh of
                      Nothing -> (r1, l1)
-                     Just h@(A.ModuleHead _ n mw me) -> foldModuleHead namef warnf exportf h text (r1, l1)
+                     Just h -> foldModuleHead namef warnf exportf h text (r1, l1)
         (r3, l3) = doList text importf is (r2, l2)
         (r4, l4) = doList text declf ds (r3, l3)
         e = textEndLoc text
@@ -175,7 +175,7 @@ test1 =
             -- spacef s r = r ++ "space: " ++ show s ++ "\n"
 
 withTestData :: (Module -> [Comment] -> String -> r) -> IO r
-withTestData f = withCurrentDirectory "testdata" $
+withTestData f = withCurrentDirectory "testdata/original" $
     do let path = "Debian/Repo/AptCache.hs"
        text <- try (readFile path)
        source <- try (parseFileWithComments defaultParseMode path)

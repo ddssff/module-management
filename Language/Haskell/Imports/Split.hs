@@ -10,11 +10,11 @@ import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
 import Data.List as List (filter, nub, isPrefixOf, intercalate, map)
 import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, keys, Map, mapKeys, mapWithKey, toList)
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Set as Set (fromList, intersection, null, Set, map)
 import Data.Set.Extra (gFind)
-import Language.Haskell.Exts (defaultParseMode, parseFileWithComments, ParseResult(ParseOk, ParseFailed))
+import Language.Haskell.Exts (defaultParseMode, ParseResult(ParseOk, ParseFailed))
 import qualified Language.Haskell.Exts.Annotated as A
 import qualified Language.Haskell.Exts.Annotated.Syntax as A
 import Language.Haskell.Exts.Comments (Comment)
@@ -22,7 +22,7 @@ import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 -- import Language.Haskell.Exts.Syntax (Decl, ExportSpec(EVar), ImportDecl(..), ImportSpec(IVar), Module(..), ModuleName(..), Name(..), QName(UnQual))
 import Language.Haskell.Imports.Clean (cleanImports)
-import Language.Haskell.Imports.Common (withCurrentDirectory, symbols, ModuleName, Decl, ExportSpec, ImportDecl, ImportSpec, Module, ModuleName, Name)
+import Language.Haskell.Imports.Common (withCurrentDirectory, symbols, ModuleName, Decl, ExportSpec, ImportDecl, ImportSpec, Module, ModuleName, Name, voidName, mapNames)
 import Language.Haskell.Imports.Fold (foldModule)
 import Language.Haskell.Imports.Params (runParamsT)
 import System.Cmd (system)
@@ -154,13 +154,6 @@ toImportDecl modName decls =
     where
       toImportSpecs :: (Decl, String) -> [ImportSpec]
       toImportSpecs = List.map (A.IVar def) . mapNames . symbols . fst
-
-voidName (A.Ident a x) = A.Ident () x
-voidName (A.Symbol a x) = A.Symbol () x
-
-mapNames [] = []
-mapNames (A.Ident () x : more) = A.Ident def x : mapNames more
-mapNames (A.Symbol () x : more) = A.Symbol def x : mapNames more
 
 -- | Build export specs of the symbols created by a declaration.
 toExportSpecs :: (Decl, String) -> [ExportSpec]

@@ -37,6 +37,8 @@ module Language.Haskell.Imports.Common
     , srcSpanText
     , srcPairText
     , HasSymbols(symbols)
+    , voidName
+    , mapNames
     ) where
 
 import qualified Language.Haskell.Exts.Annotated.Syntax as A {- (ImportDecl(..), Module(..), ModulePragma(..), Decl(..), ModuleHead(..), ModuleName(..),
@@ -52,6 +54,7 @@ import Data.Default (def, Default)
 import Data.List (groupBy, sortBy, intercalate)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
 import Language.Haskell.Exts.SrcLoc (srcSpanEnd, srcSpanStart)
+import qualified Language.Haskell.Exts.Syntax as S
 import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
 import System.FilePath ((<.>))
 import System.IO.Error (isDoesNotExistError)
@@ -148,12 +151,12 @@ lines' s =
       eol (x : xs) = x : eol xs
       eol [] = []
 
-checkParse :: ModuleName -> ParseResult a -> a
-checkParse (A.ModuleName _ name) (ParseFailed loc msg) = throw $ userError $ "Parse Failure in " ++ name ++ " at " ++ show loc ++ ": " ++ msg
+checkParse :: S.ModuleName -> ParseResult a -> a
+checkParse (S.ModuleName name) (ParseFailed loc msg) = throw $ userError $ "Parse Failure in " ++ name ++ " at " ++ show loc ++ ": " ++ msg
 checkParse _ (ParseOk x) = x
 
-modulePath :: ModuleName -> FilePath
-modulePath (A.ModuleName _ name) =
+modulePath :: S.ModuleName -> FilePath
+modulePath (S.ModuleName name) =
     map f name <.> "hs"
         where f '.' = '/'
               f c = c
@@ -394,3 +397,12 @@ instance HasSymbols ImportSpec where
     symbols (A.IAbs _ name) = symbols name
     symbols (A.IThingAll _ name) = symbols name
     symbols (A.IThingWith _ name _) = symbols name
+
+voidName :: A.Name a -> A.Name ()
+voidName (A.Ident _ x) = A.Ident () x
+voidName (A.Symbol _ x) = A.Symbol () x
+
+mapNames :: Default a => [A.Name ()] -> [A.Name a]
+mapNames [] = []
+mapNames (A.Ident () x : more) = A.Ident def x : mapNames more
+mapNames (A.Symbol () x : more) = A.Symbol def x : mapNames more
