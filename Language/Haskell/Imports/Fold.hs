@@ -10,12 +10,9 @@ import Data.Default (Default(def))
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, ParseResult(..))
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.SrcLoc (SrcLoc)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A
-import Language.Haskell.Imports.Common (untabify, withCurrentDirectory,
-                                        HasSrcSpan(..), HasSrcLoc(..), HasEndLoc(..),
-                                        Module, ModuleHead, ModulePragma, ModuleName, WarningText, ExportSpec, ImportDecl, Decl,
-                                        textEndLoc, srcPairText)
-import Test.HUnit (assertEqual, Test(TestLabel, TestCase, TestList))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), Module(Module, XmlHybrid, XmlPage), ModuleHead(ModuleHead))
+import Language.Haskell.Imports.Common (Decl, ExportSpec, HasEndLoc(..), HasSrcLoc(..), HasSrcSpan(..), ImportDecl, Module, ModuleHead, ModuleName, ModulePragma, srcPairText, textEndLoc, untabify, WarningText, withCurrentDirectory)
+import Test.HUnit (assertEqual, Test(TestCase, TestLabel))
 
 {-
 data Module l
@@ -48,7 +45,7 @@ data ModuleHead l
                (Maybe (ExportSpecList l))
 
 data Comment = Comment Bool SrcSpan String
-  	-- Defined in `Language.Haskell.Exts.Comments'
+        -- Defined in `Language.Haskell.Exts.Comments'
 
 data ImportDecl l
   = ImportDecl {importAnn :: l,
@@ -66,10 +63,10 @@ data ModulePragma l
 
 data SrcSpanInfo
   = SrcSpanInfo {srcInfoSpan :: SrcSpan, srcInfoPoints :: [SrcSpan]}
-  	-- Defined in `Language.Haskell.Exts.SrcLoc'
+        -- Defined in `Language.Haskell.Exts.SrcLoc'
 
 data ExportSpecList l = ExportSpecList l [ExportSpec l]
-  	-- Defined in `Language.Haskell.Exts.Annotated.Syntax'
+        -- Defined in `Language.Haskell.Exts.Annotated.Syntax'
 
 data ExportSpec l
   = EVar l (QName l)

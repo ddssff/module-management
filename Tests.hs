@@ -9,24 +9,21 @@ import Language.Haskell.Exts.Annotated
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Annotated.ExactPrint (exactPrint)
 import Language.Haskell.Exts.Annotated.Syntax as Syntax
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
-import Language.Haskell.Imports.Clean as Clean (test1)
+import Language.Haskell.Imports.Cat as Cat (test1, test2)
+import Language.Haskell.Imports.Clean as Clean (tests)
 import Language.Haskell.Imports.Common (untabify, withCurrentDirectory)
-import Language.Haskell.Imports.Fold as Fold (tests)
-import Language.Haskell.Imports.FoldAnnotated as FoldAnnotated (tests)
+import Language.Haskell.Imports.Fold as Fold (test1)
 -- import Language.Haskell.Imports.Move as Move (test2)
 import Language.Haskell.Imports.Split as Split (tests)
-import Language.Haskell.Imports.SrcLoc as SrcLoc (tests)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import Test.HUnit (runTestTT, Test(TestList, TestCase, TestLabel), assertEqual, Counts(..))
 
 main =
-    do counts <- runTestTT (TestList [TestLabel "Clean" Clean.test1,
-                                      TestLabel "Fold" Fold.tests,
-                                      TestLabel "FoldAnnotated" FoldAnnotated.tests,
-                                      TestLabel "Move" Move.test2,
+    do counts <- runTestTT (TestList [TestLabel "Cat1" Cat.test1,
+                                      TestLabel "Cat2" Cat.test2,
+                                      TestLabel "Clean" Clean.tests,
+                                      TestLabel "Fold" Fold.test1,
                                       TestLabel "Main" Main.tests,
-                                      TestLabel "SrcLoc" SrcLoc.tests,
                                       TestLabel "Split" Split.tests])
        putStrLn (show counts)
        case (errors counts + failures counts) of

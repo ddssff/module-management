@@ -7,27 +7,26 @@ module Language.Haskell.Imports.Clean
     ) where
 
 import Control.Monad (when)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (try, catch, throw)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw, try)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
 import Data.Default (def, Default)
 import Data.Function (on)
-import Data.List (groupBy, intercalate, nub, sortBy, find)
+import Data.List (find, groupBy, intercalate, nub, sortBy)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import qualified Distribution.ModuleName as D (components, ModuleName)
 import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Executable(modulePath), Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
-import qualified Language.Haskell.Exts.Annotated.Syntax as A -- (ImportDecl(..), ImportSpec(..), Module(..), ModuleName(..), ModuleHead(..), Name(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl, importAnn, importModule, importSpecs), ImportSpecList(ImportSpecList), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName), Name(..))
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
-import Language.Haskell.Imports.Common (replaceFile, tildeBackup, withCurrentDirectory, HasSymbols(symbols),
-                                        Module, ImportDecl, ImportSpecList, ImportSpec, ModuleName)
+import Language.Haskell.Imports.Common (HasSymbols(symbols), ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, replaceFile, tildeBackup, withCurrentDirectory)
 import Language.Haskell.Imports.Fold (foldModule)
-import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, {-putDryRun,-} removeEmptyImports, runParamsT, scratchDir)
+import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadParams, removeEmptyImports, runParamsT, scratchDir)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
 import System.Exit (ExitCode(..))
@@ -69,9 +68,9 @@ test2 =
     TestCase
       (do _ <- system "rsync -aHxS --delete testdata/ testcopy"
           let path = "Debian/Repo/PackageIndex.hs"
-          _ <- withCurrentDirectory "testcopy" (runParamsT "dist/scratch" (cleanImports path))
-          (ExitSuccess, diff, _) <- readProcessWithExitCode "diff" ["-ru", "testdata" </> path, "testcopy" </> path] ""
-          assertEqual "cleanImports" "" diff)
+          _ <- withCurrentDirectory "testdata/copy" (runParamsT "dist/scratch" (cleanImports path))
+          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> path, "testdata/copy" </> path] ""
+          assertEqual "cleanImports" (ExitSuccess, "", "") (code, diff, err))
 
 -- | This is designed to be called from the postConf script of your
 -- Setup file, it cleans up the imports of all the source files in the

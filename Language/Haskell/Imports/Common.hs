@@ -41,20 +41,16 @@ module Language.Haskell.Imports.Common
     , mapNames
     ) where
 
-import qualified Language.Haskell.Exts.Annotated.Syntax as A {- (ImportDecl(..), Module(..), ModulePragma(..), Decl(..), ModuleHead(..), ModuleName(..),
-                                                              WarningText(..), ExportSpecList(..), ExportSpec(..), DeclHead(..), InstHead(..),
-                                                              QName(..), Name(..), Match(..)) -}
-
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ImportSpec(..), ImportSpecList, InstHead(..), Match(..), Module, ModuleHead(..), ModuleName(..), ModulePragma(..), Name(..), QName(..), WarningText(..))
 import Language.Haskell.Exts.Comments (Comment(..))
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..), SrcSpan(..), SrcLoc(..))
-
+import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Control.Applicative ((<$>))
-import Control.Exception (catch, throw, bracket)
+import Control.Exception (bracket, catch, throw)
 import Data.Default (def, Default)
-import Data.List (groupBy, sortBy, intercalate)
+import Data.List (groupBy, intercalate, sortBy)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
 import Language.Haskell.Exts.SrcLoc (srcSpanEnd, srcSpanStart)
-import qualified Language.Haskell.Exts.Syntax as S
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
 import System.FilePath ((<.>))
 import System.IO.Error (isDoesNotExistError)

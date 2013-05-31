@@ -14,12 +14,12 @@ module Language.Haskell.Imports.Params
     , putRemoveEmptyImports
     ) where
 
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO, catch, throw)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
-import Control.Monad.Trans (MonadIO, liftIO)
+import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Set (empty, insert, Set, toList)
 import Data.String (fromString)
-import Filesystem (removeTree, createTree)
+import Filesystem (createTree, removeTree)
 import Language.Haskell.Imports.Common (removeFile')
 import System.FilePath ((</>))
 import System.IO.Error (isDoesNotExistError)

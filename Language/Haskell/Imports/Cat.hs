@@ -2,35 +2,32 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Imports.Cat
     ( catModules
+    , test1
+    , test2
     ) where
-
-import Debug.Trace
 
 import Control.Applicative ((<$>))
 import Control.Exception (throw)
-import Control.Monad as List (mapM, mapM_, filterM)
+import Control.Monad as List (filterM, mapM, mapM_)
 import Control.Monad.Trans (liftIO)
 import Data.Default (def)
-import Data.Generics (Data, Typeable, mkT, everywhere)
-import Data.List as List (null, map, intercalate, isPrefixOf, filter)
+import Data.Generics (Data, everywhere, mkT, Typeable)
+import Data.List as List (filter, intercalate, isPrefixOf, map, null)
 import Data.Monoid ((<>))
-import Data.Set as Set (Set, toList, fromList, member, union, map)
+import Data.Set as Set (fromList, map, member, Set, toList, union)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments)
-import Language.Haskell.Exts.Annotated.Simplify (sModule, sDecl, sModuleName, sName, sExportSpec)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A -- (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpec, Module(Module), ModuleName(..), QName(Qual), Name(..), ExportSpec(..), ImportSpec(..), Decl)
-import Language.Haskell.Exts.Comments (Comment)
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import qualified Language.Haskell.Exts.Syntax as S
+import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName))
+import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Imports.Clean (cleanImports)
-import Language.Haskell.Imports.Common (replaceFileIfDifferent, tildeBackup, withCurrentDirectory, removeFileIfPresent, modulePath, checkParse, Module, ModuleName, ExportSpec, )
+import Language.Haskell.Imports.Common (checkParse, Module, modulePath, removeFileIfPresent, replaceFileIfDifferent, withCurrentDirectory)
 import Language.Haskell.Imports.Fold (foldModule)
-import Language.Haskell.Imports.Params (dryRun, MonadParams, putDryRun, runParamsT)
+import Language.Haskell.Imports.Params (runParamsT)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitFailure))
-import System.FilePath ((<.>))
 import System.Process (readProcessWithExitCode)
-import Test.HUnit (Test(TestCase), assertEqual)
+import Test.HUnit (assertEqual, Test(TestCase))
 
 -- | Merge the declarations from several modules into a single new
 -- one.  Note that a circular imports can be created by this
