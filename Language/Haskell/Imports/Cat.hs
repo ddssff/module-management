@@ -23,7 +23,7 @@ import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Imports.Clean (cleanImports)
 import Language.Haskell.Imports.Common (checkParse, Module, modulePath, removeFileIfPresent, replaceFileIfDifferent, withCurrentDirectory)
 import Language.Haskell.Imports.Fold (foldModule)
-import Language.Haskell.Imports.Params (runParamsT)
+import Language.Haskell.Imports.Params (MonadClean, runCleanT)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitFailure))
 import System.Process (readProcessWithExitCode)
@@ -33,23 +33,23 @@ import Test.HUnit (assertEqual, Test(TestCase))
 -- one.  Note that a circular imports can be created by this
 -- operation, in which case you will have to add more modules to the
 -- merge.
-catModules :: Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> IO ()
+catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m ()
 catModules all from to
     | List.null from = throw $ userError "catModules: invalid argument"
     | elem to from = throw $ userError "catModules: invalid destination"
     | True = do let all' = union all (Set.fromList from)
-                from' <- List.mapM (\ name -> do text <- readFile (modulePath name)
+                from' <- List.mapM (\ name -> do text <- liftIO $ readFile (modulePath name)
                                                  (m, comments) <- liftIO (checkParse name <$> parseFileWithComments defaultParseMode (modulePath name))
                                                  return (name, m, text)) from
                 -- Generate the modified modules
-                changed <- filterM (catModules' all' from' to) (Set.toList all') >>=
+                changed <- filterM (liftIO . catModules' all' from' to) (Set.toList all') >>=
                            -- The first from module turned into the to
                            -- module, the other from modules disappeared.
                            return . Set.map (\ x -> if elem x from then to else x) . Set.fromList
                 -- Remove the original modules
-                List.mapM_ (removeFileIfPresent . modulePath) from
+                List.mapM_ (liftIO . removeFileIfPresent . modulePath) from
                 -- Clean up the imports of the new modules
-                runParamsT "dist/scratch" $ List.mapM_ cleanImports (List.map modulePath (Set.toList changed))
+                List.mapM_ cleanImports (List.map modulePath (Set.toList changed))
 
 -- | Update the module 'name' to reflect the result of the cat operation.
 catModules' :: Set S.ModuleName -> [(S.ModuleName, Module, String)] -> S.ModuleName -> S.ModuleName -> IO Bool
@@ -188,10 +188,11 @@ test1 =
     TestCase
       (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
        withCurrentDirectory "testdata/copy"
-         (catModules
+         (runCleanT "dist/scratch"
+          (catModules
            (Set.fromList testModules)
-           [(S.ModuleName "Debian.Repo.AptCache"), (S.ModuleName "Debian.Repo.AptImage")]
-           (S.ModuleName "Debian.Repo.Cache") >>= \ () ->
+           [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
+           (S.ModuleName "Debian.Repo.Cache")) >>
             assertEqual
               "catModules"
               ()
@@ -202,10 +203,11 @@ test2 =
     TestCase
       (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
        withCurrentDirectory "testdata/copy"
-         (catModules
+         (runCleanT "dist/scratch"
+          (catModules
            (Set.fromList testModules)
            [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
-           (S.ModuleName "Debian.Repo.Types.Common") >>
+           (S.ModuleName "Debian.Repo.Types.Common")) >>
           mapM_ removeFileIfPresent junk) >>
        readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "testdata/original", "testdata/copy"] "" >>= \ (code, out, err) ->
        let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out)) in

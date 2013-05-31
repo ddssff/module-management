@@ -6,6 +6,7 @@ module Language.Haskell.Imports.Split
     ) where
 
 import Control.Exception (throw)
+import Control.Monad.Trans (liftIO)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
 import Data.List as List (filter, intercalate, isPrefixOf, map, nub)
@@ -22,7 +23,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Imports.Clean (cleanImports)
 import Language.Haskell.Imports.Common (Decl, ExportSpec, HasSymbols(symbols), ImportDecl, ImportSpec, mapNames, ModuleName, voidName, withCurrentDirectory)
 import Language.Haskell.Imports.Fold (foldModule)
-import Language.Haskell.Imports.Params (runParamsT)
+import Language.Haskell.Imports.Params (MonadClean, runCleanT)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitFailure))
@@ -45,17 +46,17 @@ subModuleName (A.ModuleName l moduleName) name =
 -- resulting modules may need to import some of the other split
 -- modules, but we don't know which or how to avoid circular imports,
 -- so a commented out list of imports is added.
-splitModule :: FilePath -> IO ()
+splitModule :: MonadClean m => FilePath -> m ()
 splitModule path =
-    do parsed <- A.parseFileWithComments defaultParseMode path
-       text <- readFile path
+    do parsed <- liftIO $ A.parseFileWithComments defaultParseMode path
+       text <- liftIO $ readFile path
        let newFiles = splitModule' path parsed text
        -- Create a subdirectory named after the old module
-       createDirectoryIfMissing True (dropExtension path)
+       liftIO $ createDirectoryIfMissing True (dropExtension path)
        -- Write the new modules
-       mapM_ (uncurry writeFile) (Map.toList newFiles)
+       mapM_ (liftIO . uncurry writeFile) (Map.toList newFiles)
        -- Clean the new modules
-       runParamsT "dist/scratch" $ mapM_ cleanImports (Map.keys newFiles)
+       mapM_ cleanImports (Map.keys newFiles)
 
 -- | If the original module was M, the the split operation creates a
 -- subdirectory M containing a module for each declaration of the
@@ -165,9 +166,9 @@ test1 =
     TestCase
       (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
        withCurrentDirectory "testdata/copy"
-         (splitModule "Debian/Repo/Package.hs" >>= \ () ->
-          readProcessWithExitCode "diff" ["-ru", "../splitresult", "."] "" >>= \ (code, out, err) ->
-          assertEqual
+          (runCleanT "dist/scratch" (splitModule "Debian/Repo/Package.hs") >>
+           readProcessWithExitCode "diff" ["-ru", "../splitresult", "."] "" >>= \ (code, out, err) ->
+           assertEqual
             "splitModule"
             (ExitFailure 1, "", "")
             (code, unlines (List.filter (not . isPrefixOf "Only") (lines out)), err)))
