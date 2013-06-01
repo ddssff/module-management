@@ -34,15 +34,15 @@ import Test.HUnit (assertEqual, Test(TestCase))
 -- operation, in which case you will have to add more modules to the
 -- merge.
 catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m ()
-catModules all from to
+catModules univ from to
     | List.null from = throw $ userError "catModules: invalid argument"
     | elem to from = throw $ userError "catModules: invalid destination"
-    | True = do let all' = union all (Set.fromList from)
+    | True = do let univ' = union univ (Set.fromList from)
                 from' <- List.mapM (\ name -> do text <- liftIO $ readFile (modulePath name)
-                                                 (m, comments) <- liftIO (checkParse name <$> parseFileWithComments defaultParseMode (modulePath name))
+                                                 (m, _) <- liftIO (checkParse name <$> parseFileWithComments defaultParseMode (modulePath name))
                                                  return (name, m, text)) from
                 -- Generate the modified modules
-                changed <- filterM (liftIO . catModules' all' from' to) (Set.toList all') >>=
+                changed <- filterM (liftIO . catModules' from' to) (Set.toList univ') >>=
                            -- The first from module turned into the to
                            -- module, the other from modules disappeared.
                            return . Set.map (\ x -> if elem x from then to else x) . Set.fromList
@@ -52,16 +52,18 @@ catModules all from to
                 List.mapM_ cleanImports (List.map modulePath (Set.toList changed))
 
 -- | Update the module 'name' to reflect the result of the cat operation.
-catModules' :: Set S.ModuleName -> [(S.ModuleName, Module, String)] -> S.ModuleName -> S.ModuleName -> IO Bool
-catModules' all from@((first, _, _) : _) to name =
+catModules' :: [(S.ModuleName, Module, String)] -> S.ModuleName -> S.ModuleName -> IO Bool
+catModules' from@((first, _, _) : _) to name =
     do text <- liftIO . readFile . modulePath $ name
-       (m, comments) <- liftIO (checkParse name <$> parseFileWithComments defaultParseMode (modulePath name))
+       (m, _) <- liftIO (checkParse name <$> parseFileWithComments defaultParseMode (modulePath name))
        let name' = if name == first then to else name
-           text' = catModules'' all from to (name, m, text)
+           text' = catModules'' from to (name, m, text)
        replaceFileIfDifferent (modulePath name') text'
+catModules' [] _ _ = error "catModules'"
 
-catModules'' :: Set S.ModuleName -> [(S.ModuleName, Module, String)] -> S.ModuleName -> (S.ModuleName, Module, String) -> String
-catModules'' all from@((first, _, _) : _) to (name, m, text) =
+catModules'' :: [(S.ModuleName, Module, String)] -> S.ModuleName -> (S.ModuleName, Module, String) -> String
+catModules'' [] _ _ = error "catModules''"
+catModules'' from@((first, _, _) : _) to (name, m, text) =
     let (r, e, i, d) = foldModule pragmaf namef warnf exportf importf declf tailf m text ("", "", "", "") in
     r ++ e ++ i ++ d
     where
@@ -83,8 +85,8 @@ catModules'' all from@((first, _, _) : _) to (name, m, text) =
               let e' = e <>
                        -- This could result in more than one export of a module
                        case sExportSpec x of
-                         S.EModuleContents m
-                             | elem m fromNames -> "\n     , " <> prettyPrintWithMode defaultMode (S.EModuleContents to)
+                         S.EModuleContents x
+                             | elem x fromNames -> "\n     , " <> prettyPrintWithMode defaultMode (S.EModuleContents to)
                          _ -> pre <> s in
               (r, e', i, d)
           | True =
@@ -96,15 +98,15 @@ catModules'' all from@((first, _, _) : _) to (name, m, text) =
               (r, e, i', d)
           | not (elem name (to : fromNames)) =
               -- Imports of "from" modules need to be changed to "to" module
-              let m = A.importModule x
-                  m' = sModuleName m
-                  (S.ModuleName to') = to
-                  s' = if elem m' fromNames then prettyPrintWithMode defaultMode (x {A.importModule = A.ModuleName def to'}) else s in
+              let (S.ModuleName to') = to
+                  s' = if elem (sModuleName (A.importModule x)) fromNames
+                       then prettyPrintWithMode defaultMode (x {A.importModule = A.ModuleName def to'})
+                       else s in
               (r, e, i <> pre <> s', d)
           | True =
               -- These modules will be deleted
               (r, e, i, d)
-      declf x pre s (r, e, i, d)
+      declf _ pre s (r, e, i, d)
           | name == first =
               -- In the destination module, keep original
               -- declarations, add declarations from other "from"
@@ -126,6 +128,7 @@ mergeExports from to =
       mergeExports' (_, A.Module _ Nothing _ _ _, _) = error "catModules: no explicit export list"
       mergeExports' (_, A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _) = error "catModules: no explicit export list"
       mergeExports' (_, A.Module _ (Just (A.ModuleHead _ _ _ (Just (A.ExportSpecList _ e)))) _ _ _, _) = updateModuleContentsExports fromNames to (List.map sExportSpec e)
+      mergeExports' (_, _, _) = error "mergeExports'"
       fromNames = List.map (\ (x, _, _) -> x) from
 
 updateModuleContentsExports :: [S.ModuleName] -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
@@ -133,7 +136,7 @@ updateModuleContentsExports from to es =
     foldl f [] es
     where
       f :: [S.ExportSpec] -> S.ExportSpec ->  [S.ExportSpec]
-      f ys e@(S.EModuleContents m) =
+      f ys (S.EModuleContents m) =
           let e' = S.EModuleContents (if elem m from then to else m) in
           if elem e' ys then ys else e' : ys
       f ys e = e : ys
@@ -156,7 +159,7 @@ imports from' (_, m, text) =
 -- | Grab the declarations out of the "from" modules, fix any
 -- qualified symbol references, prettyprint and return.
 decls :: Set S.ModuleName -> S.ModuleName -> (S.ModuleName, Module, String) -> String
-decls from to (S.ModuleName name, m, text) =
+decls from to (S.ModuleName _, m, text) =
     foldModule (\ _ _ _ r -> r)
                (\ _ _ _ r -> r)
                (\ _ _ _ r -> r)
@@ -177,7 +180,7 @@ decls from to (S.ModuleName name, m, text) =
 -- different from the original) should be prettyprinted, not
 -- exactPrinted.
 fixReferences :: (Data a, Typeable a) => Set S.ModuleName -> S.ModuleName -> a -> a
-fixReferences from to@(S.ModuleName to') x =
+fixReferences from to x =
     everywhere (mkT moveModuleName) x
     where
       moveModuleName :: S.ModuleName -> S.ModuleName
@@ -213,6 +216,7 @@ test2 =
        let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out)) in
        assertEqual "catModules" (ExitFailure 2, expected, "") (code, out', err))
 
+expected :: String
 expected =
     unlines
     [ "diff -ru --unidirectional-new-file testdata/original/Debian/Repo/AptCache.hs testdata/copy/Debian/Repo/AptCache.hs",
@@ -502,6 +506,7 @@ expected =
       "+import Debian.Repo.Types.PackageIndex (BinaryPackage(..), BinaryPackageLocal, binaryPackageName, makeBinaryPackageID, makeSourcePackageID, PackageID(..), PackageIDLocal, PackageIndex(..), PackageIndexLocal, PackageVersion(..), PkgVersion(..), prettyBinaryPackage, prettyPackageID, prettyPkgVersion, SourceControl(..), SourceFileSpec(..), SourcePackage(..), SourcePackageLocal, sourcePackageName)",
       "+import Debian.Repo.Types.Release (makeReleaseInfo, parseArchitectures, parseComponents, Release(..))"]
 
+junk :: [String]
 junk =
     [ "Debian.Repo.Monads.Top.imports"
     , "Debian.Repo.Orphans.imports"
@@ -526,6 +531,7 @@ junk =
     , "Debian/Repo/Types.hs~"
     , "Debian/Repo/Monads/Apt.hs~" ]
 
+testModules :: [S.ModuleName]
 testModules =
             [S.ModuleName "Debian.Repo.Sync",
              S.ModuleName "Debian.Repo.Slice",

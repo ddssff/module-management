@@ -85,16 +85,16 @@ splitModule' path (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                                                              (Map.filter (\ pairs ->
                                                                               let declared = Set.fromList (concatMap (symbols . fst) pairs) in
                                                                               not (Set.null (Set.intersection declared referenced))) declPairs)) in
-            let (r, x, y, z) =
+            let (r', x', y', z') =
                     foldModule (\ _p pre s (r, x, y, z) -> (r <> pre <> s, x, y, z))
-                               (\ _n pre s (r, x, y, z) -> (r <> pre <> modName, x, y, z))
+                               (\ _n pre _ (r, x, y, z) -> (r <> pre <> modName, x, y, z))
                                (\ _w pre s (r, x, y, z) -> (r <> pre <> s, x, y, z))
-                               (\ _e pre s (r, x, y, z) -> (r, maybe (Just pre) Just x, y, z))
-                               (\ _i pre s (r, x, y, z) -> (r, x, maybe (Just pre) Just y, z))
-                               (\ _d pre s (r, x, y, z) -> (r, x, y, maybe (Just pre) Just z))
+                               (\ _e pre _ (r, x, y, z) -> (r, maybe (Just pre) Just x, y, z))
+                               (\ _i pre _ (r, x, y, z) -> (r, x, maybe (Just pre) Just y, z))
+                               (\ _d pre _ (r, x, y, z) -> (r, x, y, maybe (Just pre) Just z))
                                (\ _ r -> r)
                                m text ("", Nothing, Nothing, Nothing) in
-            r <> fromMaybe "" x <> intercalate ", " (nub (List.map (prettyPrintWithMode defaultMode) newExports)) <> fromMaybe "" y <> unlines (List.map (prettyPrintWithMode defaultMode) (elems newImports)) <> oldImports <> fromMaybe "" z <> concatMap snd (reverse modDecls) <> "\n"
+            r' <> fromMaybe "" x' <> intercalate ", " (nub (List.map (prettyPrintWithMode defaultMode) newExports)) <> fromMaybe "" y' <> unlines (List.map (prettyPrintWithMode defaultMode) (elems newImports)) <> oldImports <> fromMaybe "" z' <> concatMap snd (reverse modDecls) <> "\n"
         -- Grab the old imports
         oldImports = case foldModule (\ _p _ _ r -> r)
                                      (\ _n _ _ r -> r)
@@ -107,7 +107,7 @@ splitModule' path (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                        (_ : xs) -> concat xs
                        [] -> ""
         newReExporter =
-            let (r, x) =
+            let (r', x') =
                     foldModule (\ _p pre s (r, x) -> (r <> pre <> s, x))
                                (\ _n pre s (r, x) -> (r <> pre <> s, x))
                                (\ _w pre s (r, x) -> (r <> pre <> s, x))
@@ -116,7 +116,7 @@ splitModule' path (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                                (\ _d _ _ r -> r)
                                (\ _ r -> r)
                                m text ("", Nothing) in
-            r <> fromMaybe "" x <> unlines (List.map (prettyPrintWithMode defaultMode) allNewImports)
+            r' <> fromMaybe "" x' <> unlines (List.map (prettyPrintWithMode defaultMode) allNewImports)
         allNewImports :: [ImportDecl]
         allNewImports = elems (mapWithKey toImportDecl declPairs)
         -- Build a (new module name, declaration list) map
@@ -130,15 +130,7 @@ splitModule' path (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                        (\ d pre s r -> foldr (\ name mp -> insertWith (++) (subModuleName moduleName name) [(d, pre <> s)] mp) r (symbols d))
                        (\ _ r -> r)
                        m text Map.empty
-        -- Grab any comment before the module header
-        oldHeader = foldModule (\ _ pre s r -> r <> pre <> s)
-                               (\ _ pre _ r -> r <> pre)
-                               (\ _ _ _ r -> r)
-                               (\ _ _ _ r -> r)
-                               (\ _ _ _ r -> r)
-                               (\ _ _ _ r -> r)
-                               (\ _ r -> r)
-                               m text ""
+splitModule' _ _ _ = error "splitModule'"
 
 -- | Build an import of the symbols created by a declaration.
 toImportDecl :: ModuleName -> [(Decl, String)] -> ImportDecl
