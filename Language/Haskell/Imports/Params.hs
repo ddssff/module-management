@@ -6,6 +6,9 @@ module Language.Haskell.Imports.Params
     -- , putDryRun
     , hsFlags
     , putHsFlags
+    , sourceDirs
+    , putSourceDirs
+    , findSourcePath
     , markForDelete
     , putScratchJunk
     , scratchDir
@@ -21,6 +24,7 @@ import Data.Set (empty, insert, Set, toList)
 import Data.String (fromString)
 import Filesystem (createTree, removeTree)
 import Language.Haskell.Imports.Common (removeFile')
+import System.Directory (doesFileExist)
 import System.FilePath ((</>))
 import System.IO.Error (isDoesNotExistError)
 
@@ -33,6 +37,11 @@ data Params
       -- , verbosity_ :: Int -- unimplemented
       , hsFlags_ :: [String]
       -- ^ Extra flags to pass to GHC.
+      , sourceDirs_ :: [FilePath]
+      -- ^ Top level directories to search for source files and
+      -- imports.  These directories would be the value used in the
+      -- hs-source-dirs parameter of a cabal file, and passed to ghc
+      -- via the -i option.
       , junk_ :: Set FilePath
       -- ^ Paths added to this list are removed as the monad finishes.
       , removeEmpty_ :: Bool
@@ -69,6 +78,23 @@ hsFlags = getParams >>= return . hsFlags_
 putHsFlags :: MonadClean m => [String] -> m ()
 putHsFlags x = modifyParams (\ p -> p {hsFlags_ = x})
 
+putSourceDirs :: MonadClean m => [FilePath] -> m ()
+putSourceDirs xs = modifyParams (\ p -> p {sourceDirs_ = xs})
+
+sourceDirs :: MonadClean m => m [FilePath]
+sourceDirs = getParams >>= return . sourceDirs_
+
+findSourcePath :: MonadClean m => FilePath -> m FilePath
+findSourcePath path =
+    do dirs <- sourceDirs
+       findFile dirs
+    where
+      findFile [] = liftIO . throw . userError $ "Not found: " ++ path
+      findFile (dir : dirs) =
+          do let x = dir </> path
+             exists <- liftIO $ doesFileExist x
+             if exists then return x else findFile dirs
+
 markForDelete :: MonadClean m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk_ = insert x (junk_ p)})
 
@@ -83,6 +109,7 @@ runCleanT scratch action =
                                                      -- dryRun_ = False,
                                                      -- verbosity_ = 0,
                                                      hsFlags_ = [],
+                                                     sourceDirs_ = ["."],
                                                      junk_ = empty,
                                                      removeEmpty_ = True})
        mapM_ (liftIO . removeFile') (toList (junk_ params))

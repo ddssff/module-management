@@ -26,7 +26,7 @@ import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Imports.Common (HasSymbols(symbols), ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, replaceFile, tildeBackup, withCurrentDirectory)
 import Language.Haskell.Imports.Fold (foldModule)
-import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir)
+import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, findSourcePath)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
 import System.Exit (ExitCode(..))
@@ -60,13 +60,13 @@ cleanImports sourcePath =
     try (dumpImports sourcePath >> checkImports sourcePath)
       -- `catch` (\ (e :: IOError) -> liftIO (hPutStrLn stderr (show e)))
 
-
 dumpImports :: MonadClean m => FilePath -> m ()
 dumpImports sourcePath =
     do scratch <- Language.Haskell.Imports.Params.scratchDir
+       sourcePath' <- findSourcePath sourcePath
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"
-       args' <- hsFlags >>= return . (["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, sourcePath] ++)
+       args' <- hsFlags >>= return . (++ ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, sourcePath'])
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
          ExitSuccess -> return () -- liftIO $ putStrLn $ showCommandForUser cmd args' ++ " -> Ok"
@@ -87,6 +87,7 @@ checkImports sourcePath =
                 case result of
                   ParseOk newImports -> updateSource newImports sourcePath m comments sourceText
                   _ -> error (importsPath ++ ": parse failed")
+         ParseOk _ -> error "checkImports"
          ParseFailed _loc msg -> error (sourcePath ++ " - parse failed: " ++ msg)
 
 -- | If all the parsing went well and the new imports differ from the
@@ -105,6 +106,7 @@ updateSource (A.Module _ _ _ newImports _) sourcePath (m@(A.Module _ _ _ oldImpo
                liftIO (when (not dry) (replaceFile tildeBackup sourcePath text)) >>
                return (Just text))
           (replaceImports (fixNewImports remove oldImports newImports) m sourceText {-(importsSpan m comments sourceText)-})
+updateSource _ _ _ _ _ = error "updateSource"
 
 -- | Compare the old and new import sets and if they differ clip out
 -- the imports from the sourceText and insert the new ones.
@@ -175,8 +177,10 @@ test1 =
       (do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
           let path = "Debian/Repo/Types/PackageIndex.hs"
           _ <- withCurrentDirectory "testdata/copy" (runCleanT "dist/scratch" (cleanImports path))
-          (ExitFailure 1, diff, _) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> path, "testdata/copy" </> path] ""
+          -- _ <- runCleanT "dist/scratch" (putHsFlags ["-itestdata/copy"] >> cleanImports path)
+          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> path, "testdata/copy" </> path] ""
           assertEqual "cleanImports"
+                         (ExitFailure 1,
                           ["@@ -22,13 +22,13 @@",
                            "     , prettyPkgVersion",
                            "     ) where",
@@ -192,8 +196,9 @@ test1 =
                            "+import Debian.Repo.Orphans ()",
                            " import Debian.Version (DebianVersion, prettyDebianVersion)",
                            " import System.Posix.Types (FileOffset)",
-                           " import Text.PrettyPrint.ANSI.Leijen ((<>), Doc, Pretty(pretty), text)"]
-                          (drop 2 (lines diff)))
+                           " import Text.PrettyPrint.ANSI.Leijen ((<>), Doc, Pretty(pretty), text)"],
+                          "")
+                          (code, drop 2 (lines diff), err))
 
 test2 :: Test
 test2 =
