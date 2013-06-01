@@ -34,32 +34,34 @@ import Test.HUnit (assertEqual, Test(TestCase))
 -- operation, in which case you will have to add more modules to the
 -- merge.
 catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m ()
-catModules univ from to
+catModules univ from to = liftIO (catModulesIO univ from to) >>= List.mapM_ cleanImports . List.map modulePath . Set.toList
+
+catModulesIO :: Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> IO (Set S.ModuleName)
+catModulesIO univ from to
     | List.null from = throw $ userError "catModules: invalid argument"
     | elem to from = throw $ userError "catModules: invalid destination"
     | True = do let univ' = union univ (Set.fromList from)
-                from' <- List.mapM (\ name -> do text <- liftIO $ readFile (modulePath name)
-                                                 (m, _) <- liftIO (checkParse name <$> parseFileWithComments defaultParseMode (modulePath name))
+                from' <- List.mapM (\ name -> do text <- readFile (modulePath name)
+                                                 (m, _) <- checkParse name <$> parseFileWithComments defaultParseMode (modulePath name)
                                                  return (name, m, text)) from
                 -- Generate the modified modules
-                changed <- filterM (liftIO . catModules' from' to) (Set.toList univ') >>=
+                changed <- filterM (doModule from') (Set.toList univ') >>=
                            -- The first from module turned into the to
                            -- module, the other from modules disappeared.
                            return . Set.map (\ x -> if elem x from then to else x) . Set.fromList
                 -- Remove the original modules
-                List.mapM_ (liftIO . removeFileIfPresent . modulePath) from
-                -- Clean up the imports of the new modules
-                List.mapM_ cleanImports (List.map modulePath (Set.toList changed))
-
--- | Update the module 'name' to reflect the result of the cat operation.
-catModules' :: [(S.ModuleName, Module, String)] -> S.ModuleName -> S.ModuleName -> IO Bool
-catModules' from@((first, _, _) : _) to name =
-    do text <- liftIO . readFile . modulePath $ name
-       (m, _) <- liftIO (checkParse name <$> parseFileWithComments defaultParseMode (modulePath name))
-       let name' = if name == first then to else name
-           text' = catModules'' from to (name, m, text)
-       replaceFileIfDifferent (modulePath name') text'
-catModules' [] _ _ = error "catModules'"
+                List.mapM_ (removeFileIfPresent . modulePath) from
+                return changed
+    where
+      -- Update the module 'name' to reflect the result of the cat operation.
+      doModule :: [(S.ModuleName, Module, String)] -> S.ModuleName -> IO Bool
+      doModule from@((first, _, _) : _) name =
+          do text <- readFile . modulePath $ name
+             (m, _) <- checkParse name <$> parseFileWithComments defaultParseMode (modulePath name)
+             let name' = if name == first then to else name
+                 text' = catModules'' from to (name, m, text)
+             replaceFileIfDifferent (modulePath name') text'
+      doModule [] _ = error "catModulesIO"
 
 catModules'' :: [(S.ModuleName, Module, String)] -> S.ModuleName -> (S.ModuleName, Module, String) -> String
 catModules'' [] _ _ = error "catModules''"
