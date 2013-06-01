@@ -1,6 +1,6 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
-module Language.Haskell.Imports.Clean
+module Language.Haskell.Modules.Imports
     ( cleanImports
     , cleanBuildImports
     , tests
@@ -24,9 +24,9 @@ import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
-import Language.Haskell.Imports.Common (HasSymbols(symbols), ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, replaceFile, tildeBackup, withCurrentDirectory)
-import Language.Haskell.Imports.Fold (foldModule)
-import Language.Haskell.Imports.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, findSourcePath)
+import Language.Haskell.Modules.Common (HasSymbols(symbols), ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, replaceFile, tildeBackup, withCurrentDirectory)
+import Language.Haskell.Modules.Fold (foldModule)
+import Language.Haskell.Modules.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, findSourcePath)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
 import System.Exit (ExitCode(..))
@@ -62,7 +62,7 @@ cleanImports sourcePath =
 
 dumpImports :: MonadClean m => FilePath -> m ()
 dumpImports sourcePath =
-    do scratch <- Language.Haskell.Imports.Params.scratchDir
+    do scratch <- Language.Haskell.Modules.Params.scratchDir
        sourcePath' <- findSourcePath sourcePath
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"

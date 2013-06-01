@@ -9,20 +9,20 @@ import Language.Haskell.Exts.Annotated
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Annotated.ExactPrint (exactPrint)
 import Language.Haskell.Exts.Annotated.Syntax as Syntax
-import Language.Haskell.Imports.Cat as Cat (test1, test2)
-import Language.Haskell.Imports.Clean as Clean (tests)
-import Language.Haskell.Imports.Common (untabify, withCurrentDirectory)
-import Language.Haskell.Imports.Fold as Fold (test1)
--- import Language.Haskell.Imports.Move as Move (test2)
-import Language.Haskell.Imports.Split as Split (tests)
+import Language.Haskell.Modules.Cat as Cat (test1, test2)
+import Language.Haskell.Modules.Imports as Imports (tests)
+import Language.Haskell.Modules.Common (untabify, withCurrentDirectory)
+import Language.Haskell.Modules.Fold as Fold (test1)
+-- import Language.Haskell.Modules.Move as Move (test2)
+import Language.Haskell.Modules.Split as Split (tests)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import Test.HUnit (runTestTT, Test(TestList, TestCase, TestLabel), assertEqual, Counts(..))
 
 main =
     do counts <- runTestTT (TestList [TestLabel "Cat1" Cat.test1,
                                       TestLabel "Cat2" Cat.test2,
-                                      TestLabel "Clean" Clean.tests,
                                       TestLabel "Fold" Fold.test1,
+                                      TestLabel "Imports" Imports.tests,
                                       TestLabel "Main" Main.tests,
                                       TestLabel "Split" Split.tests])
        putStrLn (show counts)

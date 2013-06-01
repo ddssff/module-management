@@ -1,3 +1,9 @@
+haskell-import-management (0.6) unstable; urgency=low
+
+  * Rename module heirarchy, add Exports.hs, generalize Cat.
+
+ -- David Fox <dsf@seereason.com>  Sat, 01 Jun 2013 10:00:01 -0700
+
 haskell-import-management (0.5) unstable; urgency=low
 
   * Add catModules.

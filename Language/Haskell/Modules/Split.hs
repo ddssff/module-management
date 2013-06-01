@@ -1,6 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
-module Language.Haskell.Imports.Split
+module Language.Haskell.Modules.Split
     ( splitModule
     , tests
     ) where
@@ -20,10 +20,10 @@ import qualified Language.Haskell.Exts.Annotated as A (ExportSpec(EVar), ImportD
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
-import Language.Haskell.Imports.Clean (cleanImports)
-import Language.Haskell.Imports.Common (Decl, ExportSpec, HasSymbols(symbols), ImportDecl, ImportSpec, mapNames, ModuleName, voidName, withCurrentDirectory)
-import Language.Haskell.Imports.Fold (foldModule)
-import Language.Haskell.Imports.Params (MonadClean, runCleanT)
+import Language.Haskell.Modules.Common (Decl, ExportSpec, HasSymbols(symbols), ImportDecl, ImportSpec, mapNames, ModuleName, voidName, withCurrentDirectory)
+import Language.Haskell.Modules.Fold (foldModule)
+import Language.Haskell.Modules.Imports (cleanImports)
+import Language.Haskell.Modules.Params (MonadClean, runCleanT)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitFailure))

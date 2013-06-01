@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports #-}
-module Language.Haskell.Imports.Params
+module Language.Haskell.Modules.Params
     ( MonadClean
     , runCleanT
     , dryRun
@@ -23,7 +23,7 @@ import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Set (empty, insert, Set, toList)
 import Data.String (fromString)
 import Filesystem (createTree, removeTree)
-import Language.Haskell.Imports.Common (removeFile')
+import Language.Haskell.Modules.Common (removeFile')
 import System.Directory (doesFileExist)
 import System.FilePath ((</>))
 import System.IO.Error (isDoesNotExistError)

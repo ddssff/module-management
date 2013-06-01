@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
-module Language.Haskell.Imports.Cat
+module Language.Haskell.Modules.Cat
     ( catModules
     , test1
     , test2
@@ -20,10 +20,10 @@ import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
-import Language.Haskell.Imports.Clean (cleanImports)
-import Language.Haskell.Imports.Common (checkParse, Module, modulePath, removeFileIfPresent, replaceFileIfDifferent, withCurrentDirectory)
-import Language.Haskell.Imports.Fold (foldModule)
-import Language.Haskell.Imports.Params (MonadClean, runCleanT)
+import Language.Haskell.Modules.Common (checkParse, Module, modulePath, removeFileIfPresent, replaceFileIfDifferent, withCurrentDirectory)
+import Language.Haskell.Modules.Fold (foldModule)
+import Language.Haskell.Modules.Imports (cleanImports)
+import Language.Haskell.Modules.Params (MonadClean, runCleanT)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitFailure))
 import System.Process (readProcessWithExitCode)

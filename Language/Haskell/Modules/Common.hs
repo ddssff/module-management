@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns, FlexibleInstances, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-module Language.Haskell.Imports.Common
+module Language.Haskell.Modules.Common
     ( Display(..)
     , tildeBackup
     , noBackup

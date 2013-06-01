@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns, FlexibleInstances, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-module Language.Haskell.Imports.Fold
+module Language.Haskell.Modules.Fold
     ( foldModule
     , test1
     ) where
@@ -11,7 +11,7 @@ import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments,
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.SrcLoc (SrcLoc)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), Module(Module, XmlHybrid, XmlPage), ModuleHead(ModuleHead))
-import Language.Haskell.Imports.Common (Decl, ExportSpec, HasEndLoc(..), HasSrcLoc(..), HasSrcSpan(..), ImportDecl, Module, ModuleHead, ModuleName, ModulePragma, srcPairText, textEndLoc, untabify, WarningText, withCurrentDirectory)
+import Language.Haskell.Modules.Common (Decl, ExportSpec, HasEndLoc(..), HasSrcLoc(..), HasSrcSpan(..), ImportDecl, Module, ModuleHead, ModuleName, ModulePragma, srcPairText, textEndLoc, untabify, WarningText, withCurrentDirectory)
 import Test.HUnit (assertEqual, Test(TestCase, TestLabel))
 
 {-
