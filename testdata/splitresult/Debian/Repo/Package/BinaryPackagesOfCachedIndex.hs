@@ -6,11 +6,11 @@ module Debian.Repo.Package.BinaryPackagesOfCachedIndex
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Debian.Repo.Package.IndexCacheFile (indexCacheFile)
-import Debian.Repo.Package.ToBinaryPackage (toBinaryPackage)
 import "mtl" Control.Monad.Trans (MonadIO(..))
 import Data.List as List (map)
 import Debian.Repo.Monads.Apt (insertBinaryPackages, lookupBinaryPackages, MonadApt(..), readParagraphs)
+import Debian.Repo.Package.IndexCacheFile (indexCacheFile)
+import Debian.Repo.Package.ToBinaryPackage (toBinaryPackage)
 import Debian.Repo.Types.AptCache (AptCache(rootDir))
 import Debian.Repo.Types.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.Types.PackageIndex (BinaryPackage, PackageIndex)

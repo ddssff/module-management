@@ -6,12 +6,12 @@ module Debian.Repo.Package.SourcePackagesOfCachedIndex
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Debian.Repo.Package.IndexCacheFile (indexCacheFile)
-import Debian.Repo.Package.ToSourcePackage (toSourcePackage)
 import Control.Exception as E (catch)
 import "mtl" Control.Monad.Trans (MonadIO(..))
 import Data.List as List (map)
 import Debian.Repo.Monads.Apt (insertSourcePackages, lookupSourcePackages, MonadApt(..), readParagraphs)
+import Debian.Repo.Package.IndexCacheFile (indexCacheFile)
+import Debian.Repo.Package.ToSourcePackage (toSourcePackage)
 import Debian.Repo.Types.AptCache (AptCache(rootDir))
 import Debian.Repo.Types.EnvPath (EnvRoot(rootPath))
 import Debian.Repo.Types.PackageIndex (PackageIndex, SourcePackage)

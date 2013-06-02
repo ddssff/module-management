@@ -19,7 +19,9 @@ import qualified Distribution.ModuleName as D (components, ModuleName)
 import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Executable(modulePath), Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl, importAnn, importModule, importSpecs), ImportSpecList(ImportSpecList), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName), Name(..))
+import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpecList(ImportSpecList), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName), Name(..))
+import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
@@ -127,14 +129,8 @@ replaceImports newImports m sourceText =
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: Bool -> [ImportDecl] -> [ImportDecl] -> [ImportDecl]
 fixNewImports remove oldImports imports =
-    filter filterDecls $ map mergeDecls $ groupBy ((==) `on` noSpecs) $ sortBy importCompare imports
+    filter filterDecls $ map mergeDecls $ groupBy (\ a b -> importMergable a b == EQ) $ sortBy importMergable imports
     where
-      importCompare a b =
-          case (compare `on` A.importModule) a b of
-            EQ -> (compare `on` noSpecs) a b
-            x -> x
-      noSpecs :: ImportDecl -> ImportDecl
-      noSpecs x = x {A.importAnn = def, A.importSpecs = fmap (\ (A.ImportSpecList loc flag _) -> (A.ImportSpecList loc flag [])) (A.importSpecs x)}
       mergeDecls :: [ImportDecl] -> ImportDecl
       mergeDecls xs@(x : _) = x {A.importSpecs = mergeSpecs (catMaybes (map A.importSpecs xs))}
       mergeDecls [] = error "mergeDecls"
@@ -146,6 +142,26 @@ fixNewImports remove oldImports imports =
       filterDecls _ = True
       isEmptyImport (Just (A.ImportSpecList _ _ [])) = True
       isEmptyImport _ = False
+
+-- | Compare the two import declarations ignoring the things that are
+-- actually being imported.  Equality here indicates that the two
+-- imports could be merged.
+importMergable :: ImportDecl -> ImportDecl -> Ordering
+importMergable a b =
+    case (compare `on` noSpecs) a' b' of
+      EQ -> EQ
+      specOrdering ->
+          case (compare `on` S.importModule) a' b' of
+            EQ -> specOrdering
+            moduleNameOrdering -> moduleNameOrdering
+    where
+      a' = sImportDecl a
+      b' = sImportDecl b
+      -- Return a version of an ImportDecl with an empty spec list and no
+      -- source locations.  This will distinguish "import Foo as F" from
+      -- "import Foo", but will let us group imports that can be merged.
+      noSpecs :: S.ImportDecl -> S.ImportDecl
+      noSpecs x = x {S.importLoc = def, S.importSpecs = Nothing}
 
 -- | Be careful not to try to compare objects with embeded SrcSpanInfo.
 unModuleName :: ModuleName -> String

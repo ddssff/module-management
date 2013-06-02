@@ -6,10 +6,10 @@ module Debian.Repo.Package.BinaryPackagesOfIndex
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Debian.Repo.Package.GetPackages (getPackages)
 import Control.Exception as E (SomeException)
 import "mtl" Control.Monad.Trans (MonadIO(..))
 import Debian.Arch (Arch(Source))
+import Debian.Repo.Package.GetPackages (getPackages)
 import Debian.Repo.Types.PackageIndex (BinaryPackage, PackageIndex(packageIndexArch))
 import Debian.Repo.Types.Release (Release)
 import Debian.Repo.Types.Repo (RepoKey)

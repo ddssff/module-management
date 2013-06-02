@@ -6,11 +6,11 @@ module Debian.Repo.Package.ReleaseSourcePackages
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Debian.Repo.Package.SourcePackagesOfIndex (sourcePackagesOfIndex)
 import Control.Exception as E (SomeException)
 import Data.Either (partitionEithers)
 import Data.List as List (intercalate, map)
 import Data.Set as Set (fromList, Set, unions)
+import Debian.Repo.Package.SourcePackagesOfIndex (sourcePackagesOfIndex)
 import Debian.Repo.PackageIndex (sourceIndexList)
 import Debian.Repo.Types.PackageIndex (SourcePackage)
 import Debian.Repo.Types.Release (Release)

@@ -6,8 +6,8 @@ module Debian.Repo.Package.IndexCacheFile
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Debian.Repo.Package.IndexPrefix (indexPrefix)
 import Debian.Arch (Arch(..), prettyArch)
+import Debian.Repo.Package.IndexPrefix (indexPrefix)
 import Debian.Repo.Types.AptCache (AptCache(aptArch))
 import Debian.Repo.Types.PackageIndex (PackageIndex(packageIndexArch))
 import Debian.Repo.Types.Release (Release)

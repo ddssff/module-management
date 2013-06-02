@@ -6,12 +6,12 @@ module Debian.Repo.Package.GetPackages
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Debian.Repo.Package.ToBinaryPackage (toBinaryPackage)
 import Control.Exception as E (ErrorCall(ErrorCall), SomeException(..), try)
 import qualified Data.ByteString.Lazy.Char8 as L (ByteString)
 import Data.List as List (map)
 import Debian.Apt.Index (Compression(..), controlFromIndex)
 import qualified Debian.Control.Text as B (Control'(Control))
+import Debian.Repo.Package.ToBinaryPackage (toBinaryPackage)
 import Debian.Repo.PackageIndex (packageIndexPath)
 import Debian.Repo.Types.PackageIndex (BinaryPackage, PackageIndex)
 import Debian.Repo.Types.Release (Release)

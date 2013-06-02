@@ -6,8 +6,8 @@ module Debian.Repo.Package.SourcePackageBinaryNames
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Debian.Repo.Package.SourceBinaryNames (sourceBinaryNames)
 import Debian.Relation (BinPkgName(..))
+import Debian.Repo.Package.SourceBinaryNames (sourceBinaryNames)
 import Debian.Repo.Types.PackageIndex (SourcePackage(sourceParagraph))
 
 sourcePackageBinaryNames :: SourcePackage -> [BinPkgName]

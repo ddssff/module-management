@@ -6,10 +6,10 @@ module Debian.Repo.Package.IndexPrefix
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Debian.Repo.Package.OtherSymbols ((+?+))
-import Debian.Repo.Package.UriToString (uriToString')
 import Data.List as List (intercalate)
 import Debian.Release (releaseName', sectionName')
+import Debian.Repo.Package.OtherSymbols ((+?+))
+import Debian.Repo.Package.UriToString (uriToString')
 import Debian.Repo.Types.PackageIndex (PackageIndex(packageIndexComponent))
 import Debian.Repo.Types.Release (Release(releaseName))
 import Debian.Repo.Types.Repo (RepoKey, repoKeyURI)

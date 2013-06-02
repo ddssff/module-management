@@ -6,10 +6,10 @@ module Debian.Repo.Package.ReleaseBinaryPackages
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Debian.Repo.Package.BinaryPackagesOfIndex (binaryPackagesOfIndex)
 import Data.Either (partitionEithers)
 import Data.List as List (intercalate, map)
 import Data.Set as Set (fromList, Set, unions)
+import Debian.Repo.Package.BinaryPackagesOfIndex (binaryPackagesOfIndex)
 import Debian.Repo.PackageIndex (binaryIndexList)
 import Debian.Repo.Types.PackageIndex (BinaryPackage)
 import Debian.Repo.Types.Release (Release)
