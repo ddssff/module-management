@@ -177,8 +177,8 @@ updateModuleContentsExports old new es =
       f :: [S.ExportSpec] -> S.ExportSpec ->  [S.ExportSpec]
       f ys (S.EModuleContents m) =
           let e' = S.EModuleContents (if elem m old then new else m) in
-          if elem e' ys then ys else e' : ys
-      f ys e = e : ys
+          ys ++ if elem e' ys then [] else [e']
+      f ys e = ys ++ [e]
 
 moduleImports :: [S.ModuleName] -> (S.ModuleName, Module, String) -> String
 moduleImports old' (_, m, text) =

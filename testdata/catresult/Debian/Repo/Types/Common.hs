@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Common
-    ( NamedSliceList(..), SliceList(..), Slice(..), compatibilityFile, libraryCompatibilityLevel, repoKeyURI, repoURI, RepoKey(..), Repo(..), rootEnvPath, appendPath, outsidePath, EnvPath(..), EnvRoot(..)
+    ( EnvRoot(..), EnvPath(..), outsidePath, appendPath, rootEnvPath, Repo(..), RepoKey(..), repoURI, repoKeyURI, libraryCompatibilityLevel, compatibilityFile, Slice(..), SliceList(..), NamedSliceList(..)
     ) where
 
 import Control.Exception (throw)
