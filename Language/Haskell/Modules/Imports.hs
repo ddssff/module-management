@@ -20,7 +20,7 @@ import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Exe
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpecList(ImportSpecList), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName), Name(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpecList(ImportSpecList), Module(..), ModuleHead(ModuleHead), ModuleName(ModuleName), Name(..))
 import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
@@ -82,23 +82,24 @@ checkImports sourcePath =
     do source <- liftIO $ parseFileWithComments defaultParseMode sourcePath
        sourceText <- liftIO $ readFile sourcePath
        case source of
-         ParseOk (m@(A.Module _ (Just (A.ModuleHead _ (A.ModuleName _ name) _ _)) _ _ _), comments) ->
-             do let importsPath = name <.> ".imports"
+         ParseOk (m@(A.Module _ h _ _ _), comments) ->
+             do let name =
+                        case h of
+                          Just (A.ModuleHead _ (A.ModuleName _ x) _ _) -> x
+                          _ -> "Main"
+                    importsPath = name <.> ".imports"
                 markForDelete importsPath
                 result <- liftIO (parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath) `catch` (\ (e :: IOError) -> liftIO getCurrentDirectory >>= \ here -> liftIO . throw . userError $ here ++ ": " ++ show e)
                 case result of
                   ParseOk newImports -> updateSource newImports sourcePath m comments sourceText
                   _ -> error (importsPath ++ ": parse failed")
-         ParseOk _ -> error "checkImports"
+         ParseOk ((A.XmlPage {}), _) -> error "checkImports: XmlPage"
+         ParseOk ((A.XmlHybrid {}), _) -> error "checkImports: XmlHybrid"
          ParseFailed _loc msg -> error (sourcePath ++ " - parse failed: " ++ msg)
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
 updateSource :: MonadClean m => Module -> FilePath -> Module -> [Comment] -> String -> m (Maybe String)
-updateSource _ sourcePath (A.Module _ Nothing _ _ _) _ _ =
-    error (sourcePath ++ ": Won't modify source file with no explicit export list")
-updateSource _ sourcePath (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _) _ _ =
-    error (sourcePath ++ ": Won't modify source file with no explicit export list")
 updateSource (A.Module _ _ _ newImports _) sourcePath (m@(A.Module _ _ _ oldImports _)) _ sourceText =
     removeEmptyImports >>= \ remove ->
     dryRun >>= \ dry ->
