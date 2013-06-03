@@ -4,24 +4,26 @@ module Language.Haskell.Modules.Cat
     ( catModules
     , test1
     , test2
+    , test3
     ) where
 
 import Control.Applicative ((<$>))
 import Control.Exception (throw)
-import Control.Monad as List (filterM, mapM, mapM_)
+import Control.Monad as List (mapM_)
 import Control.Monad.Trans (liftIO)
 import Data.Default (def)
 import Data.Generics (Data, everywhere, mkT, Typeable)
-import Data.List as List (filter, intercalate, isPrefixOf, map, null)
-import Data.Maybe (fromMaybe)
+import Data.List as List (filter, intercalate, isPrefixOf, map)
+import Data.Map as Map (Map, fromList, member, toAscList, lookup)
+import Data.Maybe (fromMaybe, catMaybes)
 import Data.Monoid (Monoid, (<>))
-import Data.Set as Set (fromList, map, member, Set, toList, union)
+import Data.Set as Set (Set, fromList, toList, union)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
-import Language.Haskell.Modules.Common (checkParse, Module, modulePath, removeFileIfPresent, replaceFileIfDifferent, withCurrentDirectory)
+import Language.Haskell.Modules.Common (checkParse, Module, modulePath, removeFileIfPresent, replaceFile, tildeBackup, withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Params (MonadClean, runCleanT)
@@ -30,57 +32,67 @@ import System.Exit (ExitCode(ExitFailure))
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (assertEqual, Test(TestCase))
 
+data Result
+    = Unchanged
+    | Removed S.ModuleName
+    | Modified S.ModuleName String
+
 -- | Merge the declarations from several modules into a single new
 -- one.  Note that a circular imports can be created by this
 -- operation, in which case you will have to add more modules to the
 -- merge.
 catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m ()
-catModules univ old new = liftIO (catModulesIO univ old new) >>= List.mapM_ cleanImports . List.map modulePath . Set.toList
+catModules univ inputs output =
+    liftIO (catModulesIO univ inputs output) >>= List.mapM_ cleanImports . List.map modulePath
 
-catModulesIO :: Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> IO (Set S.ModuleName)
-catModulesIO univ old new
-    | List.null old = throw $ userError "catModules: invalid argument"
-    | elem new old = throw $ userError "catModules: invalid destination"
-    | True = do let univ' = union univ (Set.fromList old)
-                old' <- List.mapM (\ name -> do text <- readFile (modulePath name)
-                                                (m, _) <- checkParse name <$> parseFileWithComments defaultParseMode (modulePath name)
-                                                return (name, m, text)) old
-                -- Generate the modified modules
-                changed <- filterM (doModule old' new) (Set.toList univ') >>=
-                           -- The first from module turned into the new
-                           -- module, the other from modules disappeared.
-                           return . Set.map (\ x -> if elem x old then new else x) . Set.fromList
-                -- Remove the original modules
-                List.mapM_ (removeFileIfPresent . modulePath) old
-                return changed
+catModulesIO :: Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> IO [S.ModuleName]
+catModulesIO _ [] _ = throw $ userError "catModules: invalid argument"
+catModulesIO univ inputs output =
+    do let univ' = union univ (Set.fromList (output : inputs))
+       info <- loadModules inputs
+       mapM (doModule info inputs output) (Set.toList univ') >>= mapM doResult >>= return . catMaybes
+       {- >>= return . Set.map (\ x -> if elem x inputs then output else x) . Set.fromList -}
+       -- List.mapM_ (removeFileIfPresent . modulePath) inputs
+       -- return changed
+    where
+      doResult :: Result -> IO (Maybe S.ModuleName)
+      doResult Unchanged = return Nothing
+      doResult (Removed name) = removeFileIfPresent (modulePath name) >> return (Just name)
+      doResult (Modified name text) = replaceFile tildeBackup (modulePath name) text >> return (Just name)
 
 -- Update the module 'name' to reflect the result of the cat operation.
-doModule :: [(S.ModuleName, Module, String)] -> S.ModuleName -> S.ModuleName -> IO Bool
-doModule old@((first, _, _) : _ ) new name =
-          do text <- readFile . modulePath $ name
-             (m, _) <- checkParse name <$> parseFileWithComments defaultParseMode (modulePath name)
-             let name' = if name == first then new else name
-                 text' = catModules'' old new (name, m, text)
-             replaceFileIfDifferent (modulePath name') text'
-doModule [] _ _ = error "catModulesIO"
+doModule :: Map S.ModuleName (Module, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> IO Result
+doModule info input@(first : _) output name =
+    do -- The new module will be based on the existing module, unless
+       -- name equals output and output does not exist
+       let base = if name == output && not (Map.member name info) then first else name
+       (m, text) <- maybe (loadModule base) return (Map.lookup name info)
+       let text' = doModule' info input output (name, (m, text))
+       return $ if name == output
+                then Modified name text'
+                else if elem name input
+                     then Removed name
+                     else if text /= text'
+                          then Modified name text'
+                          else Unchanged
+       -- if base /= name || text' /= text then (replaceFile (const Nothing) (modulePath name) text' >> return True) else return False
+       -- replaceFileIfDifferent (modulePath name) text'
 
-catModules'' :: [(S.ModuleName, Module, String)] -> S.ModuleName -> (S.ModuleName, Module, String) -> String
-catModules'' [] _ _ = error "catModules''"
-catModules'' from@((first, _, _) : _) to (name, m, text) =
+doModule' :: Map S.ModuleName (Module, String) -> [S.ModuleName] -> S.ModuleName -> (S.ModuleName, (Module, String)) -> String
+doModule' _ [] _ _ = error "doModule'"
+doModule' info inputs output (name, (m, text)) =
     case () of
-      _ | name == first -> doFirst from to (m, text)
-        | not (elem name (to : fromNames)) -> doOther from to (m, text)
+      _ | name == output -> doOutput info inputs output (m, text)
+        | not (elem name (output : inputs)) -> doOther inputs output (m, text)
         | True -> ""
-    where
-      fromNames = List.map (\ (x, _, _) -> x) from
 
-doFirst :: [(S.ModuleName, Module, String)] -> S.ModuleName -> (Module, String) -> String
-doFirst old new (m, text) =
+doOutput :: Map S.ModuleName (Module, String) -> [S.ModuleName] -> S.ModuleName -> (Module, String) -> String
+doOutput info inputs output (m, text) =
     header ++ fromMaybe "" exports ++ fromMaybe "" imports ++ fromMaybe "" decls
     where
       header =
           foldModule echo
-                     (\ _ pre _ r -> r <> pre <> prettyPrintWithMode defaultMode new)
+                     (\ _ pre _ r -> r <> pre <> prettyPrintWithMode defaultMode output)
                      echo
                      ignore
                      ignore
@@ -91,7 +103,7 @@ doFirst old new (m, text) =
           foldModule ignore
                      ignore
                      ignore
-                     (\ _e pre _ r -> Just (fromMaybe (pre <> maybe "" (intercalate ", " . List.map (prettyPrintWithMode defaultMode)) (mergeExports old new)) r))
+                     (\ _e pre _ r -> Just (fromMaybe (pre <> maybe "" (intercalate ", " . List.map (prettyPrintWithMode defaultMode)) (mergeExports info output)) r))
                      ignore
                      ignore
                      (\ _ r -> r)
@@ -101,7 +113,7 @@ doFirst old new (m, text) =
                      ignore
                      ignore
                      ignore
-                     (\ _i pre _ r -> Just (fromMaybe (pre <> unlines (List.map (moduleImports oldNames) old)) r))
+                     (\ _i pre _ r -> Just (fromMaybe (pre <> unlines (List.map (moduleImports info) inputs)) r))
                      ignore
                      (\ _ r -> r)
                      m text Nothing
@@ -111,11 +123,9 @@ doFirst old new (m, text) =
                      ignore
                      ignore
                      ignore
-                     (\ _d _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls (fromList oldNames) new) old)) r))
+                     (\ _d _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls info output) inputs)) r))
                      (\ s r -> Just (maybe s (<> s) r))
                      m text Nothing
-
-      oldNames = List.map (\ (x, _, _) -> x) old
 
 echo :: Monoid m => t -> m -> m -> m -> m
 echo _ pre s r = r <> pre <> s
@@ -123,8 +133,8 @@ echo _ pre s r = r <> pre <> s
 ignore :: t -> t1 -> t2 -> t3 -> t3
 ignore _ _ _ r = r
 
-doOther :: [(S.ModuleName, Module, String)] -> S.ModuleName -> (Module, String) -> String
-doOther old new@(S.ModuleName new') (m, text) =
+doOther :: [S.ModuleName] -> S.ModuleName -> (Module, String) -> String
+doOther inputs input@(S.ModuleName input') (m, text) =
     header ++ exports ++ imports ++ decls
     where
       header = foldModule echo echo echo ignore ignore ignore (\ _ r -> r) m text ""
@@ -135,8 +145,8 @@ doOther old new@(S.ModuleName new') (m, text) =
                      ignore
                      ignore
                      (\ x pre s r ->
-                          r <> pre <> (if elem (sModuleName (A.importModule x)) oldNames
-                                       then prettyPrintWithMode defaultMode (x {A.importModule = A.ModuleName def new'})
+                          r <> pre <> (if elem (sModuleName (A.importModule x)) inputs
+                                       then prettyPrintWithMode defaultMode (x {A.importModule = A.ModuleName def input'})
                                        else s))
                      ignore
                      (\ _ r -> r)
@@ -154,34 +164,32 @@ doOther old new@(S.ModuleName new') (m, text) =
       fixModuleExport x pre s r =
           r <> case sExportSpec x of
                  S.EModuleContents y
-                     | elem y oldNames ->
-                         "\n     , " <> prettyPrintWithMode defaultMode (S.EModuleContents new)
+                     | elem y inputs ->
+                         "\n     , " <> prettyPrintWithMode defaultMode (S.EModuleContents input)
                  _ -> pre <> s
 
-      oldNames = List.map (\ (x, _, _) -> x) old
-
-mergeExports :: [(S.ModuleName, Module, String)] -> S.ModuleName -> Maybe [S.ExportSpec]
+mergeExports :: Map S.ModuleName (Module, String) -> S.ModuleName -> Maybe [S.ExportSpec]
 mergeExports old new =
-    Just (concatMap mergeExports' old)
+    Just (concatMap mergeExports' (Map.toAscList old))
     where
-      mergeExports' (_, A.Module _ Nothing _ _ _, _) = error "catModules: no explicit export list"
-      mergeExports' (_, A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _) = error "catModules: no explicit export list"
-      mergeExports' (_, A.Module _ (Just (A.ModuleHead _ _ _ (Just (A.ExportSpecList _ e)))) _ _ _, _) = updateModuleContentsExports oldNames new (List.map sExportSpec e)
-      mergeExports' (_, _, _) = error "mergeExports'"
-      oldNames = List.map (\ (x, _, _) -> x) old
+      mergeExports' (_, (A.Module _ Nothing _ _ _, _)) = error "catModules: no explicit export list"
+      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _)) = error "catModules: no explicit export list"
+      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ (Just (A.ExportSpecList _ e)))) _ _ _, _)) = updateModuleContentsExports old new (List.map sExportSpec e)
+      mergeExports' (_, _) = error "mergeExports'"
 
-updateModuleContentsExports :: [S.ModuleName] -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
+updateModuleContentsExports :: Map S.ModuleName (Module, String) -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
 updateModuleContentsExports old new es =
     foldl f [] es
     where
       f :: [S.ExportSpec] -> S.ExportSpec ->  [S.ExportSpec]
       f ys (S.EModuleContents m) =
-          let e' = S.EModuleContents (if elem m old then new else m) in
+          let e' = S.EModuleContents (if Map.member m old then new else m) in
           ys ++ if elem e' ys then [] else [e']
       f ys e = ys ++ [e]
 
-moduleImports :: [S.ModuleName] -> (S.ModuleName, Module, String) -> String
-moduleImports old' (_, m, text) =
+moduleImports :: Map S.ModuleName (Module, String) -> S.ModuleName -> String
+moduleImports old name =
+    let (Just (m, text)) = Map.lookup name old in
     foldModule (\ _ _ _ r -> r)
                (\ _ _ _ r -> r)
                (\ _ _ _ r -> r)
@@ -190,15 +198,16 @@ moduleImports old' (_, m, text) =
                     r
                     -- If this is the first import, omit the prefix, it includes the ") where" text.
                     <> (if r == "" then "" else pre)
-                    <> if elem (sModuleName (A.importModule x)) old' then "" else s)
+                    <> if Map.member (sModuleName (A.importModule x)) old then "" else s)
                (\ _ _ _ r -> r)
                (\ _ r -> r)
                m text "" <> "\n"
 
 -- | Grab the declarations out of the old modules, fix any
 -- qualified symbol references, prettyprint and return.
-moduleDecls :: Set S.ModuleName -> S.ModuleName -> (S.ModuleName, Module, String) -> String
-moduleDecls old new (S.ModuleName _, m, text) =
+moduleDecls :: Map S.ModuleName (Module, String) -> S.ModuleName -> S.ModuleName -> String
+moduleDecls old new name =
+    let (Just (m, text)) = Map.lookup name old in
     foldModule (\ _ _ _ r -> r)
                (\ _ _ _ r -> r)
                (\ _ _ _ r -> r)
@@ -218,12 +227,12 @@ moduleDecls old new (S.ModuleName _, m, text) =
 -- probably mess up the location information, so the result (if
 -- different from the original) should be prettyprinted, not
 -- exactPrinted.
-fixReferences :: (Data a, Typeable a) => Set S.ModuleName -> S.ModuleName -> a -> a
+fixReferences :: (Data a, Typeable a) => Map S.ModuleName (Module, String) -> S.ModuleName -> a -> a
 fixReferences old new x =
     everywhere (mkT moveModuleName) x
     where
       moveModuleName :: S.ModuleName -> S.ModuleName
-      moveModuleName name@(S.ModuleName _) = if member name old then new else name
+      moveModuleName name@(S.ModuleName _) = if Map.member name old then new else name
 
 test1 :: Test
 test1 =
@@ -255,10 +264,27 @@ test2 =
        let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out)) in
        assertEqual "catModules" (ExitFailure 2, "", "") (code, out', err))
 
+test3 :: Test
+test3 =
+    TestCase
+      (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
+       withCurrentDirectory "testdata/copy"
+         (runCleanT "dist/scratch"
+          (catModules
+           (Set.fromList testModules)
+           [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
+           (S.ModuleName "Debian.Repo.Types.Repo")) >>
+          mapM_ removeFileIfPresent junk) >>
+       readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "testdata/catresult", "testdata/copy"] "" >>= \ (code, out, err) ->
+       let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out)) in
+       assertEqual "catModules" (ExitFailure 2, "", "") (code, out', err))
+
 junk :: [String]
 junk =
-    [ "Debian.Repo.Monads.Top.imports"
+    [ "Debian.Repo.Monads.Apt.imports"
+    , "Debian.Repo.Monads.Top.imports"
     , "Debian.Repo.Orphans.imports"
+    , "Debian.Repo.PackageIndex.imports"
     , "Debian.Repo.SourcesList.imports"
     , "Debian.Repo.Sync.imports"
     , "Debian.Repo.Types.PackageIndex.imports"
@@ -305,3 +331,12 @@ testModules =
              S.ModuleName "Debian.Repo.AptCache",
              S.ModuleName "Tmp.File",
              S.ModuleName "Text.Format"]
+
+loadModule :: S.ModuleName -> IO (Module, String)
+loadModule name =
+    do text <- readFile (modulePath name)
+       (m, _) <- checkParse name <$> parseFileWithComments defaultParseMode (modulePath name)
+       return (m, text)
+
+loadModules :: [S.ModuleName] -> IO (Map S.ModuleName (Module, String))
+loadModules names = mapM loadModule names >>= return . Map.fromList . zip names
