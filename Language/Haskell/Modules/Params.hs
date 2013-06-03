@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
 module Language.Haskell.Modules.Params
     ( MonadClean
     , runCleanT
@@ -9,6 +9,7 @@ module Language.Haskell.Modules.Params
     , sourceDirs
     , putSourceDirs
     , findSourcePath
+    , modulePath
     , markForDelete
     , putScratchJunk
     , scratchDir
@@ -23,9 +24,10 @@ import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Set (empty, insert, Set, toList)
 import Data.String (fromString)
 import Filesystem (createTree, removeTree)
+import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Modules.Common (removeFile')
-import System.Directory (doesFileExist)
-import System.FilePath ((</>))
+import System.Directory (doesFileExist, getCurrentDirectory)
+import System.FilePath ((</>), (<.>))
 import System.IO.Error (isDoesNotExistError)
 
 data Params
@@ -86,14 +88,29 @@ sourceDirs = getParams >>= return . sourceDirs_
 
 findSourcePath :: MonadClean m => FilePath -> m FilePath
 findSourcePath path =
-    do dirs <- sourceDirs
-       findFile dirs
+    sourceDirs >>= findFile
     where
-      findFile [] = liftIO . throw . userError $ "Not found: " ++ path
       findFile (dir : dirs) =
           do let x = dir </> path
              exists <- liftIO $ doesFileExist x
              if exists then return x else findFile dirs
+      findFile [] =
+          do here <- liftIO getCurrentDirectory
+             dirs <- sourceDirs
+             liftIO . throw . userError $ "findSourcePath failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ path
+
+modulePath :: MonadClean m => S.ModuleName -> m FilePath
+modulePath (S.ModuleName name) =
+    findSourcePath path `catch` (\ (_ :: IOError) -> makePath)
+    where
+      makePath =
+          do dirs <- sourceDirs
+             case dirs of
+               [] -> return path
+               (d : _) -> return $ d </> path
+      path = map f name <.> "hs"
+      f '.' = '/'
+      f c = c
 
 markForDelete :: MonadClean m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk_ = insert x (junk_ p)})

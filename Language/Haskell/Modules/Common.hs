@@ -14,7 +14,6 @@ module Language.Haskell.Modules.Common
     , untabify
     , lines'
     , checkParse
-    , modulePath
     , Module
     , ModuleHead
     , ModulePragma
@@ -52,7 +51,6 @@ import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
 import Language.Haskell.Exts.SrcLoc (srcSpanEnd, srcSpanStart)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
-import System.FilePath ((<.>))
 import System.IO.Error (isDoesNotExistError)
 
 type Module = A.Module SrcSpanInfo
@@ -150,12 +148,6 @@ lines' s =
 checkParse :: S.ModuleName -> ParseResult a -> a
 checkParse (S.ModuleName name) (ParseFailed loc msg) = throw $ userError $ "Parse Failure in " ++ name ++ " at " ++ show loc ++ ": " ++ msg
 checkParse _ (ParseOk x) = x
-
-modulePath :: S.ModuleName -> FilePath
-modulePath (S.ModuleName name) =
-    map f name <.> "hs"
-        where f '.' = '/'
-              f c = c
 
 class HasSrcSpan a where
     srcSpan :: a -> SrcSpan

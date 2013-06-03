@@ -7,9 +7,8 @@ module Language.Haskell.Modules.Cat
     , test3
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Exception (throw)
-import Control.Monad as List (mapM_)
+import Control.Monad as List (mapM_, mapM)
 import Control.Monad.Trans (liftIO)
 import Data.Default (def)
 import Data.Generics (Data, everywhere, mkT, Typeable)
@@ -23,10 +22,10 @@ import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
-import Language.Haskell.Modules.Common (checkParse, Module, modulePath, removeFileIfPresent, replaceFile, tildeBackup, withCurrentDirectory)
+import Language.Haskell.Modules.Common (checkParse, Module, removeFileIfPresent, replaceFile, tildeBackup, withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (MonadClean, runCleanT)
+import Language.Haskell.Modules.Params (MonadClean, runCleanT, modulePath, putSourceDirs)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitFailure))
 import System.Process (readProcessWithExitCode)
@@ -43,9 +42,9 @@ data Result
 -- merge.
 catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m ()
 catModules univ inputs output =
-    liftIO (catModulesIO univ inputs output) >>= List.mapM_ cleanImports . List.map modulePath
+    catModulesIO univ inputs output >>= List.mapM modulePath >>= List.mapM_ cleanImports
 
-catModulesIO :: Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> IO [S.ModuleName]
+catModulesIO :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m [S.ModuleName]
 catModulesIO _ [] _ = throw $ userError "catModules: invalid argument"
 catModulesIO univ inputs output =
     do let univ' = union univ (Set.fromList (output : inputs))
@@ -55,13 +54,13 @@ catModulesIO univ inputs output =
        -- List.mapM_ (removeFileIfPresent . modulePath) inputs
        -- return changed
     where
-      doResult :: Result -> IO (Maybe S.ModuleName)
+      doResult :: MonadClean m => Result -> m (Maybe S.ModuleName)
       doResult Unchanged = return Nothing
-      doResult (Removed name) = removeFileIfPresent (modulePath name) >> return (Just name)
-      doResult (Modified name text) = replaceFile tildeBackup (modulePath name) text >> return (Just name)
+      doResult (Removed name) = modulePath name >>= liftIO . removeFileIfPresent >> return (Just name)
+      doResult (Modified name text) = modulePath name >>= \ path -> liftIO (replaceFile tildeBackup path text) >> return (Just name)
 
 -- Update the module 'name' to reflect the result of the cat operation.
-doModule :: Map S.ModuleName (Module, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> IO Result
+doModule :: MonadClean m => Map S.ModuleName (Module, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m Result
 doModule info input@(first : _) output name =
     do -- The new module will be based on the existing module, unless
        -- name equals output and output does not exist
@@ -236,18 +235,23 @@ fixReferences old new x =
 
 test1 :: Test
 test1 =
-    TestCase
-      (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
-       withCurrentDirectory "testdata/copy"
-         (runCleanT "dist/scratch"
-          (catModules
-           (Set.fromList testModules)
-           [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
-           (S.ModuleName "Debian.Repo.Cache")) >>
-            assertEqual
-              "catModules"
-              ()
-              ()))
+    TestCase $
+      do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
+         runCleanT "dist/scratch" $
+           do putSourceDirs ["testdata/copy"]
+              catModules
+                 (Set.fromList testModules)
+                 [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
+                 (S.ModuleName "Debian.Repo.Cache")
+{-
+         withCurrentDirectory "testdata/copy"
+           (runCleanT "dist/scratch"
+            (catModules
+             (Set.fromList testModules)
+             [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
+             (S.ModuleName "Debian.Repo.Cache")))
+-}
+         assertEqual "catModules" () ()
 
 test2 :: Test
 test2 =
@@ -332,11 +336,12 @@ testModules =
              S.ModuleName "Tmp.File",
              S.ModuleName "Text.Format"]
 
-loadModule :: S.ModuleName -> IO (Module, String)
+loadModule :: MonadClean m => S.ModuleName -> m (Module, String)
 loadModule name =
-    do text <- readFile (modulePath name)
-       (m, _) <- checkParse name <$> parseFileWithComments defaultParseMode (modulePath name)
+    do path <- modulePath name
+       text <- liftIO $ readFile path
+       (m, _) <- liftIO (parseFileWithComments defaultParseMode path) >>= return . checkParse name
        return (m, text)
 
-loadModules :: [S.ModuleName] -> IO (Map S.ModuleName (Module, String))
+loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (Module, String))
 loadModules names = mapM loadModule names >>= return . Map.fromList . zip names
