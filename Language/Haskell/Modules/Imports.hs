@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Imports
     ( cleanImports
-    , cleanBuildImports
+    -- , cleanBuildImports
     , tests
     ) where
 
@@ -16,19 +16,19 @@ import Data.List (find, groupBy, intercalate, nub, sortBy)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import qualified Distribution.ModuleName as D (components, ModuleName)
-import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Executable(modulePath), Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
+import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
-import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl)
+import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpecList(ImportSpecList), Module(..), ModuleHead(ModuleHead), ModuleName(ModuleName), Name(..))
 import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
-import Language.Haskell.Modules.Common (HasSymbols(symbols), ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, replaceFile, tildeBackup, withCurrentDirectory)
+import Language.Haskell.Modules.Common (HasSymbols(symbols), ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, replaceFile, tildeBackup, withCurrentDirectory, ModuleResult(..))
 import Language.Haskell.Modules.Fold (foldModule)
-import Language.Haskell.Modules.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, findSourcePath)
+import Language.Haskell.Modules.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, findSourcePath, sourceDirs, modulePath, modulePathBase, quietly, qPutStrLn)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
 import System.Exit (ExitCode(..))
@@ -39,6 +39,7 @@ import Test.HUnit (assertEqual, Test(..))
 -- | This is designed to be called from the postConf script of your
 -- Setup file, it cleans up the imports of all the source files in the
 -- package.
+{-
 cleanBuildImports :: LocalBuildInfo -> IO ()
 cleanBuildImports lbi =
     mapM (toFilePath srcDirs) (maybe [] exposedModules (library (localPkgDescr lbi))) >>= \ libPaths ->
@@ -55,61 +56,74 @@ cleanBuildImports lbi =
           let path = (dir </> intercalate "/" (D.components m) <.> "hs") in
           doesFileExist path >>= \ exists ->
           if exists then return path else toFilePath dirs m
+-}
 
 -- | Clean up the imports of a source file.
-cleanImports :: MonadClean m => FilePath -> m (Either IOError (Maybe String))
-cleanImports sourcePath =
-    try (dumpImports sourcePath >> checkImports sourcePath)
-      -- `catch` (\ (e :: IOError) -> liftIO (hPutStrLn stderr (show e)))
+cleanImports :: MonadClean m => FilePath -> m ModuleResult
+cleanImports path =
+    do source <- liftIO $ parseFileWithComments defaultParseMode path
+       case source of
+         ParseOk (m@(A.Module _ h _ _ _), comments) ->
+             do let name = case h of
+                             Just (A.ModuleHead _ x _ _) -> sModuleName x
+                             _ -> S.ModuleName "Main"
+                dumpImports path name >> checkImports path name m
+         ParseOk ((A.XmlPage {}), _) -> error "cleanImports: XmlPage"
+         ParseOk ((A.XmlHybrid {}), _) -> error "cleanImports: XmlHybrid"
+         ParseFailed _loc msg -> error ("cleanImports: - parse of " ++ path ++ " failed: " ++ msg)
 
-dumpImports :: MonadClean m => FilePath -> m ()
-dumpImports sourcePath =
+-- | Clean up the imports of a source file.
+{-
+cleanImports :: MonadClean m => S.ModuleName -> m ModuleResult
+cleanImports name@(S.ModuleName x) =
+    dumpImports name >> checkImports name
+    do result <- try (dumpImports name >> checkImports name)
+       qPutStrLn . either show (\ text -> x ++ ": " ++ maybe "no changes" (\ _ -> " updated") text) $ result
+       return result
+      -- `catch` (\ (e :: IOError) -> liftIO (hPutStrLn stderr (show e)))
+-}
+
+dumpImports :: MonadClean m => FilePath -> S.ModuleName -> m ()
+dumpImports path name =
     do scratch <- Language.Haskell.Modules.Params.scratchDir
-       sourcePath' <- findSourcePath sourcePath
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"
-       args' <- hsFlags >>= return . (++ ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, sourcePath'])
+       args <- hsFlags
+       dirs <- sourceDirs
+       let args' = args ++ ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs, path]
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
-         ExitSuccess -> return () -- liftIO $ putStrLn $ showCommandForUser cmd args' ++ " -> Ok"
-         ExitFailure _ -> error (sourcePath ++ ": compile failed\n " ++ showCommandForUser cmd args' ++ " ->\n" ++ err)
+         ExitSuccess -> quietly (qPutStrLn (showCommandForUser cmd args' ++ " -> Ok")) >> return ()
+         ExitFailure _ -> error ("dumpImports: compile failed\n " ++ showCommandForUser cmd args' ++ " ->\n" ++ err)
 
 -- | Parse the import list generated by GHC, parse the original source
 -- file, and if all goes well insert the new imports into the old
 -- source file.
-checkImports :: MonadClean m => FilePath -> m (Maybe String)
-checkImports sourcePath =
-    do source <- liftIO $ parseFileWithComments defaultParseMode sourcePath
-       sourceText <- liftIO $ readFile sourcePath
-       case source of
-         ParseOk (m@(A.Module _ h _ _ _), comments) ->
-             do let name =
-                        case h of
-                          Just (A.ModuleHead _ (A.ModuleName _ x) _ _) -> x
-                          _ -> "Main"
-                    importsPath = name <.> ".imports"
-                markForDelete importsPath
-                result <- liftIO (parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath) `catch` (\ (e :: IOError) -> liftIO getCurrentDirectory >>= \ here -> liftIO . throw . userError $ here ++ ": " ++ show e)
-                case result of
-                  ParseOk newImports -> updateSource newImports sourcePath m comments sourceText
-                  _ -> error (importsPath ++ ": parse failed")
-         ParseOk ((A.XmlPage {}), _) -> error "checkImports: XmlPage"
-         ParseOk ((A.XmlHybrid {}), _) -> error "checkImports: XmlHybrid"
-         ParseFailed _loc msg -> error (sourcePath ++ " - parse failed: " ++ msg)
+checkImports :: MonadClean m => FilePath -> S.ModuleName -> Module -> m ModuleResult
+checkImports path name@(S.ModuleName name') m@(A.Module _ h _ _ _) =
+    do let importsPath = name' <.> ".imports"
+       markForDelete importsPath
+       result <- liftIO (parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath)
+                   `catch` (\ (e :: IOError) -> liftIO getCurrentDirectory >>= \ here -> liftIO . throw . userError $ here ++ ": " ++ show e)
+       case result of
+         ParseOk newImports -> updateSource m newImports name
+         _ -> error ("checkImports: parse of " ++ importsPath ++ " failed - " ++ show result)
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: MonadClean m => Module -> FilePath -> Module -> [Comment] -> String -> m (Maybe String)
-updateSource (A.Module _ _ _ newImports _) sourcePath (m@(A.Module _ _ _ oldImports _)) _ sourceText =
-    removeEmptyImports >>= \ remove ->
-    dryRun >>= \ dry ->
-    maybe (liftIO (putStrLn (sourcePath ++ ": no changes")) >> return Nothing)
-          (\ text ->
-               liftIO (putStrLn (sourcePath ++ ": replacing imports")) >>
-               liftIO (when (not dry) (replaceFile tildeBackup sourcePath text)) >>
-               return (Just text))
-          (replaceImports (fixNewImports remove oldImports newImports) m sourceText {-(importsSpan m comments sourceText)-})
-updateSource _ _ _ _ _ = error "updateSource"
+updateSource :: MonadClean m => Module -> Module -> S.ModuleName -> m ModuleResult
+updateSource (m@(A.Module _ _ _ oldImports _)) (A.Module _ _ _ newImports _) name =
+    do remove <- removeEmptyImports
+       dry <- dryRun
+       sourcePath <- modulePath name
+       sourceText <- liftIO $ readFile sourcePath
+       maybe (qPutStrLn ("cleanImports: no changes to " ++ sourcePath) >> return (Unchanged name))
+             (\ text ->
+                  qPutStrLn ("cleanImports: modifying " ++ sourcePath) >>
+                  liftIO (when (not dry) (replaceFile tildeBackup sourcePath text)) >>
+                  return (Modified name text))
+             (replaceImports (fixNewImports remove oldImports newImports) m sourceText)
+updateSource _ _ _ = error "updateSource"
 
 -- | Compare the old and new import sets and if they differ clip out
 -- the imports from the sourceText and insert the new ones.
@@ -192,10 +206,10 @@ test1 :: Test
 test1 =
     TestCase
       (do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-          let path = "Debian/Repo/Types/PackageIndex.hs"
-          _ <- withCurrentDirectory "testdata/copy" (runCleanT "dist/scratch" (cleanImports path))
-          -- _ <- runCleanT "dist/scratch" (putHsFlags ["-itestdata/copy"] >> cleanImports path)
-          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> path, "testdata/copy" </> path] ""
+          let name = S.ModuleName "Debian.Repo.Types.PackageIndex"
+          let base = modulePathBase name
+          _ <- withCurrentDirectory "testdata/copy" (runCleanT "dist/scratch" (cleanImports base))
+          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> base, "testdata/copy" </> base] ""
           assertEqual "cleanImports"
                          (ExitFailure 1,
                           ["@@ -22,13 +22,13 @@",
@@ -221,7 +235,8 @@ test2 :: Test
 test2 =
     TestCase
       (do _ <- system "rsync -aHxS --delete testdata/ testcopy"
-          let path = "Debian/Repo/PackageIndex.hs"
-          _ <- withCurrentDirectory "testdata/copy" (runCleanT "dist/scratch" (cleanImports path))
-          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> path, "testdata/copy" </> path] ""
+          let name = S.ModuleName "Debian.Repo.PackageIndex"
+              base = modulePathBase name
+          _ <- withCurrentDirectory "testdata/copy" (runCleanT "dist/scratch" (cleanImports base))
+          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> base, "testdata/copy" </> base] ""
           assertEqual "cleanImports" (ExitSuccess, "", "") (code, diff, err))

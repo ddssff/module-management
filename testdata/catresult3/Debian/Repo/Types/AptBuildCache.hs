@@ -5,7 +5,7 @@ module Debian.Repo.Types.AptBuildCache
     ) where
 
 import Debian.Repo.Types.AptCache (AptCache)
-import Debian.Repo.Types.Common (SliceList)
+import Debian.Repo.Types.Repo (SliceList)
 
 -- | An apt cache with extra sources.list lines for a local upload repository.
 class AptCache t => AptBuildCache t where

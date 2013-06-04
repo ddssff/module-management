@@ -7,8 +7,8 @@ module Debian.Repo.Types.AptImage
 import Debian.Arch (Arch(..))
 import Debian.Release (ReleaseName(..))
 import Debian.Repo.Types.AptCache (AptCache(..))
-import Debian.Repo.Types.Common (EnvRoot, SliceList)
 import Debian.Repo.Types.PackageIndex (BinaryPackage, SourcePackage)
+import Debian.Repo.Types.Repo (EnvRoot, SliceList)
 
 {-
 instance Show FileStatus where

@@ -7,7 +7,6 @@ module Language.Haskell.Modules.Common
     , readFileMaybe
     , replaceFile
     , replaceFileIfDifferent
-    , removeFile'
     , removeFileIfPresent
     , groupBy'
     , withCurrentDirectory
@@ -38,6 +37,7 @@ module Language.Haskell.Modules.Common
     , HasSymbols(symbols)
     , voidName
     , mapNames
+    , ModuleResult(..)
     ) where
 
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ImportSpec(..), ImportSpecList, InstHead(..), Match(..), Module, ModuleHead(..), ModuleName(..), ModulePragma(..), Name(..), QName(..), WarningText(..))
@@ -96,9 +96,6 @@ replaceFile backup path text =
       remove = maybe (return ()) removeFile (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       rename = maybe (return ()) (renameFile path) (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       write = writeFile path text
-
-removeFile' :: FilePath -> IO ()
-removeFile' path = putStrLn ("removeFile " ++ show path) >> removeFile path
 
 withCurrentDirectory :: FilePath -> IO a -> IO a
 withCurrentDirectory path action =
@@ -394,3 +391,9 @@ mapNames :: Default a => [A.Name ()] -> [A.Name a]
 mapNames [] = []
 mapNames (A.Ident () x : more) = A.Ident def x : mapNames more
 mapNames (A.Symbol () x : more) = A.Symbol def x : mapNames more
+
+data ModuleResult
+    = Unchanged S.ModuleName
+    | Removed S.ModuleName
+    | Modified S.ModuleName String
+    deriving (Show, Eq, Ord)

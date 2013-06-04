@@ -7,60 +7,73 @@ module Language.Haskell.Modules.Cat
     , test3
     ) where
 
-import Control.Exception (throw)
-import Control.Monad as List (mapM_, mapM)
+import Control.Exception (throw, catch)
+import Control.Monad as List (mapM, foldM)
 import Control.Monad.Trans (liftIO)
 import Data.Default (def)
 import Data.Generics (Data, everywhere, mkT, Typeable)
 import Data.List as List (filter, intercalate, isPrefixOf, map)
 import Data.Map as Map (Map, fromList, member, toAscList, lookup)
-import Data.Maybe (fromMaybe, catMaybes)
+import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid, (<>))
-import Data.Set as Set (Set, fromList, toList, union)
+import Data.Set as Set (Set, fromList, union, empty, insert, difference)
+import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
-import Language.Haskell.Modules.Common (checkParse, Module, removeFileIfPresent, replaceFile, tildeBackup, withCurrentDirectory)
+import Language.Haskell.Modules.Common (checkParse, Module, removeFileIfPresent, replaceFile, tildeBackup, withCurrentDirectory, ModuleResult(..), readFileMaybe)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (MonadClean, runCleanT, modulePath, putSourceDirs)
+import Language.Haskell.Modules.Params (MonadClean, runCleanT, modulePath, putSourceDirs, noisily, quietly, qPutStrLn)
 import System.Cmd (system)
-import System.Exit (ExitCode(ExitFailure))
-import System.Process (readProcessWithExitCode)
+import System.Exit (ExitCode(ExitSuccess, ExitFailure))
+import System.FilePath ((</>))
+import System.IO.Error (isDoesNotExistError)
+import System.Process (readProcess, readProcessWithExitCode)
 import Test.HUnit (assertEqual, Test(TestCase))
-
-data Result
-    = Unchanged
-    | Removed S.ModuleName
-    | Modified S.ModuleName String
 
 -- | Merge the declarations from several modules into a single new
 -- one.  Note that a circular imports can be created by this
 -- operation, in which case you will have to add more modules to the
 -- merge.
-catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m ()
+catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
 catModules univ inputs output =
-    catModulesIO univ inputs output >>= List.mapM modulePath >>= List.mapM_ cleanImports
+    catModulesIO univ inputs output >>= Set.mapM clean
+    where
+      clean x@(Modified name _) = modulePath name >>= cleanImports
+      clean x@(Unchanged _name) = return x
+      clean x@(Removed _name) = return x
 
-catModulesIO :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m [S.ModuleName]
+catModulesIO :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
 catModulesIO _ [] _ = throw $ userError "catModules: invalid argument"
 catModulesIO univ inputs output =
     do let univ' = union univ (Set.fromList (output : inputs))
        info <- loadModules inputs
-       mapM (doModule info inputs output) (Set.toList univ') >>= mapM doResult >>= return . catMaybes
+       Set.mapM (doModule info inputs output) univ' >>= Set.mapM doResult
        {- >>= return . Set.map (\ x -> if elem x inputs then output else x) . Set.fromList -}
        -- List.mapM_ (removeFileIfPresent . modulePath) inputs
        -- return changed
     where
-      doResult :: MonadClean m => Result -> m (Maybe S.ModuleName)
-      doResult Unchanged = return Nothing
-      doResult (Removed name) = modulePath name >>= liftIO . removeFileIfPresent >> return (Just name)
-      doResult (Modified name text) = modulePath name >>= \ path -> liftIO (replaceFile tildeBackup path text) >> return (Just name)
+      doResult :: MonadClean m => ModuleResult -> m ModuleResult
+      doResult x@(Unchanged _name) = quietly (qPutStrLn ("unchanged: " ++ show _name)) >> return x
+      doResult x@(Removed name) = removeModuleIfPresent name >> return x
+      doResult x@(Modified name text) = replaceModuleIfDifferent name text >> return x
+
+replaceModuleIfDifferent :: MonadClean m => S.ModuleName -> String -> m Bool
+replaceModuleIfDifferent name newText =
+    do path <- modulePath name
+       oldText <- liftIO $ readFileMaybe path
+       if oldText == Just newText then return False else qPutStrLn ("catModules: modifying " ++ show path) >> liftIO (replaceFile tildeBackup path newText) >> return True
+
+removeModuleIfPresent :: MonadClean m => S.ModuleName -> m ()
+removeModuleIfPresent name =
+    do path <- modulePath name
+       liftIO (removeFileIfPresent path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e))
 
 -- Update the module 'name' to reflect the result of the cat operation.
-doModule :: MonadClean m => Map S.ModuleName (Module, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m Result
+doModule :: MonadClean m => Map S.ModuleName (Module, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
 doModule info input@(first : _) output name =
     do -- The new module will be based on the existing module, unless
        -- name equals output and output does not exist
@@ -73,7 +86,7 @@ doModule info input@(first : _) output name =
                      then Removed name
                      else if text /= text'
                           then Modified name text'
-                          else Unchanged
+                          else Unchanged name
        -- if base /= name || text' /= text then (replaceFile (const Nothing) (modulePath name) text' >> return True) else return False
        -- replaceFileIfDifferent (modulePath name) text'
 
@@ -218,7 +231,7 @@ moduleDecls old new name =
                     r <>
                     -- Omit the first pre of each module, it probably contains ") where"
                     (if r /= "" then pre else "") <>
-                    (if d'' /= d' then prettyPrintWithMode defaultMode d'' <> "\n\n" else s))
+                    (if d'' /= d' then "-- Declaration reformatted because module qualifiers changed\n" <> prettyPrintWithMode defaultMode d'' <> "\n\n" else s))
                (\ s r -> r <> s)
                m text "" <> "\n"
 
@@ -237,51 +250,49 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         runCleanT "dist/scratch" $
+         _ <- runCleanT "dist/scratch" $
            do putSourceDirs ["testdata/copy"]
               catModules
                  (Set.fromList testModules)
                  [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
                  (S.ModuleName "Debian.Repo.Cache")
-{-
-         withCurrentDirectory "testdata/copy"
-           (runCleanT "dist/scratch"
-            (catModules
-             (Set.fromList testModules)
-             [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
-             (S.ModuleName "Debian.Repo.Cache")))
--}
-         assertEqual "catModules" () ()
+         mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
+         (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/catresult1", "testdata/copy"] ""
+         let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
+         assertEqual "catModules1" (ExitSuccess, "", "") (code, out', err)
 
 test2 :: Test
 test2 =
-    TestCase
-      (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
-       withCurrentDirectory "testdata/copy"
-         (runCleanT "dist/scratch"
-          (catModules
-           (Set.fromList testModules)
-           [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
-           (S.ModuleName "Debian.Repo.Types.Common")) >>
-          mapM_ removeFileIfPresent junk) >>
-       readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "testdata/catresult", "testdata/copy"] "" >>= \ (code, out, err) ->
-       let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out)) in
-       assertEqual "catModules" (ExitFailure 2, "", "") (code, out', err))
+    TestCase $
+      do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
+         result <- runCleanT "dist/scratch" . noisily $
+           do putSourceDirs ["testdata/copy"]
+              catModules
+                (Set.fromList testModules)
+                [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
+                (S.ModuleName "Debian.Repo.Types.Common")
+         mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
+         (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "testdata/catresult2", "testdata/copy"] ""
+         let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
+         assertEqual "catModules2" (ExitSuccess, "", "") (code, out', err)
+    where
+      f :: MonadClean m => Set ModuleResult -> S.ModuleName -> m (Set ModuleResult)
+      f s m = modulePath m >>= liftIO . readFile >>= return . (flip Set.insert) s . Modified m
 
 test3 :: Test
 test3 =
-    TestCase
-      (system "rsync -aHxS --delete testdata/original/ testdata/copy" >>
-       withCurrentDirectory "testdata/copy"
-         (runCleanT "dist/scratch"
-          (catModules
-           (Set.fromList testModules)
-           [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
-           (S.ModuleName "Debian.Repo.Types.Repo")) >>
-          mapM_ removeFileIfPresent junk) >>
-       readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "testdata/catresult", "testdata/copy"] "" >>= \ (code, out, err) ->
-       let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out)) in
-       assertEqual "catModules" (ExitFailure 2, "", "") (code, out', err))
+    TestCase $
+      do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
+         result <- withCurrentDirectory "testdata/copy"
+           (runCleanT "dist/scratch"
+                (catModules
+                 (Set.fromList testModules)
+                 [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
+                 (S.ModuleName "Debian.Repo.Types.Repo")))
+         mapM_ removeFileIfPresent junk
+         (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "testdata/catresult3", "testdata/copy"] ""
+         let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
+         assertEqual "catModules3" (ExitSuccess, "", "") (code, out', err)
 
 junk :: [String]
 junk =
@@ -304,7 +315,9 @@ junk =
     , "Debian/Repo/Types/AptCache.hs~"
     , "Debian/Repo/Types/Repository.hs~"
     , "Debian/Repo/Types/Common.hs~"
+    , "Debian/Repo/AptCache.hs~"
     , "Debian/Repo/AptImage.hs~"
+    , "Debian/Repo/Cache.hs~"
     , "Debian/Repo/Slice.hs~"
     , "Debian/Repo/AptCache.hs~"
     , "Debian/Repo/Types.hs~"
@@ -344,4 +357,4 @@ loadModule name =
        return (m, text)
 
 loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (Module, String))
-loadModules names = mapM loadModule names >>= return . Map.fromList . zip names
+loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names

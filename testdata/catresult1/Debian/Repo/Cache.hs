@@ -4,55 +4,36 @@
 -- |An AptCache represents a local cache of a remote repository.  The
 -- cached information is usually downloaded by running "apt-get
 -- update", and appears in @\/var\/lib\/apt\/lists@.
-module Debian.Repo.AptCache {-# WARNING "this is a warning" #-}
-    ( SourcesChangedAction(..)
-    , aptSourcePackagesSorted
-    , sliceIndexes
-    , cacheDistDir
-    , distDir
-    , aptDir
-    , cacheRootDir
-    , cacheSourcesPath
-    , sourcesPath
-    , sourceDir
-    , aptCacheFiles
-    , aptCacheFilesOfSlice
-    , archFiles
-    , buildArchOfEnv
-    , buildArchOfRoot
-    , updateCacheSources
-    , sourcePackages
-    , binaryPackages
-    , runAptGet
-    , aptOpts
-    , getSourcePackagesBase
-    , getBinaryPackagesBase
-    , getSourcePackagesBuild
-    , getBinaryPackagesBuild
+module Debian.Repo.Cache {-# WARNING "this is a warning" #-}
+    ( SourcesChangedAction(..), aptSourcePackagesSorted, sliceIndexes, cacheDistDir, distDir, aptDir, cacheRootDir, cacheSourcesPath, sourcesPath, sourceDir, aptCacheFiles, aptCacheFilesOfSlice, archFiles, buildArchOfEnv, buildArchOfRoot, updateCacheSources, sourcePackages, binaryPackages, runAptGet, aptOpts, getSourcePackagesBase, getBinaryPackagesBase, getSourcePackagesBuild, getBinaryPackagesBuild, prepareAptEnv, updateAptEnv
     ) where
 
 import Control.DeepSeq (force, NFData)
 import "mtl" Control.Monad.Trans (MonadIO(..))
 import qualified Data.ByteString.Lazy as L (empty)
 import Data.Data (Data)
+import Data.Function (on)
 import Data.List (intercalate, sortBy)
 import Data.Typeable (Typeable)
 import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..), prettyArch)
 import Debian.Relation (BinPkgName, PkgName, SrcPkgName(..))
-import Debian.Release (ReleaseName(relName), releaseName', sectionName')
-import Debian.Repo.Monads.Apt (MonadApt)
+import Debian.Release (ReleaseName(..), ReleaseName(relName), releaseName', sectionName')
+import Debian.Repo.Monads.Apt (insertAptImage, lookupAptImage, MonadApt, MonadApt(getApt, putApt))
 import Debian.Repo.Package (binaryPackagesOfCachedIndex, sourcePackagesOfCachedIndex)
 import Debian.Repo.Slice (binarySlices, sourceSlices, verifySourcesList)
 import Debian.Repo.SourcesList (parseSourcesList)
 import Debian.Repo.Types.AptBuildCache (AptBuildCache(aptSliceList))
 import Debian.Repo.Types.AptCache (AptCache(..), AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir))
-import Debian.Repo.Types.Common (EnvRoot(..), EnvRoot(EnvRoot), Repo(repoReleaseInfo), repoKey, RepoKey, Slice(..), SliceList(slices))
+import Debian.Repo.Types.AptImage (AptImage(..))
+import Debian.Repo.Types.EnvPath (EnvRoot(..), EnvRoot(EnvRoot))
 import Debian.Repo.Types.PackageIndex (BinaryPackage(packageID), binaryPackageName, PackageID(packageVersion), PackageIndex(..), SourcePackage(sourcePackageID), sourcePackageName)
 import Debian.Repo.Types.Release (Release(releaseName))
+import Debian.Repo.Types.Repo (Repo(repoReleaseInfo), repoKey, RepoKey)
 import Debian.Repo.Types.Repository (MonadRepoCache, prepareRepository)
-import Debian.Sources (DebSource(..), SourceType(..))
+import Debian.Repo.Types.Slice (NamedSliceList(sliceList, sliceListName), Slice(..), SliceList(slices))
+import Debian.Sources (DebSource(..), SliceName(sliceName), SourceType(..))
 import Debian.Version (DebianVersion, prettyDebianVersion)
-import Extra.Files (replaceFile)
+import Extra.Files (replaceFile, writeFileIfMissing)
 import Network.URI (escapeURIString, URI(uriAuthority, uriPath, uriScheme), URIAuth(uriPort, uriRegName, uriUserInfo))
 import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Exit (ExitCode(ExitSuccess))
@@ -60,7 +41,7 @@ import System.FilePath ((</>))
 import System.IO (hGetLine, stdin)
 import System.Posix.Env (setEnv)
 import System.Process (readProcessWithExitCode, shell)
-import System.Process.Progress (ePutStr, ePutStrLn, qPutStrLn, runProcessF)
+import System.Process.Progress (ePutStr, ePutStrLn, qPutStrLn, quieter, runProcessF)
 import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
@@ -271,60 +252,90 @@ data SourcesChangedAction =
 -- |Change the sources.list of an AptCache object, subject to the
 -- value of sourcesChangedAction.
 updateCacheSources :: (MonadApt m, AptCache c) => SourcesChangedAction -> c -> m c
-updateCacheSources sourcesChangedAction distro =
-    -- (\ x -> qPutStrLn "Updating cache sources" >> quieter 2 x) $
-    qPutStrLn "Updating cache sources" >>
-    do
-      let baseSources = aptBaseSliceList distro
-      --let distro@(ReleaseCache _ dist _) = releaseFromConfig' top text
-      let dir = Debian.Repo.AptCache.distDir distro
-      distExists <- liftIO $ doesFileExist (Debian.Repo.AptCache.sourcesPath distro)
-      case distExists of
-        True ->
-            do
-              fileSources <- liftIO (readFile (Debian.Repo.AptCache.sourcesPath distro)) >>= verifySourcesList Nothing . parseSourcesList
-              case (fileSources == baseSources, sourcesChangedAction) of
-                (True, _) -> return ()
-                (False, SourcesChangedError) ->
-                    do
-                      ePutStrLn ("The sources.list in the existing '" ++ relName (aptReleaseName distro) ++
-                                 "' build environment doesn't match the parameters passed to the autobuilder" ++
-                                 ":\n\n" ++ Debian.Repo.AptCache.sourcesPath distro ++ ":\n\n" ++
-                                 show (pretty fileSources) ++
-                                 "\nRun-time parameters:\n\n" ++
-                                 show (pretty baseSources) ++ "\n" ++
-                                 "It is likely that the build environment in\n" ++
-                                 dir ++ " is invalid and should be rebuilt.")
-                      ePutStr $ "Remove it and continue (or exit)?  [y/n]: "
-                      result <- liftIO $ hGetLine stdin
-                      case result of
-                        ('y' : _) ->
-                            do
-                              liftIO $ removeRecursiveSafely dir
-                              liftIO $ createDirectoryIfMissing True dir
-                              liftIO $ replaceFile (Debian.Repo.AptCache.sourcesPath distro) (show (pretty baseSources))
-                        _ ->
-                            error ("Please remove " ++ dir ++ " and restart.")
-                (False, RemoveRelease) ->
-                    do
-                      ePutStrLn $ "Removing suspect environment: " ++ dir
-                      liftIO $ removeRecursiveSafely dir
-                      liftIO $ createDirectoryIfMissing True dir
-                      liftIO $ replaceFile (Debian.Repo.AptCache.sourcesPath distro) (show (pretty baseSources))
-                (False, UpdateSources) ->
-                    do
-                      -- The sources.list has changed, but it should be
-                      -- safe to update it.
-                      ePutStrLn $ "Updating environment with new sources.list: " ++ dir
-                      liftIO $ removeFile (Debian.Repo.AptCache.sourcesPath distro)
-                      liftIO $ replaceFile (Debian.Repo.AptCache.sourcesPath distro) (show (pretty baseSources))
-        False ->
-            do
-              liftIO $ createDirectoryIfMissing True dir
-              liftIO $ replaceFile (Debian.Repo.AptCache.sourcesPath distro) (show (pretty baseSources))
-      return distro
+-- Declaration reformatted because module qualifiers changed
+updateCacheSources sourcesChangedAction distro
+  = qPutStrLn "Updating cache sources" >>
+      do let baseSources = aptBaseSliceList distro
+         let dir = Debian.Repo.Cache.distDir distro
+         distExists <- liftIO $
+                         doesFileExist (Debian.Repo.Cache.sourcesPath distro)
+         case distExists of
+             True -> do fileSources <- liftIO
+                                         (readFile (Debian.Repo.Cache.sourcesPath distro))
+                                         >>= verifySourcesList Nothing . parseSourcesList
+                        case (fileSources == baseSources, sourcesChangedAction) of
+                            (True, _) -> return ()
+                            (False, SourcesChangedError) -> do ePutStrLn
+                                                                 ("The sources.list in the existing '"
+                                                                    ++
+                                                                    relName (aptReleaseName distro)
+                                                                      ++
+                                                                      "' build environment doesn't match the parameters passed to the autobuilder"
+                                                                        ++
+                                                                        ":\n\n" ++
+                                                                          Debian.Repo.Cache.sourcesPath
+                                                                            distro
+                                                                            ++
+                                                                            ":\n\n" ++
+                                                                              show
+                                                                                (pretty fileSources)
+                                                                                ++
+                                                                                "\nRun-time parameters:\n\n"
+                                                                                  ++
+                                                                                  show
+                                                                                    (pretty
+                                                                                       baseSources)
+                                                                                    ++
+                                                                                    "\n" ++
+                                                                                      "It is likely that the build environment in\n"
+                                                                                        ++
+                                                                                        dir ++
+                                                                                          " is invalid and should be rebuilt.")
+                                                               ePutStr $
+                                                                 "Remove it and continue (or exit)?  [y/n]: "
+                                                               result <- liftIO $ hGetLine stdin
+                                                               case result of
+                                                                   ('y' : _) -> do liftIO $
+                                                                                     removeRecursiveSafely
+                                                                                       dir
+                                                                                   liftIO $
+                                                                                     createDirectoryIfMissing
+                                                                                       True
+                                                                                       dir
+                                                                                   liftIO $
+                                                                                     replaceFile
+                                                                                       (Debian.Repo.Cache.sourcesPath
+                                                                                          distro)
+                                                                                       (show
+                                                                                          (pretty
+                                                                                             baseSources))
+                                                                   _ -> error
+                                                                          ("Please remove " ++
+                                                                             dir ++ " and restart.")
+                            (False, RemoveRelease) -> do ePutStrLn $
+                                                           "Removing suspect environment: " ++ dir
+                                                         liftIO $ removeRecursiveSafely dir
+                                                         liftIO $ createDirectoryIfMissing True dir
+                                                         liftIO $
+                                                           replaceFile
+                                                             (Debian.Repo.Cache.sourcesPath distro)
+                                                             (show (pretty baseSources))
+                            (False, UpdateSources) -> do ePutStrLn $
+                                                           "Updating environment with new sources.list: "
+                                                             ++ dir
+                                                         liftIO $
+                                                           removeFile
+                                                             (Debian.Repo.Cache.sourcesPath distro)
+                                                         liftIO $
+                                                           replaceFile
+                                                             (Debian.Repo.Cache.sourcesPath distro)
+                                                             (show (pretty baseSources))
+             False -> do liftIO $ createDirectoryIfMissing True dir
+                         liftIO $
+                           replaceFile (Debian.Repo.Cache.sourcesPath distro)
+                             (show (pretty baseSources))
+         return distro
 
--- | Return a sorted list of available source packages, newest version first.
 sourcePackages :: AptCache a => a -> [SrcPkgName] -> [SourcePackage]
 sourcePackages os names =
     sortBy cmp . filterNames . aptSourcePackages $ os
@@ -388,3 +399,74 @@ aptOpts os =
      " -o=Dir::Etc::SourceList=" ++ root ++ "/etc/apt/sources.list" ++
      " -o=Dir::Etc::SourceParts=" ++ root ++ "/etc/apt/sources.list.d")
     where root = rootPath . rootDir $ os
+
+
+prepareAptEnv :: MonadApt m =>
+                 FilePath               -- Put environment in a subdirectory of this
+              -> SourcesChangedAction   -- What to do if environment already exists and sources.list is different
+              -> NamedSliceList         -- The sources.list
+              -> m AptImage             -- The resulting environment
+prepareAptEnv cacheDir sourcesChangedAction sources =
+    (\ x -> qPutStrLn ("Preparing apt-get environment for " ++ show (sliceName (sliceListName sources))) >> quieter 2 x) $
+    getApt >>= return . lookupAptImage (sliceListName sources) >>=
+    maybe (prepareAptEnv' cacheDir sourcesChangedAction sources) return
+
+-- |Create a skeletal enviroment sufficient to run apt-get.
+{-# NOINLINE prepareAptEnv' #-}
+prepareAptEnv' :: MonadApt m => FilePath -> SourcesChangedAction -> NamedSliceList -> m AptImage
+prepareAptEnv' cacheDir sourcesChangedAction sources =
+    do let root = rootPath (cacheRootDir cacheDir (ReleaseName (sliceName (sliceListName sources))))
+       --vPutStrLn 2 $ "prepareAptEnv " ++ sliceName (sliceListName sources)
+       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
+       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/apt/lists/partial")
+       liftIO $ createDirectoryIfMissing True (root ++ "/var/cache/apt/archives/partial")
+       liftIO $ createDirectoryIfMissing True (root ++ "/var/lib/dpkg")
+       liftIO $ createDirectoryIfMissing True (root ++ "/etc/apt")
+       liftIO $ writeFileIfMissing True (root ++ "/var/lib/dpkg/status") ""
+       liftIO $ writeFileIfMissing True (root ++ "/var/lib/dpkg/diversions") ""
+       -- We need to create the local pool before updating so the
+       -- sources.list will be valid.
+       let sourceListText = show (pretty (sliceList sources))
+       -- ePut ("writeFile " ++ (root ++ "/etc/apt/sources.list") ++ "\n" ++ sourceListText)
+       liftIO $ replaceFile (root ++ "/etc/apt/sources.list") sourceListText
+       arch <- liftIO $ buildArchOfRoot
+       let os = AptImage { aptGlobalCacheDir = cacheDir
+                         , aptImageRoot = EnvRoot root
+                         , aptImageArch = arch
+                         , aptImageReleaseName = ReleaseName . sliceName . sliceListName $ sources
+                         , aptImageSliceList = sliceList sources
+                         , aptImageSourcePackages = []
+                         , aptImageBinaryPackages = [] }
+       os' <- updateCacheSources sourcesChangedAction os >>= updateAptEnv
+       getApt >>= putApt . insertAptImage (sliceListName sources) os'
+       return os'
+
+-- |Run apt-get update and then retrieve all the packages referenced
+-- by the sources.list.  The source packages are sorted so that
+-- packages with the same name are together with the newest first.
+{-# NOINLINE updateAptEnv #-}
+updateAptEnv :: MonadApt m => AptImage -> m AptImage
+updateAptEnv os =
+    liftIO (runProcessF (shell cmd) L.empty) >>
+    getSourcePackagesBase os >>= return . sortBy cmp >>= \ sourcePackages ->
+    getBinaryPackagesBase os >>= \ binaryPackages ->
+    return $ os { aptImageSourcePackages = sourcePackages
+                , aptImageBinaryPackages = binaryPackages }
+    where
+      cmd = "apt-get" ++ aptOpts os ++ " update"
+      -- Flip args to get newest version first
+      cmp = flip (compare `on` (packageVersion . sourcePackageID))
+{-
+      cmp p1 p2 =
+          compare v2 v1         -- Flip args to get newest first
+          where
+            v1 = packageVersion . sourcePackageID $ p1
+            v2 = packageVersion . sourcePackageID $ p2
+
+    putStrLn ("> " ++ cmd) >> system cmd >>= \ code ->
+    case code of
+      ExitSuccess -> return ()
+      ExitFailure n -> error $ cmd ++ " -> ExitFailure " ++ show n
+-}
+
+

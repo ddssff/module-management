@@ -10,14 +10,21 @@ module Language.Haskell.Modules.Params
     , putSourceDirs
     , findSourcePath
     , modulePath
+    , modulePathBase
     , markForDelete
     , putScratchJunk
     , scratchDir
     -- , putScratchDir
     , removeEmptyImports
     , putRemoveEmptyImports
+    , quietly
+    , noisily
+    , qIO
+    , qPutStr
+    , qPutStrLn
     ) where
 
+import Control.Monad (when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
@@ -25,7 +32,7 @@ import Data.Set (empty, insert, Set, toList)
 import Data.String (fromString)
 import Filesystem (createTree, removeTree)
 import qualified Language.Haskell.Exts.Syntax as S
-import Language.Haskell.Modules.Common (removeFile')
+import Language.Haskell.Modules.Common (removeFileIfPresent)
 import System.Directory (doesFileExist, getCurrentDirectory)
 import System.FilePath ((</>), (<.>))
 import System.IO.Error (isDoesNotExistError)
@@ -36,7 +43,7 @@ data Params
       -- ^ Location of the scratch directory for ghc output.  Cabal
       -- uses dist/scratch by default.
       -- , dryRun_ :: Bool -- unimplemented
-      -- , verbosity_ :: Int -- unimplemented
+      , verbosity_ :: Int
       , hsFlags_ :: [String]
       -- ^ Extra flags to pass to GHC.
       , sourceDirs_ :: [FilePath]
@@ -86,6 +93,7 @@ putSourceDirs xs = modifyParams (\ p -> p {sourceDirs_ = xs})
 sourceDirs :: MonadClean m => m [FilePath]
 sourceDirs = getParams >>= return . sourceDirs_
 
+-- | Search the path directory list for a source file that already exists.
 findSourcePath :: MonadClean m => FilePath -> m FilePath
 findSourcePath path =
     sourceDirs >>= findFile
@@ -99,16 +107,23 @@ findSourcePath path =
              dirs <- sourceDirs
              liftIO . throw . userError $ "findSourcePath failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ path
 
+-- | Search the path directory list, preferring an already existing file, but
+-- if there is none construct one using the first element of the directory list.
 modulePath :: MonadClean m => S.ModuleName -> m FilePath
-modulePath (S.ModuleName name) =
-    findSourcePath path `catch` (\ (_ :: IOError) -> makePath)
+modulePath name =
+    findSourcePath (modulePathBase name) `catch` (\ (_ :: IOError) -> makePath)
     where
       makePath =
           do dirs <- sourceDirs
              case dirs of
-               [] -> return path
-               (d : _) -> return $ d </> path
-      path = map f name <.> "hs"
+               [] -> return (modulePathBase name)
+               (d : _) -> return $ d </> modulePathBase name
+
+-- | Construct the base of a module path.
+modulePathBase :: S.ModuleName -> FilePath
+modulePathBase (S.ModuleName name) =
+    map f name <.> "hs"
+    where
       f '.' = '/'
       f c = c
 
@@ -124,12 +139,12 @@ runCleanT scratch action =
        liftIO $ createTree (fromString scratch)
        (result, params) <- runStateT action (Params {scratchDir_ = scratch,
                                                      -- dryRun_ = False,
-                                                     -- verbosity_ = 0,
+                                                     verbosity_ = 0,
                                                      hsFlags_ = [],
                                                      sourceDirs_ = ["."],
                                                      junk_ = empty,
                                                      removeEmpty_ = True})
-       mapM_ (liftIO . removeFile') (toList (junk_ params))
+       mapM_ (liftIO . removeFileIfPresent) (toList (junk_ params))
        return result
 
 scratchDir :: MonadClean m => m FilePath
@@ -143,3 +158,28 @@ removeEmptyImports = getParams >>= return . removeEmpty_
 
 putRemoveEmptyImports :: MonadClean m => Bool -> m ()
 putRemoveEmptyImports x = modifyParams (\ p -> p {removeEmpty_ = x})
+
+quietly :: MonadClean m => m a -> m a
+quietly action =
+    do modifyParams (\ p -> p {verbosity_ = verbosity_ p - 1})
+       result <- action
+       modifyParams (\ p -> p {verbosity_ = verbosity_ p + 1})
+       return result
+
+noisily :: MonadClean m => m a -> m a
+noisily action =
+    do modifyParams (\ p -> p {verbosity_ = verbosity_ p + 1})
+       result <- action
+       modifyParams (\ p -> p {verbosity_ = verbosity_ p - 1})
+       return result
+
+qIO :: MonadClean m => m () -> m ()
+qIO action =
+    do v <- getParams >>= return . verbosity_
+       when (v > 0) action
+
+qPutStrLn :: MonadClean m => String -> m ()
+qPutStrLn = qIO . liftIO . putStrLn
+
+qPutStr :: MonadClean m => String -> m ()
+qPutStr = qIO . liftIO . putStr
