@@ -202,7 +202,7 @@ nameString (A.Ident _ s) = s
 nameString (A.Symbol _ s) = s
 
 tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test2])
+tests = TestLabel "Clean" (TestList [test1, test2, test3])
 
 test1 :: Test
 test1 =
