@@ -28,7 +28,7 @@ import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Modules.Common (HasSymbols(symbols), ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, replaceFile, tildeBackup, withCurrentDirectory, ModuleResult(..))
 import Language.Haskell.Modules.Fold (foldModule)
-import Language.Haskell.Modules.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, findSourcePath, sourceDirs, modulePath, modulePathBase, quietly, qPutStrLn)
+import Language.Haskell.Modules.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, findSourcePath, sourceDirs, modulePath, modulePathBase, quietly, qPutStrLn, putSourceDirs, noisily)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
 import System.Exit (ExitCode(..))
@@ -106,31 +106,31 @@ checkImports path name@(S.ModuleName name') m@(A.Module _ h _ _ _) =
        result <- liftIO (parseFileWithMode (defaultParseMode {extensions = [PackageImports] ++ extensions defaultParseMode}) importsPath)
                    `catch` (\ (e :: IOError) -> liftIO getCurrentDirectory >>= \ here -> liftIO . throw . userError $ here ++ ": " ++ show e)
        case result of
-         ParseOk newImports -> updateSource m newImports name
+         ParseOk newImports -> updateSource path m newImports name
          _ -> error ("checkImports: parse of " ++ importsPath ++ " failed - " ++ show result)
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: MonadClean m => Module -> Module -> S.ModuleName -> m ModuleResult
-updateSource (m@(A.Module _ _ _ oldImports _)) (A.Module _ _ _ newImports _) name =
+updateSource :: MonadClean m => FilePath -> Module -> Module -> S.ModuleName -> m ModuleResult
+updateSource path (m@(A.Module _ _ _ oldImports _)) (A.Module _ _ _ newImports _) name =
     do remove <- removeEmptyImports
        dry <- dryRun
-       sourcePath <- modulePath name
-       sourceText <- liftIO $ readFile sourcePath
-       maybe (qPutStrLn ("cleanImports: no changes to " ++ sourcePath) >> return (Unchanged name))
-             (\ text ->
-                  qPutStrLn ("cleanImports: modifying " ++ sourcePath) >>
-                  liftIO (when (not dry) (replaceFile tildeBackup sourcePath text)) >>
-                  return (Modified name text))
-             (replaceImports (fixNewImports remove oldImports newImports) m sourceText)
-updateSource _ _ _ = error "updateSource"
+       -- sourcePath <- modulePath name
+       text <- liftIO $ readFile path
+       maybe (qPutStrLn ("cleanImports: no changes to " ++ path) >> return (Unchanged name))
+             (\ text' ->
+                  qPutStrLn ("cleanImports: modifying " ++ path) >>
+                  liftIO (when (not dry) (replaceFile tildeBackup path text')) >>
+                  return (Modified name text'))
+             (replaceImports (fixNewImports remove oldImports newImports) m text)
+updateSource _ _ _ _ = error "updateSource"
 
 -- | Compare the old and new import sets and if they differ clip out
 -- the imports from the sourceText and insert the new ones.
 replaceImports :: [ImportDecl] -> Module -> String -> Maybe String
 replaceImports newImports m sourceText =
     let newPretty = intercalate "\n" (map (prettyPrintWithMode (defaultMode {layout = PPInLine})) newImports)
-        (before, before' : oldPretty, after) =
+        (before, oldPretty', after) =
             foldModule (\ _ pre s (l, i, r) -> (l <> pre <> s, i, r))
                        (\ _ pre s (l, i, r) -> (l <> pre <> s, i, r))
                        (\ _ pre s (l, i, r) -> (l <> pre <> s, i, r))
@@ -139,7 +139,9 @@ replaceImports newImports m sourceText =
                        (\ _ pre s (l, i, r) -> (l, i, r <> pre <> s))
                        (\ s (l, i, r) -> (l, i, r <> s))
                        m sourceText ("", [], "") in
-    if newPretty /= concat oldPretty then Just (before <> before' <> newPretty <> after) else Nothing
+    case oldPretty' of
+      (before' : oldPretty) -> if newPretty /= concat oldPretty then Just (before <> before' <> newPretty <> after) else Nothing
+      [] -> Nothing
 
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: Bool -> [ImportDecl] -> [ImportDecl] -> [ImportDecl]
@@ -240,3 +242,10 @@ test2 =
           _ <- withCurrentDirectory "testdata/copy" (runCleanT "dist/scratch" (cleanImports base))
           (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> base, "testdata/copy" </> base] ""
           assertEqual "cleanImports" (ExitSuccess, "", "") (code, diff, err))
+
+-- | Can we handle a Main module in a file named something other than Main.hs?
+test3 :: Test
+test3 =
+    TestCase
+      (runCleanT "scratch" (noisily $ noisily $ putSourceDirs ["testdata"] >> cleanImports "testdata/NotMain.hs") >>
+       assertEqual "module name" () ())
