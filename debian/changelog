@@ -1,3 +1,9 @@
+haskell-import-management (0.6.2) unstable; urgency=low
+
+  * Preserve "hiding" imports in cleanImports.
+
+ -- David Fox <dsf@seereason.com>  Wed, 05 Jun 2013 13:03:15 -0700
+
 haskell-import-management (0.6.1) unstable; urgency=low
 
   * Fix how cleanImports handles modules that are not where their module
