@@ -18,7 +18,7 @@ import Data.Monoid ((<>))
 import qualified Distribution.ModuleName as D (components, ModuleName)
 import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
-import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, parseFileWithMode, ParseResult(..))
+import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithMode, ParseResult(..))
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sModuleName, sModule)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpecList(ImportSpecList), Module(..), ModuleHead(ModuleHead), ModuleName(ModuleName), Name(..))
 import qualified Language.Haskell.Exts.Syntax as S
@@ -28,7 +28,7 @@ import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Modules.Common (HasSymbols(symbols), ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, replaceFile, tildeBackup, withCurrentDirectory, ModuleResult(..))
 import Language.Haskell.Modules.Fold (foldModule)
-import Language.Haskell.Modules.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, findSourcePath, sourceDirs, modulePath, modulePathBase, quietly, qPutStrLn, putSourceDirs, noisily)
+import Language.Haskell.Modules.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, findSourcePath, sourceDirs, modulePath, modulePathBase, quietly, qPutStrLn, putSourceDirs, noisily, parseFileWithComments)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
 import System.Exit (ExitCode(..))
@@ -61,7 +61,7 @@ cleanBuildImports lbi =
 -- | Clean up the imports of a source file.
 cleanImports :: MonadClean m => FilePath -> m ModuleResult
 cleanImports path =
-    do source <- liftIO $ parseFileWithComments defaultParseMode path
+    do source <- parseFileWithComments path
        case source of
          ParseOk (m@(A.Module _ h _ imports _), comments) ->
              do let name = case h of

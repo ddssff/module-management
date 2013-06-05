@@ -1,3 +1,10 @@
+haskell-import-management (0.7) unstable; urgency=low
+
+  * Add an extensions_ field to Params, and a modifyExtensions
+    to update the list of extensions used to parse each file.
+
+ -- David Fox <dsf@seereason.com>  Wed, 05 Jun 2013 16:11:29 -0700
+
 haskell-import-management (0.6.2) unstable; urgency=low
 
   * Preserve "hiding" imports in cleanImports.

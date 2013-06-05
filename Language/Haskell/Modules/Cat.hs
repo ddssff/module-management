@@ -18,7 +18,6 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid, (<>))
 import Data.Set as Set (Set, fromList, union, empty, insert, difference)
 import Data.Set.Extra as Set (mapM)
-import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
@@ -26,7 +25,7 @@ import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Modules.Common (checkParse, Module, removeFileIfPresent, replaceFile, tildeBackup, withCurrentDirectory, ModuleResult(..), readFileMaybe)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (MonadClean, runCleanT, modulePath, putSourceDirs, noisily, quietly, qPutStrLn)
+import Language.Haskell.Modules.Params (MonadClean, runCleanT, modulePath, putSourceDirs, noisily, quietly, qPutStrLn, parseFileWithComments)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((</>))
@@ -353,7 +352,7 @@ loadModule :: MonadClean m => S.ModuleName -> m (Module, String)
 loadModule name =
     do path <- modulePath name
        text <- liftIO $ readFile path
-       (m, _) <- liftIO (parseFileWithComments defaultParseMode path) >>= return . checkParse name
+       (m, _) <- parseFileWithComments path >>= return . checkParse name
        return (m, text)
 
 loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (Module, String))
