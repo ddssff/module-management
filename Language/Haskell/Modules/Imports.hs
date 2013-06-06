@@ -20,7 +20,7 @@ import qualified Distribution.ModuleName as D (components, ModuleName)
 import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithMode, ParseResult(..))
-import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sModuleName, sModule, sDecl, sName)
+import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sModuleName, sModule, sDecl, sName, sImportSpec)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpecList(ImportSpecList), ImportSpec(..), Module(..), ModuleHead(ModuleHead), ModuleName(ModuleName), QName(..), Name(..), Decl(DerivDecl), InstHead(..), Type(..))
 import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Exts.Comments (Comment)
@@ -84,11 +84,11 @@ standaloneDerivingImports m@(A.Module _ h _ imports decls) =
       filterTypes :: ImportDecl -> Maybe ImportDecl
       filterTypes imp =
           case A.importSpecs imp of
-            Nothing -> Nothing
             Just (A.ImportSpecList sp False xs) ->
                 case filter testSpec xs of
                   [] -> Nothing
                   ys -> Just (imp {A.importSpecs = Just (A.ImportSpecList sp False ys)})
+            _ -> Nothing
       -- Is this spec one of the standalone deriving types?
       testSpec :: ImportSpec -> Bool
       testSpec (A.IVar _ x) = elem (moduleName, sName x) types
@@ -257,7 +257,7 @@ unModuleName (A.ModuleName _ x) = x
 compareSpecs :: ImportSpec -> ImportSpec -> Ordering
 compareSpecs a b =
     case compare (map (map toLower . nameString) $ symbols a) (map (map toLower . nameString) $ symbols b) of
-      EQ -> compare a b
+      EQ -> compare (sImportSpec a) (sImportSpec b)
       x -> x
 
 equalSpecs :: ImportSpec -> ImportSpec -> Bool
