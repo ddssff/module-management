@@ -12,7 +12,7 @@ import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
 import Data.Default (def, Default)
 import Data.Function (on)
-import Data.List (find, groupBy, intercalate, nub, sortBy, (\\))
+import Data.List (find, groupBy, intercalate, nub, nubBy, sortBy, (\\))
 import Data.Map as Map (Map, empty, insertWith)
 import Data.Maybe (catMaybes, mapMaybe)
 import Data.Monoid ((<>))
@@ -217,7 +217,7 @@ fixNewImports remove oldImports imports =
       mergeSpecLists :: [ImportSpecList] -> Maybe ImportSpecList
       mergeSpecLists (A.ImportSpecList loc flag specs : xs) = Just (A.ImportSpecList loc flag (mergeSpecs (sortBy compareSpecs (nub (concat (specs : map (\ (A.ImportSpecList _ _ specs') -> specs') xs))))))
       mergeSpecLists [] = error "mergeSpecLists"
-      mergeSpecs xs = xs -- unimplemented, should merge Foo and Foo(..) into Foo(..), and the like
+      mergeSpecs xs = nubBy equalSpecs xs -- unimplemented, should merge Foo and Foo(..) into Foo(..), and the like
       filterDecls :: ImportDecl -> Bool
       filterDecls (A.ImportDecl _ m _ _ _ _ (Just (A.ImportSpecList _ _ []))) = not remove || maybe False (isEmptyImport . A.importSpecs) (find ((== (unModuleName m)) . unModuleName . A.importModule) oldImports)
       filterDecls _ = True
@@ -259,6 +259,9 @@ compareSpecs a b =
     case compare (map (map toLower . nameString) $ symbols a) (map (map toLower . nameString) $ symbols b) of
       EQ -> compare a b
       x -> x
+
+equalSpecs :: ImportSpec -> ImportSpec -> Bool
+equalSpecs a b = compareSpecs a b == EQ
 
 -- dropSuffix :: Eq a => [a] -> [a] -> [a]
 -- dropSuffix suf x = if isSuffixOf suf x then take (length x - length suf) x else x
