@@ -24,7 +24,9 @@ module Language.Haskell.Modules.Common
     , ImportSpecList
     , ImportSpec
     , Decl
+    , QName
     , Name
+    , Type
     , HasSrcSpan(..)
     , PutSrcSpan(..)
     , HasSrcLoc(..)
@@ -40,7 +42,7 @@ module Language.Haskell.Modules.Common
     , ModuleResult(..)
     ) where
 
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ImportSpec(..), ImportSpecList, InstHead(..), Match(..), Module, ModuleHead(..), ModuleName(..), ModulePragma(..), Name(..), QName(..), WarningText(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ImportSpec(..), ImportSpecList, InstHead(..), Match(..), Module, ModuleHead(..), ModuleName(..), ModulePragma(..), Name(..), QName(..), WarningText(..), Type(..))
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Control.Applicative ((<$>))
@@ -64,7 +66,9 @@ type ImportDecl = A.ImportDecl SrcSpanInfo
 type ImportSpecList = A.ImportSpecList SrcSpanInfo
 type ImportSpec = A.ImportSpec SrcSpanInfo
 type Decl = A.Decl SrcSpanInfo
+type QName = A.QName SrcSpanInfo
 type Name = A.Name SrcSpanInfo
+type Type = A.Type SrcSpanInfo
 
 class Display a where
     display :: a -> String

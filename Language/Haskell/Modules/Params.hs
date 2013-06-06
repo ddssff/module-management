@@ -5,6 +5,7 @@ module Language.Haskell.Modules.Params
     , dryRun
     -- , putDryRun
     , hsFlags
+    , Language.Haskell.Modules.Params.extensions
     , putHsFlags
     , sourceDirs
     , putSourceDirs
@@ -35,7 +36,7 @@ import Data.String (fromString)
 import Filesystem (createTree, removeTree)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension)
-import Language.Haskell.Exts.Parser (ParseMode(extensions), defaultParseMode, ParseResult)
+import Language.Haskell.Exts.Parser as Exts (ParseMode(extensions), defaultParseMode, ParseResult)
 import qualified Language.Haskell.Exts.Annotated as Exts (parseFileWithComments)
 import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Modules.Common (Module, removeFileIfPresent)
@@ -97,10 +98,13 @@ putHsFlags x = modifyParams (\ p -> p {hsFlags_ = x})
 modifyExtensions :: MonadClean m => ([Extension] -> [Extension]) -> m ()
 modifyExtensions f = modifyParams (\ p -> p {extensions_ = f (extensions_ p)})
 
+extensions :: MonadClean m => m [Extension]
+extensions = getParams >>= return . extensions_
+
 parseFileWithComments :: MonadClean m => FilePath -> m (ParseResult (Module, [Comment]))
 parseFileWithComments path =
     do exts <- getParams >>= return . extensions_
-       liftIO (Exts.parseFileWithComments (defaultParseMode {extensions = exts}) path)
+       liftIO (Exts.parseFileWithComments (defaultParseMode {Exts.extensions = exts}) path)
 
 putSourceDirs :: MonadClean m => [FilePath] -> m ()
 putSourceDirs xs = modifyParams (\ p -> p {sourceDirs_ = xs})
@@ -156,7 +160,7 @@ runCleanT scratch action =
                                                      -- dryRun_ = False,
                                                      verbosity_ = 0,
                                                      hsFlags_ = [],
-                                                     extensions_ = extensions defaultParseMode,
+                                                     extensions_ = Exts.extensions defaultParseMode,
                                                      sourceDirs_ = ["."],
                                                      junk_ = empty,
                                                      removeEmpty_ = True})
