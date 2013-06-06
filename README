@@ -2,6 +2,15 @@ Unsupported:
 
    CPP directives
 
+Bugs:
+
+   cleanImports will not notice if a constructor import is required to
+   implement a StandaloneDeriving delaration such as "deriving
+   instance Show T.Paragraph".
+
+   Fix: preserve imports of any type that appears in a standalone
+   instance derivation.
+
 To Do:
 
    Don't expand tabs in output files
