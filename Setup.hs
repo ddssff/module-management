@@ -9,8 +9,8 @@ import System.Exit (ExitCode(ExitSuccess))
 import System.Directory (setCurrentDirectory)
 import System.FilePath ((</>))
 
-main = defaultMainWithHooks simpleUserHooks {
-         postBuild = \ _ _ _ lbi -> do code <- system (buildDir lbi </> "tests/tests")
-                                       if code == ExitSuccess then putStrLn "Tests passed" else error "Tests failed"
-       -- , postConf = \ _ _ _ lbi -> runParamsT (cleanBuildImports lbi)
-       }
+main = defaultMainWithHooks simpleUserHooks
+       -- {
+       --   postBuild = \ _ _ _ lbi -> do code <- system (buildDir lbi </> "tests/tests")
+       --                                 if code == ExitSuccess then putStrLn "Tests passed" else error "Tests failed"
+       -- }
