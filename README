@@ -1,15 +1,19 @@
 Unsupported:
 
-   CPP directives
+   CPP directives.  It is difficult to see how this could be implemented.
 
 Bugs:
 
-   cleanImports will not notice if a constructor import is required to
-   implement a StandaloneDeriving delaration such as "deriving
-   instance Show T.Paragraph".
+   If you have a standalone derived instance of a type alias, it won't
+   notice that the constructors of the original type are required.  E.g.:
 
-   Fix: preserve imports of any type that appears in a standalone
-   instance derivation.
+     import Some.Module (Bar(..))
+     type Foo Bar
+     deriving instance Show Foo
+
+   With this input, cleanImports will remove the "(..)" from the Bar import
+   and the resulting file will not compile.  "deriving instance Show bar"
+   will work correctly.
 
 To Do:
 
