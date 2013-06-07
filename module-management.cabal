@@ -1,7 +1,7 @@
-Name:               import-management
+Name:               module-management
 Version:            0.7.1
 Synopsis:           Several functions for modifying source files and managing their imports
-Homepage:           https://src.seereason.com/import-management
+Homepage:           https://src.seereason.com/module-management
 License:            BSD3
 Author:             David Fox
 Maintainer:         David Fox <dsf@seereason.com>
@@ -49,7 +49,7 @@ Executable tests
     filepath,
     HUnit,
     haskell-src-exts,
-    import-management,
+    module-management,
     MonadCatchIO-mtl,
     mtl,
     process,
