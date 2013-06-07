@@ -40,12 +40,15 @@ Library
 
 Executable tests
   Build-Depends:
+    ansi-wl-pprint,
     base,
     bytestring,
     Cabal,
     containers,
     data-default,
+    debian,
     directory,
+    Extra,
     filepath,
     HUnit,
     haskell-src-exts,
@@ -53,7 +56,9 @@ Executable tests
     MonadCatchIO-mtl,
     mtl,
     process,
+    process-progress,
     pureMD5,
+    regex-compat,
     set-extra,
     syb,
     system-fileio
