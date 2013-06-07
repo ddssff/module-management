@@ -7,31 +7,28 @@ module Language.Haskell.Modules.Imports
     ) where
 
 import Control.Monad (when)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw, try)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
 import Data.Default (def, Default)
 import Data.Function (on)
-import Data.List (find, groupBy, intercalate, nub, nubBy, sortBy, (\\))
-import Data.Map as Map (Map, empty, insertWith)
+import Data.List (find, groupBy, intercalate, nub, nubBy, sortBy)
 import Data.Maybe (catMaybes, mapMaybe)
 import Data.Monoid ((<>))
-import qualified Distribution.ModuleName as D (components, ModuleName)
-import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
-import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
+-- import Distribution.PackageDescription (BuildInfo(hsSourceDirs), Executable, Library(exposedModules, libBuildInfo), PackageDescription(executables, library))
+-- import Distribution.Simple.LocalBuildInfo (LocalBuildInfo, localPkgDescr, scratchDir)
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithMode, ParseResult(..))
-import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sModuleName, sModule, sDecl, sName, sImportSpec)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl, importModule, importSpecs), ImportSpecList(ImportSpecList), ImportSpec(..), Module(..), ModuleHead(ModuleHead), ModuleName(ModuleName), QName(..), Name(..), Decl(DerivDecl), InstHead(..), Type(..))
+import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sModuleName, sName, sImportSpec)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(..), ImportSpecList(ImportSpecList), ImportSpec(..), Module(..), ModuleHead(ModuleHead), ModuleName(ModuleName), QName(..), Name(..), Decl(DerivDecl), InstHead(..), Type(..))
 import qualified Language.Haskell.Exts.Syntax as S
-import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(PackageImports, StandaloneDeriving, TypeSynonymInstances, FlexibleInstances))
 import Language.Haskell.Exts.Parser (ParseMode(extensions))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
-import Language.Haskell.Modules.Common (HasSymbols(symbols), ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, Decl, QName, Type, replaceFile, tildeBackup, withCurrentDirectory, ModuleResult(..), Name)
+import Language.Haskell.Modules.Common (HasSymbols(symbols), ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, Decl, Type, replaceFile, tildeBackup, withCurrentDirectory, ModuleResult(..))
 import Language.Haskell.Modules.Fold (foldModule)
-import Language.Haskell.Modules.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, findSourcePath, sourceDirs, modulePath, modulePathBase, quietly, qPutStrLn, putSourceDirs, noisily, parseFileWithComments, extensions, modifyExtensions)
+import Language.Haskell.Modules.Params (dryRun, hsFlags, markForDelete, MonadClean, removeEmptyImports, runCleanT, scratchDir, sourceDirs, modulePathBase, quietly, qPutStrLn, putSourceDirs, noisily, parseFileWithComments, extensions, modifyExtensions)
 import System.Cmd (system)
-import System.Directory (createDirectoryIfMissing, doesFileExist, getCurrentDirectory)
+import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath ((<.>), (</>))
 import System.Process (readProcessWithExitCode, showCommandForUser)
@@ -64,12 +61,12 @@ cleanImports :: MonadClean m => FilePath -> m ModuleResult
 cleanImports path =
     do source <- parseFileWithComments path
        case source of
-         ParseOk (m@(A.Module _ h _ imports decls), comments) ->
+         ParseOk (m@(A.Module _ h _ imports _decls), _comments) ->
              do let name = case h of
                              Just (A.ModuleHead _ x _ _) -> sModuleName x
                              _ -> S.ModuleName "Main"
                     hiddenImports = filter isHiddenImport imports
-                dumpImports path name >> checkImports path name m (hiddenImports ++ standaloneDerivingImports m)
+                dumpImports path >> checkImports path name m (hiddenImports ++ standaloneDerivingImports m)
          ParseOk ((A.XmlPage {}), _) -> error "cleanImports: XmlPage"
          ParseOk ((A.XmlHybrid {}), _) -> error "cleanImports: XmlHybrid"
          ParseFailed _loc msg -> error ("cleanImports: - parse of " ++ path ++ " failed: " ++ msg)
@@ -78,7 +75,9 @@ cleanImports path =
       isHiddenImport _ = False
 
 standaloneDerivingImports :: Module -> [ImportDecl]
-standaloneDerivingImports m@(A.Module _ h _ imports decls) =
+standaloneDerivingImports (A.XmlPage _ _ _ _ _ _ _) = error "standaloneDerivingImports A.XmlPage"
+standaloneDerivingImports (A.XmlHybrid _ _ _ _ _ _ _ _ _) = error "standaloneDerivingImports A.XmlHybrid"
+standaloneDerivingImports (A.Module _ _ _ imports decls) =
     mapMaybe filterTypes imports
     where
       filterTypes :: ImportDecl -> Maybe ImportDecl
@@ -89,63 +88,43 @@ standaloneDerivingImports m@(A.Module _ h _ imports decls) =
                   [] -> Nothing
                   ys -> Just (imp {A.importSpecs = Just (A.ImportSpecList sp False ys)})
             _ -> Nothing
-      -- Is this spec one of the standalone deriving types?
-      testSpec :: ImportSpec -> Bool
-      testSpec (A.IVar _ x) = elem (moduleName, sName x) types
-      testSpec (A.IAbs _ x) = elem (moduleName, sName x) types
-      testSpec (A.IThingAll _ x) = elem (moduleName, sName x) types
-      testSpec (A.IThingWith _ x _) = elem (moduleName, sName x) types
-      -- The types that appear in this module in standalone deriving declarations
-      types = concatMap derivDeclType decls
-      derivDeclType :: Decl -> [(S.ModuleName, S.Name)]
-      derivDeclType (A.DerivDecl _ _ (A.IHead _ _ xs)) = concatMap derivDeclType' xs -- Just (moduleName, sName x)
-      derivDeclType (A.DerivDecl a b (A.IHParen _ x)) = derivDeclType (A.DerivDecl a b x)
-      derivDeclType (A.DerivDecl _ _ (A.IHInfix _ x _op y)) = derivDeclType' x ++ derivDeclType' y
-      derivDeclType _ = []
-      derivDeclType' :: Type -> [(S.ModuleName, S.Name)]
-      derivDeclType' (A.TyForall _ _ _ x) = derivDeclType' x -- qualified type
-      derivDeclType' (A.TyFun _ x y) = derivDeclType' x ++ derivDeclType' y -- function type
-      derivDeclType' (A.TyTuple _ _ xs) = concatMap derivDeclType' xs -- tuple type, possibly boxed
-      derivDeclType' (A.TyList _ x) =  derivDeclType' x -- list syntax, e.g. [a], as opposed to [] a
-      derivDeclType' (A.TyApp _ x y) = derivDeclType' x ++ derivDeclType' y -- application of a type constructor
-      derivDeclType' (A.TyVar _ x) = [(moduleName, sName x)] -- type variable
-      derivDeclType' (A.TyCon _ (A.Qual _ m n)) = [(sModuleName m, sName n)] -- named type or type constructor
-      derivDeclType' (A.TyCon _ (A.UnQual _ n)) = [(moduleName, sName n)]
-      derivDeclType' (A.TyCon _ _) = []
-      derivDeclType' (A.TyParen _ x) = derivDeclType' x -- type surrounded by parentheses
-      derivDeclType' (A.TyInfix _ x _op y) = derivDeclType' x ++ derivDeclType' y -- infix type constructor
-      derivDeclType' (A.TyKind _ x _) = derivDeclType' x -- type with explicit kind signature
-      moduleName = case h of
-                     Just (A.ModuleHead _ x _ _) -> sModuleName x
-                     _ -> S.ModuleName "Main"
+          where
+            -- Is this spec of this import referring to one of the standalone deriving types?
+            testSpec :: ImportSpec -> Bool
+            testSpec spec = testImpMod spec || testImpUnqual spec || testImpAs spec
+            testImpMod spec = elem (Just (sModuleName (A.importModule imp)), sName (specName spec)) types
+            testImpUnqual spec = not (A.importQualified imp) && elem (Nothing, sName (specName spec)) types
+            testImpAs spec = maybe False (\ x -> elem (Just (sModuleName x), sName (specName spec)) types) (A.importAs imp)
+            specName (A.IVar _ x) = x
+            specName (A.IAbs _ x) = x
+            specName (A.IThingAll _ x) = x
+            specName (A.IThingWith _ x _) = x
+      -- The types that appear in this module in standalone deriving
+      -- declarations.  If unqualified they refer to this module (m).
+      types = concatMap derivDeclTypes decls
 
-findStandaloneDerivingSpecs :: [(S.ModuleName, S.Name)] -> ImportDecl -> Map S.ModuleName [ImportSpec] -> Map S.ModuleName [ImportSpec]
-findStandaloneDerivingSpecs types imp@(A.ImportDecl _ moduleName _ _ _ _ Nothing) mp = mp
-findStandaloneDerivingSpecs types imp@(A.ImportDecl _ moduleName _ _ _ _ (Just (A.ImportSpecList _ False specs))) mp =
-    foldr f mp specs
-    where
-      f :: ImportSpec -> Map S.ModuleName [ImportSpec] -> Map S.ModuleName [ImportSpec]
-      f spec mp | elem (sModuleName moduleName, sName (specName spec)) types = Map.insertWith (++) (sModuleName moduleName) [spec] mp
-      f _ mp = mp
+      derivDeclTypes :: Decl -> [(Maybe S.ModuleName, S.Name)]
+      derivDeclTypes (A.DerivDecl _ _ (A.IHead _ _ xs)) = concatMap derivDeclTypes' xs -- Just (moduleName, sName x)
+      derivDeclTypes (A.DerivDecl a b (A.IHParen _ x)) = derivDeclTypes (A.DerivDecl a b x)
+      derivDeclTypes (A.DerivDecl _ _ (A.IHInfix _ x _op y)) = derivDeclTypes' x ++ derivDeclTypes' y
+      derivDeclTypes _ = []
+      derivDeclTypes' :: Type -> [(Maybe S.ModuleName, S.Name)]
+      derivDeclTypes' (A.TyForall _ _ _ x) = derivDeclTypes' x -- qualified type
+      derivDeclTypes' (A.TyFun _ x y) = derivDeclTypes' x ++ derivDeclTypes' y -- function type
+      derivDeclTypes' (A.TyTuple _ _ xs) = concatMap derivDeclTypes' xs -- tuple type, possibly boxed
+      derivDeclTypes' (A.TyList _ x) =  derivDeclTypes' x -- list syntax, e.g. [a], as opposed to [] a
+      derivDeclTypes' (A.TyApp _ x y) = derivDeclTypes' x ++ derivDeclTypes' y -- application of a type constructor
+      derivDeclTypes' (A.TyVar _ _) = [] -- type variable
+      derivDeclTypes' (A.TyCon _ (A.Qual _ m n)) = [(Just (sModuleName m), sName n)] -- named type or type constructor
+      -- Unqualified names refer to imports without "qualified" or "as" values.
+      derivDeclTypes' (A.TyCon _ (A.UnQual _ n)) = [(Nothing, sName n)]
+      derivDeclTypes' (A.TyCon _ _) = []
+      derivDeclTypes' (A.TyParen _ x) = derivDeclTypes' x -- type surrounded by parentheses
+      derivDeclTypes' (A.TyInfix _ x _op y) = derivDeclTypes' x ++ derivDeclTypes' y -- infix type constructor
+      derivDeclTypes' (A.TyKind _ x _) = derivDeclTypes' x -- type with explicit kind signature
 
-specName :: ImportSpec -> Name
-specName (A.IVar _ name) = name
-specName (A.IAbs _ name) = name
-specName (A.IThingAll _ name) = name
-specName (A.IThingWith _ name _) = name
-
-findStandaloneDerivingTypes :: S.ModuleName -> Decl -> Maybe (S.ModuleName, S.Name)
-findStandaloneDerivingTypes mname (A.DerivDecl _ _ h) =
-    f h
-    where
-      f (A.IHead _ (A.UnQual _ x) _) = Just (mname, sName x)
-      f (A.IHInfix _ _ (A.Qual _ mname' x) _) = Just (sModuleName mname', sName x)
-      f (A.IHInfix _ _ (A.Special _ _) _) = Nothing
-      f (A.IHParen _ x) = f x
-findStandaloneDerivingTypes _ _ = Nothing
-
-dumpImports :: MonadClean m => FilePath -> S.ModuleName -> m ()
-dumpImports path name =
+dumpImports :: MonadClean m => FilePath -> m ()
+dumpImports path =
     do scratch <- Language.Haskell.Modules.Params.scratchDir
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"
@@ -206,23 +185,32 @@ replaceImports newImports m sourceText =
       [] -> Nothing
 
 -- | Final touch-ups - sort and merge similar imports.
-fixNewImports :: Bool -> [ImportDecl] -> [ImportDecl] -> [ImportDecl]
+fixNewImports :: Bool         -- ^ If true, imports that turn into empty lists will be removed
+              -> [ImportDecl]
+              -> [ImportDecl]
+              -> [ImportDecl]
 fixNewImports remove oldImports imports =
-    filter filterDecls $ map mergeDecls $ groupBy (\ a b -> importMergable a b == EQ) $ sortBy importMergable imports
+    filter importPred $ map mergeDecls $ groupBy (\ a b -> importMergable a b == EQ) $ sortBy importMergable imports
     where
       mergeDecls :: [ImportDecl] -> ImportDecl
-      mergeDecls xs@(x : _) = x {A.importSpecs = mergeSpecLists (catMaybes (map A.importSpecs xs))}
       mergeDecls [] = error "mergeDecls"
-      -- Merge a list of specs for the same module
-      mergeSpecLists :: [ImportSpecList] -> Maybe ImportSpecList
-      mergeSpecLists (A.ImportSpecList loc flag specs : xs) = Just (A.ImportSpecList loc flag (mergeSpecs (sortBy compareSpecs (nub (concat (specs : map (\ (A.ImportSpecList _ _ specs') -> specs') xs))))))
-      mergeSpecLists [] = error "mergeSpecLists"
-      mergeSpecs xs = nubBy equalSpecs xs -- unimplemented, should merge Foo and Foo(..) into Foo(..), and the like
-      filterDecls :: ImportDecl -> Bool
-      filterDecls (A.ImportDecl _ m _ _ _ _ (Just (A.ImportSpecList _ _ []))) = not remove || maybe False (isEmptyImport . A.importSpecs) (find ((== (unModuleName m)) . unModuleName . A.importModule) oldImports)
-      filterDecls _ = True
-      isEmptyImport (Just (A.ImportSpecList _ _ [])) = True
-      isEmptyImport _ = False
+      mergeDecls xs@(x : _) = x {A.importSpecs = mergeSpecLists (catMaybes (map A.importSpecs xs))}
+          where
+            -- Merge a list of specs for the same module
+            mergeSpecLists :: [ImportSpecList] -> Maybe ImportSpecList
+            mergeSpecLists (A.ImportSpecList loc flag specs : ys) =
+                Just (A.ImportSpecList loc flag (mergeSpecs (sortBy compareSpecs (nub (concat (specs : map (\ (A.ImportSpecList _ _ specs') -> specs') ys))))))
+            mergeSpecLists [] = error "mergeSpecLists"
+            -- unimplemented, should merge Foo and Foo(..) into Foo(..), and the like
+            mergeSpecs ys = nubBy equalSpecs ys
+      -- Eliminate imports that became empty
+      importPred :: ImportDecl -> Bool
+      importPred (A.ImportDecl _ m _ _ _ _ (Just (A.ImportSpecList _ _ []))) =
+          not remove || maybe False (isEmptyImport . A.importSpecs) (find ((== (unModuleName m)) . unModuleName . A.importModule) oldImports)
+          where
+            isEmptyImport (Just (A.ImportSpecList _ _ [])) = True
+            isEmptyImport _ = False
+      importPred _ = True
 
 -- | Compare the two import declarations ignoring the things that are
 -- actually being imported.  Equality here indicates that the two
@@ -274,7 +262,7 @@ nameString (A.Ident _ s) = s
 nameString (A.Symbol _ s) = s
 
 tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test2, test3, test4])
+tests = TestLabel "Clean" (TestList [test1, test2, test3, test4, test5])
 
 test1 :: Test
 test1 =
@@ -335,8 +323,22 @@ test4 =
 test5 :: Test
 test5 =
     TestCase
-      (system "cp testdata/DerivingOrig.hs testdata/Deriving.hs" >>
-       runCleanT "scratch" (noisily $ noisily $
-                            modifyExtensions (++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
-                            putSourceDirs ["testdata"] >> cleanImports "testdata/Deriving.hs") >>
-       assertEqual "standalone deriving" () ())
+      (do _ <- system "cp testdata/DerivingOrig.hs testdata/Deriving.hs"
+          _ <- runCleanT "scratch" (noisily $ noisily $
+                                    modifyExtensions (++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
+                                    putSourceDirs ["testdata"] >> cleanImports "testdata/Deriving.hs")
+          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/DerivingOrig.hs", "testdata/Deriving.hs"] ""
+          assertEqual "standalone deriving"
+                      (ExitFailure 1,
+                       (unlines
+                        ["@@ -1,7 +1,6 @@",
+                         " module Deriving where",
+                         " ",
+                         "-import Data.Text (Text)",
+                         "-import Debian.Control (Paragraph(..), Paragraph'(..), Field'(..))",
+                         "+import Debian.Control (Field', Field'(..), Paragraph, Paragraph(..))",
+                         " ",
+                         " deriving instance Show (Field' String)",
+                         " deriving instance Show Paragraph"]),
+                       "")
+                      (code, unlines (drop 2 (lines diff)), err))
