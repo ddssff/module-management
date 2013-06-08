@@ -40,6 +40,7 @@ module Language.Haskell.Modules.Common
     , voidName
     , mapNames
     , ModuleResult(..)
+    , modulePathBase
     ) where
 
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ImportSpec(..), ImportSpecList, InstHead(..), Match(..), Module, ModuleHead(..), ModuleName(..), ModulePragma(..), Name(..), QName(..), WarningText(..), Type(..))
@@ -53,6 +54,7 @@ import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
 import Language.Haskell.Exts.SrcLoc (srcSpanEnd, srcSpanStart)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
+import System.FilePath ((<.>))
 import System.IO.Error (isDoesNotExistError)
 
 type Module = A.Module SrcSpanInfo
@@ -401,3 +403,11 @@ data ModuleResult
     | Removed S.ModuleName
     | Modified S.ModuleName String
     deriving (Show, Eq, Ord)
+
+-- | Construct the base of a module path.
+modulePathBase :: S.ModuleName -> FilePath
+modulePathBase (S.ModuleName name) =
+    map f name <.> "hs"
+    where
+      f '.' = '/'
+      f c = c

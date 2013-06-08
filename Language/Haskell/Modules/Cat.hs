@@ -8,7 +8,7 @@ module Language.Haskell.Modules.Cat
     ) where
 
 import Control.Exception (throw, catch)
-import Control.Monad as List (mapM, foldM)
+import Control.Monad as List (mapM)
 import Control.Monad.Trans (liftIO)
 import Data.Default (def)
 import Data.Generics (Data, everywhere, mkT, Typeable)
@@ -16,7 +16,7 @@ import Data.List as List (filter, intercalate, isPrefixOf, map)
 import Data.Map as Map (Map, fromList, member, toAscList, lookup)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid, (<>))
-import Data.Set as Set (Set, fromList, union, empty, insert, difference)
+import Data.Set as Set (Set, fromList, union)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName))
@@ -25,12 +25,12 @@ import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Modules.Common (checkParse, Module, removeFileIfPresent, replaceFile, tildeBackup, withCurrentDirectory, ModuleResult(..), readFileMaybe)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (MonadClean, runCleanT, modulePath, putSourceDirs, noisily, quietly, qPutStrLn, parseFileWithComments)
+import Language.Haskell.Modules.Params (MonadClean, Params(sourceDirs), runCleanT, modifyParams, modulePath, noisily, quietly, qPutStrLn, parseFileWithComments)
 import System.Cmd (system)
-import System.Exit (ExitCode(ExitSuccess, ExitFailure))
+import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
 import System.IO.Error (isDoesNotExistError)
-import System.Process (readProcess, readProcessWithExitCode)
+import System.Process (readProcessWithExitCode)
 import Test.HUnit (assertEqual, Test(TestCase))
 
 -- | Merge the declarations from several modules into a single new
@@ -41,9 +41,8 @@ catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName
 catModules univ inputs output =
     catModulesIO univ inputs output >>= Set.mapM clean
     where
-      clean x@(Modified name _) = modulePath name >>= cleanImports
-      clean x@(Unchanged _name) = return x
-      clean x@(Removed _name) = return x
+      clean (Modified name _) = modulePath name >>= cleanImports
+      clean x = return x
 
 catModulesIO :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
 catModulesIO _ [] _ = throw $ userError "catModules: invalid argument"
@@ -250,7 +249,7 @@ test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _ <- runCleanT "dist/scratch" $
-           do putSourceDirs ["testdata/copy"]
+           do modifyParams (\ p -> p {sourceDirs = sourceDirs p ++ ["testdata/copy"]})
               catModules
                  (Set.fromList testModules)
                  [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
@@ -265,7 +264,7 @@ test2 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          result <- runCleanT "dist/scratch" . noisily $
-           do putSourceDirs ["testdata/copy"]
+           do modifyParams (\ p -> p {sourceDirs = sourceDirs p ++ ["testdata/copy"]})
               catModules
                 (Set.fromList testModules)
                 [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
@@ -274,9 +273,6 @@ test2 =
          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "testdata/catresult2", "testdata/copy"] ""
          let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
          assertEqual "catModules2" (ExitSuccess, "", "") (code, out', err)
-    where
-      f :: MonadClean m => Set ModuleResult -> S.ModuleName -> m (Set ModuleResult)
-      f s m = modulePath m >>= liftIO . readFile >>= return . (flip Set.insert) s . Modified m
 
 test3 :: Test
 test3 =

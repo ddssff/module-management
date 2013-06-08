@@ -4,17 +4,19 @@ Unsupported:
 
 Bugs:
 
-   If you have a standalone derived instance of a type alias, it won't
-   notice that the constructors of the original type are required.  E.g.:
+  1. If you have a standalone derived instance of a type alias, it won't
+     notice that the constructors of the original type are required.  E.g.:
 
-     import Some.Module (Bar(..))
-     type Foo Bar
-     deriving instance Show Foo
+       import Some.Module (Bar(..))
+       type Foo Bar
+       deriving instance Show Foo
 
-   With this input, cleanImports will remove the "(..)" from the Bar import
-   and the resulting file will not compile.  "deriving instance Show bar"
-   will work correctly.
+     With this input, cleanImports will remove the "(..)" from the Bar import
+     and the resulting file will not compile.  "deriving instance Show bar"
+     will work correctly.
+
+  2. Leaves behind some .imports files
 
 To Do:
 
-   Don't expand tabs in output files
+  1. Don't expand tabs in output files
