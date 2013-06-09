@@ -4,10 +4,11 @@
 import Control.Exception (SomeException, try)
 import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Modules.Cat as Cat (test1, test2)
-import Language.Haskell.Modules.Common (untabify, withCurrentDirectory)
 import Language.Haskell.Modules.Fold as Fold (test1)
 import Language.Haskell.Modules.Imports as Imports (tests)
 import Language.Haskell.Modules.Split as Split (tests)
+import Language.Haskell.Modules.Util.IO (withCurrentDirectory)
+import Language.Haskell.Modules.Util.SrcLoc (untabify)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import Test.HUnit (assertEqual, Counts(..), runTestTT, Test(TestList, TestCase, TestLabel))
 

@@ -8,7 +8,7 @@ module Language.Haskell.Modules.Imports
 
 import Control.Applicative ((<$>))
 import Control.Monad (when)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, throw, bracket)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
 import Data.Default (def, Default)
@@ -22,12 +22,12 @@ import Language.Haskell.Exts.Annotated (ParseResult(..))
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sModuleName, sName, sImportSpec)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(..), ImportSpecList(ImportSpecList), ImportSpec(..), Module(..), ModuleHead(ModuleHead), ModuleName(ModuleName), QName(..), Name(..), Decl(DerivDecl), InstHead(..), Type(..))
 import qualified Language.Haskell.Exts.Syntax as S
-import Language.Haskell.Exts.Extension (Extension(StandaloneDeriving, TypeSynonymInstances, FlexibleInstances))
+import Language.Haskell.Exts.Extension (Extension(PackageImports, StandaloneDeriving, TypeSynonymInstances, FlexibleInstances))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Modules.Common (HasSymbols(symbols) {-, ImportDecl, ImportSpec, ImportSpecList, Module, ModuleName, Decl, Type-}, ModuleResult(..), modulePathBase)
 import Language.Haskell.Modules.Fold (foldModule)
-import Language.Haskell.Modules.Params (Params(..), getParams, modifyParams, markForDelete, MonadClean, runCleanT, scratchDir, parseFileWithComments, parseFileWithMode)
+import Language.Haskell.Modules.Params (Params(..), getParams, modifyParams, markForDelete, MonadClean, runCleanT, scratchDir, parseFileWithComments, parseFile)
 import Language.Haskell.Modules.Util.IO (replaceFile, tildeBackup, withCurrentDirectory)
 import Language.Haskell.Modules.Util.QIO (quietly, qPutStrLn, noisily)
 import System.Cmd (system)
@@ -147,8 +147,11 @@ checkImports :: MonadClean m => FilePath -> S.ModuleName -> A.Module SrcSpanInfo
 checkImports path name@(S.ModuleName name') m extraImports =
     do let importsPath = name' <.> ".imports"
        markForDelete importsPath
-       result <- parseFileWithMode importsPath
-                   `catch` (\ (e :: IOError) -> liftIO getCurrentDirectory >>= \ here -> liftIO . throw . userError $ here ++ ": " ++ show e)
+       result <-
+           bracket (getParams >>= return . extensions)
+                   (\ saved -> modifyParams (\ p -> p {extensions = saved}))
+                   (\ saved -> modifyParams (\ p -> p {extensions = PackageImports : saved}) >>
+                               parseFile importsPath `catch` (\ (e :: IOError) -> liftIO getCurrentDirectory >>= \ here -> liftIO . throw . userError $ here ++ ": " ++ show e))
        case result of
          ParseOk newImports -> updateSource path m newImports name extraImports
          _ -> error ("checkImports: parse of " ++ importsPath ++ " failed - " ++ show result)
@@ -310,7 +313,7 @@ test2 =
 test3 :: Test
 test3 =
     TestCase
-      (runCleanT (noisily $ noisily $ modifyParams (\ p -> p {sourceDirs = sourceDirs p ++ ["testdata"]}) >> cleanImports "testdata/NotMain.hs") >>
+      (runCleanT (noisily $ noisily $ modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/NotMain.hs") >>
        assertEqual "module name" () ())
 
 -- | Preserve imports with a "hiding" clause
@@ -318,7 +321,7 @@ test4 :: Test
 test4 =
     TestCase
       (system "cp testdata/HidingOrig.hs testdata/Hiding.hs" >>
-       runCleanT (noisily $ noisily $ modifyParams (\ p -> p {sourceDirs = sourceDirs p ++ ["testdata"]}) >> cleanImports "testdata/Hiding.hs") >>
+       runCleanT (noisily $ noisily $ modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/Hiding.hs") >>
        -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
        assertEqual "module name" () ())
 
@@ -329,7 +332,7 @@ test5 =
       (do _ <- system "cp testdata/DerivingOrig.hs testdata/Deriving.hs"
           _ <- runCleanT (noisily $ noisily $
                                     modifyParams (\ p -> p {extensions = extensions p ++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances],
-                                                            sourceDirs = sourceDirs p ++ ["testdata"]}) >>
+                                                            sourceDirs = ["testdata"]}) >>
                                     cleanImports "testdata/Deriving.hs")
           (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/DerivingOrig.hs", "testdata/Deriving.hs"] ""
           assertEqual "standalone deriving"

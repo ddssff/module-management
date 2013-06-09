@@ -252,8 +252,8 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         _ <- runCleanT $
-           do modifyParams (\ p -> p {sourceDirs = sourceDirs p ++ ["testdata/copy"]})
+         _ <- runCleanT $ noisily $ noisily $
+           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"]})
               catModules
                  (Set.fromList testModules)
                  [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
@@ -268,7 +268,7 @@ test2 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          result <- runCleanT . noisily $
-           do modifyParams (\ p -> p {sourceDirs = sourceDirs p ++ ["testdata/copy"]})
+           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"]})
               catModules
                 (Set.fromList testModules)
                 [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]

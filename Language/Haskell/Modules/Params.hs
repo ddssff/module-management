@@ -6,7 +6,7 @@ module Language.Haskell.Modules.Params
     , getParams
     , modifyParams
     , parseFileWithComments
-    , parseFileWithMode
+    , parseFile
     , modulePath
     , markForDelete
     ) where
@@ -91,8 +91,8 @@ parseFileWithComments path =
     do exts <- getParams >>= return . Language.Haskell.Modules.Params.extensions
        liftIO (A.parseFileWithComments (defaultParseMode {Exts.extensions = exts}) path)
 
-parseFileWithMode :: MonadClean m => FilePath -> m (ParseResult (A.Module SrcSpanInfo))
-parseFileWithMode path =
+parseFile :: MonadClean m => FilePath -> m (ParseResult (A.Module SrcSpanInfo))
+parseFile path =
     do exts <- getParams >>= return . Language.Haskell.Modules.Params.extensions
        liftIO (A.parseFileWithMode (defaultParseMode {Exts.extensions = exts}) path)
 

@@ -204,7 +204,7 @@ test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          runCleanT . noisily $
-           do modifyParams (\ p -> p {sourceDirs = sourceDirs p ++ ["testdata/copy"]})
+           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"]})
               splitModule (S.ModuleName "Debian.Repo.Package")
          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/splitresult", "testdata/copy"] ""
          let out' = unlines (List.filter (not . isPrefixOf "Only") (lines out))
