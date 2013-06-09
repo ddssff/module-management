@@ -1,3 +1,9 @@
+haskell-module-management (0.8) unstable; urgency=low
+
+  * Clean up for release
+
+ -- David Fox <dsf@seereason.com>  Sun, 09 Jun 2013 11:15:55 -0700
+
 haskell-module-management (0.7.1) unstable; urgency=low
 
   * Preserve imports of constructors required for standalone deriving declarations

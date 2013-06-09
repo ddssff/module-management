@@ -1,5 +1,5 @@
 Name:               module-management
-Version:            0.7.1
+Version:            0.8
 Synopsis:           Several functions for modifying source files and managing their imports
 Homepage:           https://src.seereason.com/module-management
 License:            BSD3
@@ -12,6 +12,7 @@ Cabal-version:      >=1.8
 Library
   ghc-Options:      -Wall -O2
   Exposed-Modules:
+    Language.Haskell.Modules,
     Language.Haskell.Modules.Cat,
     Language.Haskell.Modules.Common,
     Language.Haskell.Modules.Fold,
