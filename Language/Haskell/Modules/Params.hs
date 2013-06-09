@@ -13,6 +13,7 @@ module Language.Haskell.Modules.Params
     ) where
 
 import Control.Applicative ((<$>))
+import Control.Exception (SomeException, try)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
@@ -24,10 +25,10 @@ import Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensi
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 import Language.Haskell.Modules.Common (modulePathBase)
-import Language.Haskell.Modules.Util.IO (removeFileIfPresent)
+import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..))
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
-import System.Directory (doesFileExist, getCurrentDirectory)
+import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
 import System.FilePath ((</>))
 
 data Params
@@ -67,7 +68,11 @@ instance (MonadCatchIO m, Functor m) => MonadClean (StateT Params m) where
 
 instance MonadClean m => MonadVerbosity m where
     getVerbosity = getParams >>= return . verbosity
-    putVerbosity v = getParams >>= \ p -> putParams (p {verbosity = v})
+    putVerbosity v = modifyParams (\ p -> p {verbosity = v})
+
+instance MonadClean m => MonadDryRun m where
+    dry = getParams >>= return . dryRun
+    putDry x = modifyParams (\ p -> p {dryRun = x})
 
 runCleanT :: MonadCatchIO m => StateT Params m a -> m a
 runCleanT action =
@@ -80,7 +85,7 @@ runCleanT action =
                                                      sourceDirs = ["."],
                                                      junk = empty,
                                                      removeEmptyImports = True})
-       mapM_ (liftIO . removeFileIfPresent) (toList (junk params))
+       mapM_ (\ x -> liftIO (try (removeFile x)) >>= \ (_ :: Either SomeException ()) -> return ()) (toList (junk params))
        return result
 
 parseFileWithComments :: MonadClean m => FilePath -> m (ParseResult (A.Module SrcSpanInfo, [Comment]))

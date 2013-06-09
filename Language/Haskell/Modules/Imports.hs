@@ -7,7 +7,6 @@ module Language.Haskell.Modules.Imports
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Monad (when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, throw)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
@@ -23,11 +22,12 @@ import Language.Haskell.Exts.Extension (Extension(PackageImports, StandaloneDeri
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..))
-import Language.Haskell.Modules.Common (HasSymbols(symbols), modulePathBase, ModuleResult(..))
+import Language.Haskell.Modules.Common (modulePathBase, ModuleResult(..), withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Params (getParams, markForDelete, modifyParams, MonadClean, Params(..), parseFile, parseFileWithComments, runCleanT, scratchDir)
-import Language.Haskell.Modules.Util.IO (replaceFile, tildeBackup, withCurrentDirectory)
+import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (noisily, qPutStrLn, quietly)
+import Language.Haskell.Modules.Util.Symbols (HasSymbols(symbols))
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 import System.Exit (ExitCode(..))
@@ -149,7 +149,7 @@ checkImports path name@(S.ModuleName name') m extraImports =
            bracket (getParams >>= return . extensions)
                    (\ saved -> modifyParams (\ p -> p {extensions = saved}))
                    (\ saved -> modifyParams (\ p -> p {extensions = PackageImports : saved}) >>
-                               parseFile importsPath `catch` (\ (e :: IOError) -> liftIO getCurrentDirectory >>= \ here -> liftIO . throw . userError $ here ++ ": " ++ show e))
+                               parseFile importsPath `catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here -> throw . userError $ here ++ ": " ++ show e)))
        case result of
          ParseOk newImports -> updateSource path m newImports name extraImports
          _ -> error ("checkImports: parse of " ++ importsPath ++ " failed - " ++ show result)
@@ -159,13 +159,11 @@ checkImports path name@(S.ModuleName name') m extraImports =
 updateSource :: MonadClean m => FilePath -> A.Module SrcSpanInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
 updateSource path (m@(A.Module _ _ _ oldImports _)) (A.Module _ _ _ newImports _) name extraImports =
     do remove <- removeEmptyImports <$> getParams
-       dry <- dryRun <$> getParams
-       -- sourcePath <- modulePath name
        text <- liftIO $ readFile path
        maybe (qPutStrLn ("cleanImports: no changes to " ++ path) >> return (Unchanged name))
              (\ text' ->
                   qPutStrLn ("cleanImports: modifying " ++ path) >>
-                  liftIO (when (not dry) (replaceFile tildeBackup path text')) >>
+                  replaceFile tildeBackup path text' >>
                   return (Modified name text'))
              (replaceImports (fixNewImports remove oldImports (newImports ++ extraImports)) m text)
 updateSource _ _ _ _ _ = error "updateSource"

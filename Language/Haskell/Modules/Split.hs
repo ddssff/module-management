@@ -22,13 +22,15 @@ import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import Language.Haskell.Modules.Common (HasSymbols(symbols), mapNames, voidName)
+import Language.Haskell.Modules.Common (mapNames, voidName)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFileWithComments, runCleanT)
+import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, writeFile)
 import Language.Haskell.Modules.Util.QIO (noisily)
+import Language.Haskell.Modules.Util.Symbols (HasSymbols(symbols))
+import Prelude hiding (writeFile)
 import System.Cmd (system)
-import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitFailure))
 import System.FilePath ((<.>), dropExtension)
 import System.Process (readProcessWithExitCode)
@@ -56,14 +58,14 @@ splitModule name =
        text <- liftIO $ readFile path
        let newFiles = splitModule' name parsed text
        -- Create a subdirectory named after the old module
-       liftIO $ createDirectoryIfMissing True (dropExtension path)
+       createDirectoryIfMissing True (dropExtension path)
        -- Write the new modules
        mapM_ (uncurry writeModule) (Map.toList newFiles)
        -- Clean the new modules
        mapM_ (\ name' -> modulePath name' >>= cleanImports) (Map.keys newFiles)
 
 writeModule :: MonadClean m => S.ModuleName -> String -> m ()
-writeModule name text = modulePath name >>= \ path -> liftIO (writeFile path text)
+writeModule name text = modulePath name >>= \ path -> writeFile path text
 
 -- | If the original module was M, the the split operation creates a
 -- subdirectory M containing a module for each declaration of the

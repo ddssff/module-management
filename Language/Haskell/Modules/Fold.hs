@@ -11,7 +11,7 @@ import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments,
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.SrcLoc (SrcLoc, SrcSpanInfo)
-import Language.Haskell.Modules.Util.IO (withCurrentDirectory)
+import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Util.SrcLoc (HasEndLoc(..), HasSrcLoc(..), HasSrcSpan(..), srcPairText, untabify)
 import Test.HUnit (assertEqual, Test(TestCase, TestLabel))
 
