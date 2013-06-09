@@ -10,37 +10,10 @@ module Language.Haskell.Modules.Util.IO
     , withCurrentDirectory
     ) where
 
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ImportSpec(..), ImportSpecList, InstHead(..), Match(..), Module, ModuleHead(..), ModuleName(..), ModulePragma(..), Name(..), QName(..), WarningText(..), Type(..))
-import Language.Haskell.Exts.Comments (Comment(..))
-import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Control.Applicative ((<$>))
 import Control.Exception (bracket, catch, throw)
-import Data.Default (def, Default)
-import Data.List (groupBy, intercalate, sortBy)
-import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
-import Language.Haskell.Exts.SrcLoc (srcSpanEnd, srcSpanStart)
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
-import System.FilePath ((<.>))
 import System.IO.Error (isDoesNotExistError)
-
-type Module = A.Module SrcSpanInfo
-type ModuleHead = A.ModuleHead SrcSpanInfo
-type ModulePragma = A.ModulePragma SrcSpanInfo
-type ModuleName = A.ModuleName SrcSpanInfo
-type WarningText = A.WarningText SrcSpanInfo
-type ExportSpecList = A.ExportSpecList SrcSpanInfo
-type ExportSpec = A.ExportSpec SrcSpanInfo
-type ImportDecl = A.ImportDecl SrcSpanInfo
-type ImportSpecList = A.ImportSpecList SrcSpanInfo
-type ImportSpec = A.ImportSpec SrcSpanInfo
-type Decl = A.Decl SrcSpanInfo
-type QName = A.QName SrcSpanInfo
-type Name = A.Name SrcSpanInfo
-type Type = A.Type SrcSpanInfo
-
-class Display a where
-    display :: a -> String
 
 tildeBackup :: FilePath -> Maybe FilePath
 tildeBackup = Just . (++ "~")

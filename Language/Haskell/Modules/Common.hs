@@ -9,19 +9,11 @@ module Language.Haskell.Modules.Common
     , modulePathBase
     ) where
 
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ImportSpec(..), ImportSpecList, InstHead(..), Match(..), Module, ModuleHead(..), ModuleName(..), ModulePragma(..), Name(..), QName(..), WarningText(..), Type(..))
-import Language.Haskell.Exts.Comments (Comment(..))
-import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
-import Control.Applicative ((<$>))
-import Control.Exception (bracket, catch, throw)
 import Data.Default (def, Default)
-import Data.List (groupBy, intercalate, sortBy)
-import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
-import Language.Haskell.Exts.SrcLoc (srcSpanEnd, srcSpanStart)
+import Data.List (groupBy, sortBy)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ImportSpec(..), InstHead(..), Match(..), Name(..), QName(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
 import System.FilePath ((<.>))
-import System.IO.Error (isDoesNotExistError)
 
 -- | Convert a compare function into an (==)
 toEq :: Ord a => (a -> a -> Ordering) -> (a -> a -> Bool)

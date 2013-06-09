@@ -1,3 +1,7 @@
+-- | IO operations predicated on the verbosity value managed by the
+-- methods of MonadVerbosity.  Noisily increases this value and
+-- quietly decreases it, and the q* operations only happen when the
+-- value is greater than zero.
 module Language.Haskell.Modules.Util.QIO
     ( MonadVerbosity(getVerbosity, putVerbosity)
     , modifyVerbosity
@@ -9,7 +13,7 @@ module Language.Haskell.Modules.Util.QIO
     ) where
 
 import Control.Monad (when)
-import Control.Monad.Trans (MonadIO, liftIO)
+import Control.Monad.Trans (liftIO, MonadIO)
 
 class MonadIO m => MonadVerbosity m where
     getVerbosity :: m Int

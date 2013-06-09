@@ -8,10 +8,9 @@ module Language.Haskell.Modules.Fold
 import Control.Exception (SomeException, try)
 import Data.Default (Default(def))
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, ParseResult(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.SrcLoc (SrcLoc, SrcSpanInfo)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ImportSpec(..), ImportSpecList, InstHead(..), Match(..), Module, ModuleHead(..), ModuleName(..), ModulePragma(..), Name(..), QName(..), WarningText(..), Type(..))
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), Module(Module, XmlHybrid, XmlPage), ModuleHead(ModuleHead))
 import Language.Haskell.Modules.Util.IO (withCurrentDirectory)
 import Language.Haskell.Modules.Util.SrcLoc (HasEndLoc(..), HasSrcLoc(..), HasSrcSpan(..), srcPairText, untabify)
 import Test.HUnit (assertEqual, Test(TestCase, TestLabel))
@@ -21,15 +20,9 @@ type ModuleHead = A.ModuleHead SrcSpanInfo
 type ModulePragma = A.ModulePragma SrcSpanInfo
 type ModuleName = A.ModuleName SrcSpanInfo
 type WarningText = A.WarningText SrcSpanInfo
-type ExportSpecList = A.ExportSpecList SrcSpanInfo
 type ExportSpec = A.ExportSpec SrcSpanInfo
 type ImportDecl = A.ImportDecl SrcSpanInfo
-type ImportSpecList = A.ImportSpecList SrcSpanInfo
-type ImportSpec = A.ImportSpec SrcSpanInfo
 type Decl = A.Decl SrcSpanInfo
-type QName = A.QName SrcSpanInfo
-type Name = A.Name SrcSpanInfo
-type Type = A.Type SrcSpanInfo
 
 -- | Given the result of parseModuleWithComments and the original
 -- module text, this does a fold over the parsed module contents,

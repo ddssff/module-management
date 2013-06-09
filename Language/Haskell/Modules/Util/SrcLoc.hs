@@ -2,7 +2,6 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.Util.SrcLoc
     ( HasSrcSpan(..)
-    , PutSrcSpan(..)
     , HasSrcLoc(..)
     , HasEndLoc(..)
     , srcSpanTriple
@@ -12,19 +11,10 @@ module Language.Haskell.Modules.Util.SrcLoc
     , untabify
     ) where
 
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ImportSpec(..), ImportSpecList, InstHead(..), Match(..), Module, ModuleHead(..), ModuleName(..), ModulePragma(..), Name(..), QName(..), WarningText(..), Type(..))
-import Language.Haskell.Exts.Comments (Comment(..))
-import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
-import Control.Applicative ((<$>))
-import Control.Exception (bracket, catch, throw)
 import Data.Default (def, Default)
-import Data.List (groupBy, intercalate, sortBy)
-import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
-import Language.Haskell.Exts.SrcLoc (srcSpanEnd, srcSpanStart)
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import System.Directory (getCurrentDirectory, removeFile, renameFile, setCurrentDirectory)
-import System.FilePath ((<.>))
-import System.IO.Error (isDoesNotExistError)
+import Data.List (groupBy, intercalate)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ModuleHead(..), ModuleName(..), ModulePragma(..), WarningText(..))
+import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, SrcSpanInfo(..), srcSpanStart)
 
 untabify :: String -> String
 untabify s =
@@ -138,43 +128,6 @@ instance HasSrcSpan Decl where
     srcSpan (A.InstSig l _ _) = srcSpan l
     srcSpan (A.AnnPragma l _) = srcSpan l
 
-class PutSrcSpan a where
-    putSrcSpan :: SrcSpan -> a -> a
-
-instance PutSrcSpan SrcSpanInfo where
-    putSrcSpan sp x = x {srcInfoSpan = sp} -- what should we do about srcInfoPoints?
-
-instance PutSrcSpan ModuleHead where
-    putSrcSpan sp (A.ModuleHead x a b c) = A.ModuleHead (putSrcSpan sp x) a b c
-
-instance PutSrcSpan ModuleName where
-    putSrcSpan sp (A.ModuleName x a) = A.ModuleName (putSrcSpan sp x) a
-
-instance PutSrcSpan WarningText where
-    putSrcSpan sp (A.WarnText x a) = A.WarnText (putSrcSpan sp x) a
-    putSrcSpan sp (A.DeprText x a) = A.DeprText (putSrcSpan sp x) a
-
-instance PutSrcSpan ExportSpecList where
-    putSrcSpan sp (A.ExportSpecList x a) = A.ExportSpecList (putSrcSpan sp x) a
-
-instance PutSrcSpan ExportSpec where
-    putSrcSpan sp (A.EVar x a) = A.EVar (putSrcSpan sp x) a
-    putSrcSpan sp (A.EAbs x a) = A.EAbs (putSrcSpan sp x) a
-    putSrcSpan sp (A.EThingAll x a) = A.EThingAll (putSrcSpan sp x) a
-    putSrcSpan sp (A.EThingWith x a b) = A.EThingWith (putSrcSpan sp x) a b
-    putSrcSpan sp (A.EModuleContents x a) = A.EModuleContents (putSrcSpan sp x) a
-
-instance PutSrcSpan ModulePragma where
-    putSrcSpan sp (A.LanguagePragma l a) = A.LanguagePragma (putSrcSpan sp l) a
-    putSrcSpan sp (A.OptionsPragma l a b) = A.OptionsPragma (putSrcSpan sp l) a b
-    putSrcSpan sp (A.AnnModulePragma l a) = A.AnnModulePragma (putSrcSpan sp l) a
-
-instance PutSrcSpan Comment where
-    putSrcSpan sp (Comment a _ b) = Comment a sp b
-
-instance PutSrcSpan ImportDecl where
-    putSrcSpan sp (A.ImportDecl x a b c d e f) = A.ImportDecl (putSrcSpan sp x) a b c d e f
-
 -- | Class of values that contain a source location.
 class HasSrcLoc x where
     srcLoc :: x -> SrcLoc
@@ -197,12 +150,12 @@ instance HasEndLoc String where
 -- the span, the portion within the span, and the portion after.
 srcSpanTriple :: SrcSpan -> String -> (String, String, String)
 srcSpanTriple sp s =
-    srcLocPairTriple (srcSpanStart' sp) (srcSpanEnd' sp) s
+    srcLocPairTriple srcSpanStart' srcSpanEnd' s
     where
-      srcSpanStart' :: SrcSpan -> SrcLoc
-      srcSpanStart' sp = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanStart sp)
-      srcSpanEnd' :: SrcSpan -> SrcLoc
-      srcSpanEnd' sp = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanEnd sp)
+      srcSpanStart' :: SrcLoc
+      srcSpanStart' = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanStart sp)
+      srcSpanEnd' :: SrcLoc
+      srcSpanEnd' = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanEnd sp)
 
 srcLocPairTriple :: SrcLoc -> SrcLoc -> String -> (String, String, String)
 srcLocPairTriple b e s =

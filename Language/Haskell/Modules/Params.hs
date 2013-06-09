@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Params
     ( Params(Params, dryRun, hsFlags, extensions, sourceDirs, junk, removeEmptyImports, scratchDir)
     , MonadClean
@@ -12,26 +13,22 @@ module Language.Haskell.Modules.Params
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Monad (when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Set (empty, insert, Set, toList)
-import Data.String (fromString)
-import Filesystem (createTree, removeTree)
+import qualified Language.Haskell.Exts.Annotated as A (Module, parseFileWithComments, parseFileWithMode)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension)
-import Language.Haskell.Exts.Parser as Exts (ParseMode(extensions), defaultParseMode, ParseResult)
-import qualified Language.Haskell.Exts.Annotated as A (parseFileWithMode, parseFileWithComments, Module(Module))
+import Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import qualified Language.Haskell.Exts.Syntax as S
-import Language.Haskell.Modules.Common ({-Module,-} modulePathBase)
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
+import Language.Haskell.Modules.Common (modulePathBase)
 import Language.Haskell.Modules.Util.IO (removeFileIfPresent)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import System.Directory (doesFileExist, getCurrentDirectory)
 import System.FilePath ((</>))
-import System.IO.Error (isDoesNotExistError)
 
 data Params
     = Params
