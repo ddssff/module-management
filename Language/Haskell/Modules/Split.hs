@@ -16,16 +16,17 @@ import Data.Monoid ((<>))
 import Data.Set as Set (fromList, intersection, map, null, Set)
 import Data.Set.Extra (gFind)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
-import qualified Language.Haskell.Exts.Annotated as A (ExportSpec(EVar), ImportDecl(ImportDecl, importAnn, importAs, importModule, importPkg, importQualified, importSpecs, importSrc), ImportSpec(IVar), ImportSpecList(ImportSpecList), Module(Module), ModuleHead(ModuleHead), ModuleName(..), Name(..), QName(UnQual))
+import qualified Language.Haskell.Exts.Annotated as A (Decl, ExportSpec(EVar), ImportDecl(ImportDecl, importAnn, importAs, importModule, importPkg, importQualified, importSpecs, importSrc), ImportSpec(IVar), ImportSpecList(ImportSpecList), Module(Module), ModuleHead(ModuleHead), ModuleName(..), Name(..), QName(UnQual))
 import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S
-import Language.Haskell.Modules.Common (Decl, ExportSpec, HasSymbols(symbols), ImportDecl, ImportSpec, mapNames, ModuleName, voidName)
+import Language.Haskell.Modules.Common (HasSymbols(symbols), {-Decl, ExportSpec, ImportDecl, ImportSpec, ModuleName,-} mapNames, voidName)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (Params(sourceDirs), MonadClean, modifyParams, runCleanT, modulePath, noisily, parseFileWithComments)
+import Language.Haskell.Modules.Params (Params(sourceDirs), MonadClean, modifyParams, runCleanT, modulePath, parseFileWithComments)
+import Language.Haskell.Modules.Util.QIO (noisily)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitFailure))
@@ -91,7 +92,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
               -- In this module, we need to import any module that declares a symbol
               -- referenced here.
               referenced = Set.map voidName (gFind modDecls :: Set (A.Name SrcSpanInfo))
-              newImports :: Map ModuleName ImportDecl
+              -- newImports :: Map ModuleName ImportDecl
               newImports = mapWithKey toImportDecl (Map.delete name'
                                                            (Map.filter (\ pairs ->
                                                                             let declared = Set.fromList (concatMap (symbols . fst) pairs) in
@@ -165,7 +166,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                                m text Nothing
 
         -- Build a map from module name to the list of declarations that will be in that module.
-        declMap :: Map ModuleName [(Decl, String)]
+        -- declMap :: Map ModuleName [(Decl, String)]
         declMap =
             foldModule (\ _ _ _ r -> r)
                        (\ _ _ _ r -> r)
@@ -178,7 +179,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
 splitModule' _ _ _ = error "splitModule'"
 
 -- | Build an import of the symbols created by a declaration.
-toImportDecl :: ModuleName -> [(Decl, String)] -> ImportDecl
+toImportDecl :: A.ModuleName SrcSpanInfo -> [(A.Decl SrcSpanInfo, String)] -> A.ImportDecl SrcSpanInfo
 toImportDecl modName decls =
     A.ImportDecl {A.importAnn = def,
                   A.importModule = modName,
@@ -188,11 +189,11 @@ toImportDecl modName decls =
                   A.importAs = Nothing,
                   A.importSpecs = Just (A.ImportSpecList def False (nub (concatMap toImportSpecs decls)))}
     where
-      toImportSpecs :: (Decl, String) -> [ImportSpec]
+      toImportSpecs :: (A.Decl SrcSpanInfo, String) -> [A.ImportSpec SrcSpanInfo]
       toImportSpecs = List.map (A.IVar def) . mapNames . symbols . fst
 
 -- | Build export specs of the symbols created by a declaration.
-toExportSpecs :: (Decl, String) -> [ExportSpec]
+toExportSpecs :: (A.Decl SrcSpanInfo, String) -> [A.ExportSpec SrcSpanInfo]
 toExportSpecs (x, _) = List.map (\ name -> A.EVar def (A.UnQual def name)) (mapNames (symbols x))
 
 tests :: Test
@@ -202,7 +203,7 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         runCleanT "dist/scratch" . noisily $
+         runCleanT . noisily $
            do modifyParams (\ p -> p {sourceDirs = sourceDirs p ++ ["testdata/copy"]})
               splitModule (S.ModuleName "Debian.Repo.Package")
          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/splitresult", "testdata/copy"] ""

@@ -1,21 +1,14 @@
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
 module Language.Haskell.Modules.Params
-    ( Params(..)
+    ( Params(Params, dryRun, hsFlags, extensions, sourceDirs, junk, removeEmptyImports, scratchDir)
     , MonadClean
     , runCleanT
     , getParams
     , modifyParams
     , parseFileWithComments
     , parseFileWithMode
-    , findSourcePath
     , modulePath
     , markForDelete
-    , putScratchJunk
-    , quietly
-    , noisily
-    , qIO
-    , qPutStr
-    , qPutStrLn
     ) where
 
 import Control.Applicative ((<$>))
@@ -29,9 +22,13 @@ import Filesystem (createTree, removeTree)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension)
 import Language.Haskell.Exts.Parser as Exts (ParseMode(extensions), defaultParseMode, ParseResult)
-import qualified Language.Haskell.Exts.Annotated as Exts (parseFileWithMode, parseFileWithComments)
+import qualified Language.Haskell.Exts.Annotated as A (parseFileWithMode, parseFileWithComments, Module(Module))
+import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S
-import Language.Haskell.Modules.Common (Module, removeFileIfPresent, modulePathBase)
+import Language.Haskell.Modules.Common ({-Module,-} modulePathBase)
+import Language.Haskell.Modules.Util.IO (removeFileIfPresent)
+import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
+import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import System.Directory (doesFileExist, getCurrentDirectory)
 import System.FilePath ((</>))
 import System.IO.Error (isDoesNotExistError)
@@ -39,8 +36,7 @@ import System.IO.Error (isDoesNotExistError)
 data Params
     = Params
       { scratchDir :: FilePath
-      -- ^ Location of the scratch directory for ghc output.  Cabal
-      -- uses dist/scratch by default.
+      -- ^ Location of the temporary directory for ghc output.
       , dryRun :: Bool -- unimplemented
       , verbosity :: Int
       , extensions :: [Extension]
@@ -68,15 +64,18 @@ class (MonadIO m, MonadCatchIO m, Functor m) => MonadClean m where
 modifyParams :: MonadClean m => (Params -> Params) -> m ()
 modifyParams f = getParams >>= putParams . f
 
-instance (MonadIO m, MonadCatchIO m, Functor m) => MonadClean (StateT Params m) where
+instance (MonadCatchIO m, Functor m) => MonadClean (StateT Params m) where
     getParams = get
     putParams = put
 
-runCleanT :: MonadIO m => FilePath -> StateT Params m a -> m a
-runCleanT scratch action =
-    do liftIO $ removeTree (fromString scratch) `catch` (\ e -> if isDoesNotExistError e then return () else throw e)
-       liftIO $ createTree (fromString scratch)
-       (result, params) <- runStateT action (Params {scratchDir = scratch,
+instance MonadClean m => MonadVerbosity m where
+    getVerbosity = getParams >>= return . verbosity
+    putVerbosity v = getParams >>= \ p -> putParams (p {verbosity = v})
+
+runCleanT :: MonadCatchIO m => StateT Params m a -> m a
+runCleanT action =
+    withTempDirectory "." "scratch" $ \ scratch ->
+    do (result, params) <- runStateT action (Params {scratchDir = scratch,
                                                      dryRun = False,
                                                      verbosity = 0,
                                                      hsFlags = [],
@@ -87,15 +86,15 @@ runCleanT scratch action =
        mapM_ (liftIO . removeFileIfPresent) (toList (junk params))
        return result
 
-parseFileWithComments :: MonadClean m => FilePath -> m (ParseResult (Module, [Comment]))
+parseFileWithComments :: MonadClean m => FilePath -> m (ParseResult (A.Module SrcSpanInfo, [Comment]))
 parseFileWithComments path =
     do exts <- getParams >>= return . Language.Haskell.Modules.Params.extensions
-       liftIO (Exts.parseFileWithComments (defaultParseMode {Exts.extensions = exts}) path)
+       liftIO (A.parseFileWithComments (defaultParseMode {Exts.extensions = exts}) path)
 
-parseFileWithMode :: MonadClean m => FilePath -> m (ParseResult Module)
+parseFileWithMode :: MonadClean m => FilePath -> m (ParseResult (A.Module SrcSpanInfo))
 parseFileWithMode path =
     do exts <- getParams >>= return . Language.Haskell.Modules.Params.extensions
-       liftIO (Exts.parseFileWithMode (defaultParseMode {Exts.extensions = exts}) path)
+       liftIO (A.parseFileWithMode (defaultParseMode {Exts.extensions = exts}) path)
 
 -- | Search the path directory list for a source file that already exists.
 findSourcePath :: MonadClean m => FilePath -> m FilePath
@@ -107,7 +106,8 @@ findSourcePath path =
              exists <- liftIO $ doesFileExist x
              if exists then return x else findFile dirs
       findFile [] =
-          do here <- liftIO getCurrentDirectory
+          do -- Just building an error message here
+             here <- liftIO getCurrentDirectory
              dirs <- sourceDirs <$> getParams
              liftIO . throw . userError $ "findSourcePath failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ path
 
@@ -120,36 +120,8 @@ modulePath name =
       makePath =
           do dirs <- sourceDirs <$> getParams
              case dirs of
-               [] -> return (modulePathBase name)
+               [] -> return (modulePathBase name) -- should this be an error?
                (d : _) -> return $ d </> modulePathBase name
 
 markForDelete :: MonadClean m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk = insert x (junk p)})
-
-putScratchJunk :: MonadClean m => FilePath -> m ()
-putScratchJunk x = scratchDir <$> getParams >>= \ scratch -> markForDelete (scratch </> x)
-
-quietly :: MonadClean m => m a -> m a
-quietly action =
-    do modifyParams (\ p -> p {verbosity = verbosity p - 1})
-       result <- action
-       modifyParams (\ p -> p {verbosity = verbosity p + 1})
-       return result
-
-noisily :: MonadClean m => m a -> m a
-noisily action =
-    do modifyParams (\ p -> p {verbosity = verbosity p + 1})
-       result <- action
-       modifyParams (\ p -> p {verbosity = verbosity p - 1})
-       return result
-
-qIO :: MonadClean m => m () -> m ()
-qIO action =
-    do v <- verbosity <$> getParams
-       when (v > 0) action
-
-qPutStrLn :: MonadClean m => String -> m ()
-qPutStrLn = qIO . liftIO . putStrLn
-
-qPutStr :: MonadClean m => String -> m ()
-qPutStr = qIO . liftIO . putStr

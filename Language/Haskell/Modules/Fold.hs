@@ -1,5 +1,5 @@
 {-# LANGUAGE BangPatterns, FlexibleInstances, ScopedTypeVariables #-}
-{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
+{-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Fold
     ( foldModule
     , test1
@@ -9,72 +9,27 @@ import Control.Exception (SomeException, try)
 import Data.Default (Default(def))
 import Language.Haskell.Exts.Annotated (defaultParseMode, parseFileWithComments, ParseResult(..))
 import Language.Haskell.Exts.Comments (Comment)
-import Language.Haskell.Exts.SrcLoc (SrcLoc)
+import Language.Haskell.Exts.SrcLoc (SrcLoc, SrcSpanInfo)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), DeclHead(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ImportSpec(..), ImportSpecList, InstHead(..), Match(..), Module, ModuleHead(..), ModuleName(..), ModulePragma(..), Name(..), QName(..), WarningText(..), Type(..))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), Module(Module, XmlHybrid, XmlPage), ModuleHead(ModuleHead))
-import Language.Haskell.Modules.Common (Decl, ExportSpec, HasEndLoc(..), HasSrcLoc(..), HasSrcSpan(..), ImportDecl, Module, ModuleHead, ModuleName, ModulePragma, srcPairText, textEndLoc, untabify, WarningText, withCurrentDirectory)
+import Language.Haskell.Modules.Util.IO (withCurrentDirectory)
+import Language.Haskell.Modules.Util.SrcLoc (HasEndLoc(..), HasSrcLoc(..), HasSrcSpan(..), srcPairText, untabify)
 import Test.HUnit (assertEqual, Test(TestCase, TestLabel))
 
-{-
-data Module l
-  = Module l
-           (Maybe (ModuleHead l))
-           [ModulePragma l]
-           [ImportDecl l]
-           [Decl l]
-  | A.XmlPage l
-              (A.ModuleName l)
-              [A.ModulePragma l]
-              (A.XName l)
-              [A.XAttr l]
-              (Maybe (A.Exp l))
-              [A.Exp l]
-  | A.XmlHybrid l
-                (Maybe (A.ModuleHead l))
-                [A.ModulePragma l]
-                [A.ImportDecl l]
-                [A.Decl l]
-                (A.XName l)
-                [A.XAttr l]
-                (Maybe (A.Exp l))
-                [A.Exp l]
-
-data ModuleHead l
-  = ModuleHead l
-               (ModuleName l)
-               (Maybe (WarningText l))
-               (Maybe (ExportSpecList l))
-
-data Comment = Comment Bool SrcSpan String
-        -- Defined in `Language.Haskell.Exts.Comments'
-
-data ImportDecl l
-  = ImportDecl {importAnn :: l,
-                importModule :: ModuleName l,
-                importQualified :: Bool,
-                importSrc :: Bool,
-                importPkg :: Maybe String,
-                importAs :: Maybe (ModuleName l),
-                importSpecs :: Maybe (ImportSpecList l)}
-
-data ModulePragma l
-  = LanguagePragma l [Name l]
-  | OptionsPragma l (Maybe Tool) String
-  | AnnModulePragma l (Annotation l)
-
-data SrcSpanInfo
-  = SrcSpanInfo {srcInfoSpan :: SrcSpan, srcInfoPoints :: [SrcSpan]}
-        -- Defined in `Language.Haskell.Exts.SrcLoc'
-
-data ExportSpecList l = ExportSpecList l [ExportSpec l]
-        -- Defined in `Language.Haskell.Exts.Annotated.Syntax'
-
-data ExportSpec l
-  = EVar l (QName l)
-  | EAbs l (QName l)
-  | EThingAll l (QName l)
-  | EThingWith l (QName l) [CName l]
-  | EModuleContents l (ModuleName l)
--}
+type Module = A.Module SrcSpanInfo
+type ModuleHead = A.ModuleHead SrcSpanInfo
+type ModulePragma = A.ModulePragma SrcSpanInfo
+type ModuleName = A.ModuleName SrcSpanInfo
+type WarningText = A.WarningText SrcSpanInfo
+type ExportSpecList = A.ExportSpecList SrcSpanInfo
+type ExportSpec = A.ExportSpec SrcSpanInfo
+type ImportDecl = A.ImportDecl SrcSpanInfo
+type ImportSpecList = A.ImportSpecList SrcSpanInfo
+type ImportSpec = A.ImportSpec SrcSpanInfo
+type Decl = A.Decl SrcSpanInfo
+type QName = A.QName SrcSpanInfo
+type Name = A.Name SrcSpanInfo
+type Type = A.Type SrcSpanInfo
 
 -- | Given the result of parseModuleWithComments and the original
 -- module text, this does a fold over the parsed module contents,
@@ -103,7 +58,7 @@ foldModule pragmaf namef warnf exportf importf declf tailf (A.Module _ mh ps is 
                      Just h -> foldModuleHead namef warnf exportf h text (r1, l1)
         (r3, l3) = doList text importf is (r2, l2)
         (r4, l4) = doList text declf ds (r3, l3)
-        e = textEndLoc text
+        e = endLoc text
         r5 = if e == l4 then r4 else tailf (srcPairText l4 e text) r4 in
     r5
 

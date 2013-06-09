@@ -17,7 +17,11 @@ Library
     Language.Haskell.Modules.Fold,
     Language.Haskell.Modules.Imports,
     Language.Haskell.Modules.Params,
-    Language.Haskell.Modules.Split
+    Language.Haskell.Modules.Split,
+    Language.Haskell.Modules.Util.IO,
+    Language.Haskell.Modules.Util.QIO,
+    Language.Haskell.Modules.Util.SrcLoc,
+    Language.Haskell.Modules.Util.Temp
   Build-Depends:
     applicative-extras,
     base,

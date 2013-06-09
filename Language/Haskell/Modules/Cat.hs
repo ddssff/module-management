@@ -20,12 +20,16 @@ import Data.Set as Set (Set, fromList, union)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName))
+import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
+import Language.Haskell.Exts.Parser (fromParseResult)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
-import Language.Haskell.Modules.Common (checkParse, Module, removeFileIfPresent, replaceFile, tildeBackup, withCurrentDirectory, ModuleResult(..), readFileMaybe)
+import Language.Haskell.Modules.Common ({-Module,-} ModuleResult(..))
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (MonadClean, Params(sourceDirs), runCleanT, modifyParams, modulePath, noisily, quietly, qPutStrLn, parseFileWithComments)
+import Language.Haskell.Modules.Params (MonadClean, Params(sourceDirs), runCleanT, modifyParams, modulePath, parseFileWithComments)
+import Language.Haskell.Modules.Util.IO (removeFileIfPresent, replaceFile, tildeBackup, withCurrentDirectory, readFileMaybe)
+import Language.Haskell.Modules.Util.QIO (noisily, quietly, qPutStrLn)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
@@ -71,7 +75,7 @@ removeModuleIfPresent name =
        liftIO (removeFileIfPresent path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e))
 
 -- Update the module 'name' to reflect the result of the cat operation.
-doModule :: MonadClean m => Map S.ModuleName (Module, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
+doModule :: MonadClean m => Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
 doModule info input@(first : _) output name =
     do -- The new module will be based on the existing module, unless
        -- name equals output and output does not exist
@@ -88,7 +92,7 @@ doModule info input@(first : _) output name =
        -- if base /= name || text' /= text then (replaceFile (const Nothing) (modulePath name) text' >> return True) else return False
        -- replaceFileIfDifferent (modulePath name) text'
 
-doModule' :: Map S.ModuleName (Module, String) -> [S.ModuleName] -> S.ModuleName -> (S.ModuleName, (Module, String)) -> String
+doModule' :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> (S.ModuleName, (A.Module SrcSpanInfo, String)) -> String
 doModule' _ [] _ _ = error "doModule'"
 doModule' info inputs output (name, (m, text)) =
     case () of
@@ -96,7 +100,7 @@ doModule' info inputs output (name, (m, text)) =
         | not (elem name (output : inputs)) -> doOther inputs output (m, text)
         | True -> ""
 
-doOutput :: Map S.ModuleName (Module, String) -> [S.ModuleName] -> S.ModuleName -> (Module, String) -> String
+doOutput :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
 doOutput info inputs output (m, text) =
     header ++ fromMaybe "" exports ++ fromMaybe "" imports ++ fromMaybe "" decls
     where
@@ -143,7 +147,7 @@ echo _ pre s r = r <> pre <> s
 ignore :: t -> t1 -> t2 -> t3 -> t3
 ignore _ _ _ r = r
 
-doOther :: [S.ModuleName] -> S.ModuleName -> (Module, String) -> String
+doOther :: [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
 doOther inputs input@(S.ModuleName input') (m, text) =
     header ++ exports ++ imports ++ decls
     where
@@ -178,7 +182,7 @@ doOther inputs input@(S.ModuleName input') (m, text) =
                          "\n     , " <> prettyPrintWithMode defaultMode (S.EModuleContents input)
                  _ -> pre <> s
 
-mergeExports :: Map S.ModuleName (Module, String) -> S.ModuleName -> Maybe [S.ExportSpec]
+mergeExports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> Maybe [S.ExportSpec]
 mergeExports old new =
     Just (concatMap mergeExports' (Map.toAscList old))
     where
@@ -187,7 +191,7 @@ mergeExports old new =
       mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ (Just (A.ExportSpecList _ e)))) _ _ _, _)) = updateModuleContentsExports old new (List.map sExportSpec e)
       mergeExports' (_, _) = error "mergeExports'"
 
-updateModuleContentsExports :: Map S.ModuleName (Module, String) -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
+updateModuleContentsExports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
 updateModuleContentsExports old new es =
     foldl f [] es
     where
@@ -197,7 +201,7 @@ updateModuleContentsExports old new es =
           ys ++ if elem e' ys then [] else [e']
       f ys e = ys ++ [e]
 
-moduleImports :: Map S.ModuleName (Module, String) -> S.ModuleName -> String
+moduleImports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> String
 moduleImports old name =
     let (Just (m, text)) = Map.lookup name old in
     foldModule (\ _ _ _ r -> r)
@@ -215,7 +219,7 @@ moduleImports old name =
 
 -- | Grab the declarations out of the old modules, fix any
 -- qualified symbol references, prettyprint and return.
-moduleDecls :: Map S.ModuleName (Module, String) -> S.ModuleName -> S.ModuleName -> String
+moduleDecls :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> S.ModuleName -> String
 moduleDecls old new name =
     let (Just (m, text)) = Map.lookup name old in
     foldModule (\ _ _ _ r -> r)
@@ -237,7 +241,7 @@ moduleDecls old new name =
 -- probably mess up the location information, so the result (if
 -- different from the original) should be prettyprinted, not
 -- exactPrinted.
-fixReferences :: (Data a, Typeable a) => Map S.ModuleName (Module, String) -> S.ModuleName -> a -> a
+fixReferences :: (Data a, Typeable a) => Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> a -> a
 fixReferences old new x =
     everywhere (mkT moveModuleName) x
     where
@@ -248,7 +252,7 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         _ <- runCleanT "dist/scratch" $
+         _ <- runCleanT $
            do modifyParams (\ p -> p {sourceDirs = sourceDirs p ++ ["testdata/copy"]})
               catModules
                  (Set.fromList testModules)
@@ -263,7 +267,7 @@ test2 :: Test
 test2 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         result <- runCleanT "dist/scratch" . noisily $
+         result <- runCleanT . noisily $
            do modifyParams (\ p -> p {sourceDirs = sourceDirs p ++ ["testdata/copy"]})
               catModules
                 (Set.fromList testModules)
@@ -279,7 +283,7 @@ test3 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          result <- withCurrentDirectory "testdata/copy"
-           (runCleanT "dist/scratch"
+           (runCleanT
                 (catModules
                  (Set.fromList testModules)
                  [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
@@ -344,12 +348,12 @@ testModules =
              S.ModuleName "Tmp.File",
              S.ModuleName "Text.Format"]
 
-loadModule :: MonadClean m => S.ModuleName -> m (Module, String)
+loadModule :: MonadClean m => S.ModuleName -> m (A.Module SrcSpanInfo, String)
 loadModule name =
     do path <- modulePath name
        text <- liftIO $ readFile path
-       (m, _) <- parseFileWithComments path >>= return . checkParse name
+       (m, _) <- parseFileWithComments path >>= return . fromParseResult
        return (m, text)
 
-loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (Module, String))
+loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (A.Module SrcSpanInfo, String))
 loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names
