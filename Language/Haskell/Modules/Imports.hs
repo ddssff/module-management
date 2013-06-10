@@ -88,6 +88,9 @@ standaloneDerivingImports (A.Module _ _ _ imports decls) =
                 case filter testSpec xs of
                   [] -> Nothing
                   ys -> Just (imp {A.importSpecs = Just (A.ImportSpecList sp False ys)})
+            -- If there is an import with no spec list it may be
+            -- importing symbols used by the standalone instance
+            -- deriviation.  This is listed in bugs.
             _ -> Nothing
           where
             -- Is this spec of this import referring to one of the standalone deriving types?

@@ -15,7 +15,13 @@ Bugs:
      and the resulting file will not compile.  "deriving instance Show bar"
      will work correctly.
 
-  2. Leaves behind some .imports files
+  2. If the symbols used by a standalone derived instance are imported by an
+     import line with no specs, cleanImports with fail.  Add explicit imports
+     by hand before running cleanImports.
+
+  3. Leaves behind some .imports files
+
+  4. Template haskell will frequently mess it up
 
 To Do:
 
