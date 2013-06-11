@@ -8,23 +8,12 @@ module Language.Haskell.Modules.Util.SrcLoc
     , srcLocPairTriple
     , srcSpanText
     , srcPairText
-    , untabify
     ) where
 
 import Data.Default (def, Default)
 import Data.List (groupBy, intercalate)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ModuleHead(..), ModuleName(..), ModulePragma(..), WarningText(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, SrcSpanInfo(..), srcSpanStart)
-
-untabify :: String -> String
-untabify s =
-    loop 0 s
-    where
-      loop :: Int -> String -> String
-      loop n ('\t' : s') = replicate (8 - mod n 8) ' ' ++ loop 0 s'
-      loop _ ('\n' : s') = '\n' : loop 0 s'
-      loop n (c : s') = c : loop (n + 1) s'
-      loop _ [] = []
 
 -- | A version of lines that preserves the presence or absence of a
 -- terminating newline
@@ -174,12 +163,28 @@ cutSrcLoc :: SrcLoc -> String -> (String, String)
 cutSrcLoc loc s =
     case splitAt (srcLine loc - 1) (lines' s) of
       (beforeLines, lastLine : afterLines) ->
-          case splitAt (srcColumn loc - 1) lastLine of
+          case splitLine (srcColumn loc - 1) lastLine of
             ("", "") -> (unlines beforeLines, intercalate "\n" afterLines)
             (startOfLine, "") -> (intercalate "\n" (beforeLines ++ [startOfLine]), intercalate "\n" ("" : afterLines))
             ("", endOfLine) -> (unlines beforeLines, intercalate "\n" ([endOfLine] ++ afterLines))
             (startOfLine, endOfLine) -> (intercalate "\n" (beforeLines ++ [startOfLine]), intercalate "\n" ([endOfLine] ++ afterLines))
       (beforeLines, []) -> (intercalate "\n" beforeLines, "")
+
+splitLine :: Int -> String -> (String, String)
+splitLine cnt str | cnt < 0 = ("", str)
+splitLine cnt str =
+    f 0 "" cnt str
+    where
+      f pos hd 0 tl = (reverse hd, tl) -- finished
+      f pos hd _ "" = (reverse hd, "") -- Out of text, emulate splitAt behavior
+      f pos hd rem ('\t' : tl) =
+          let tab = 8 - mod (pos + 8) 8 in -- How many characters does this tab represent?
+          if rem >= tab
+          then f (pos + tab) ('\t' : hd) (rem - tab) tl -- the goal position is after the end of the tab
+          else error $ "splitLine - attempt to subdivide a tab, " ++ show (cnt, str)
+          -- else f pos hd rem (replicate tab ' ' ++ tl) -- the goal position is in the middle of a tab, untabify
+      f pos hd rem (c : tl) =
+          f (pos + 1) (c : hd) (rem - 1) tl
 
 instance Default SrcLoc where
     def = SrcLoc "<unknown>.hs" 1 1
