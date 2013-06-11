@@ -1,12 +1,17 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
-module Debian.Repo.Package.UriToString
+module Debian.Repo.Package.Constants
     ( -- * Source and binary packages
-      uriToString'
+      Constants(asBool, fromBool)
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
-import Network.URI (URI, uriToString)
 
-uriToString' :: URI -> String
-uriToString' uri = uriToString id uri ""
+
+
+
+class Constants p where
+    asBool :: p -> Maybe Bool
+    fromBool :: Bool -> p
+
+

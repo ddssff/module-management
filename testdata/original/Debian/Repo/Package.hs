@@ -56,6 +56,10 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
 import Text.Regex (matchRegex, mkRegex, splitRegex)
 
+class Constants p where
+    asBool :: p -> Maybe Bool
+    fromBool :: Bool -> p
+
 uriToString' :: URI -> String
 uriToString' uri = uriToString id uri ""
 
