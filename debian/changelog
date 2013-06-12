@@ -1,3 +1,11 @@
+haskell-module-management (0.8.1) unstable; urgency=low
+
+  * Fix handling of declarations with top level and member symbols.  There
+    are still some remaining issues with this when declaring multiple top
+    level symbols in a single declaration.
+
+ -- David Fox <dsf@seereason.com>  Wed, 12 Jun 2013 12:56:10 -0700
+
 haskell-module-management (0.8) unstable; urgency=low
 
   * Clean up for release
