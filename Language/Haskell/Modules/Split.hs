@@ -147,7 +147,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                              (\ _ r -> r)
                              m text Nothing
         newReExporter =
-            header <> imports <> unlines (List.map (prettyPrintWithMode defaultMode) (elems (mapWithKey toImportDecl declMap)))
+            header <> imports <> "\n" <> unlines (List.map (prettyPrintWithMode defaultMode) (elems (mapWithKey toImportDecl declMap)))
             where
               header =
                     foldModule (\ _p pre s r -> r <> pre <> s)
@@ -163,7 +163,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                                (\ _n _ _ r -> r)
                                (\ _w _ _ r -> r)
                                (\ _e _ _ r -> r)
-                               (\ _i pre _ r -> maybe (Just pre) Just r)
+                               (\ _i pre s r -> maybe (Just (pre <> s)) (Just . (<> (pre <> s))) r)
                                (\ _d _ _ r -> r)
                                (\ _ r -> r)
                                m text Nothing
