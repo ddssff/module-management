@@ -5,6 +5,7 @@ module Language.Haskell.Modules.Util.Symbols
     , FoldMembers(foldMembers)
     , symbols
     , exports
+    , imports
     , test1
     ) where
 
@@ -133,6 +134,15 @@ exports x = case (foldDeclared (:) [] x, foldMembers (:) [] x) of
               ([], []) -> []
               ([], ys) -> error "exports: members with no top level name"
               (xs, []) -> map (S.EVar . S.UnQual) xs
+              (xs, ys) -> error "exports: multiple top level names and member names"
+
+imports :: (FoldDeclared a, FoldMembers a) => a -> [S.ImportSpec]
+imports x = case (foldDeclared (:) [] x, foldMembers (:) [] x) of
+              ([x], []) -> [S.IVar x]
+              ([x], ys) -> [S.IThingWith x (sort (map S.VarName ys))]
+              ([], []) -> []
+              ([], ys) -> error "exports: members with no top level name"
+              (xs, []) -> map S.IVar xs
               (xs, ys) -> error "exports: multiple top level names and member names"
 
 -- | Fold over the declared members - e.g. the method names of a class declaration, the constructors of a data declaration.

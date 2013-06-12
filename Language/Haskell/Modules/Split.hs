@@ -21,14 +21,14 @@ import Language.Haskell.Exts.Annotated.Simplify (sModuleName, sName)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..), ExportSpec)
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..), ExportSpec, ImportSpec, ImportDecl(..))
 import Language.Haskell.Modules.Common (mapNames)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFileWithComments, runCleanT)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, writeFile)
 import Language.Haskell.Modules.Util.QIO (noisily)
-import Language.Haskell.Modules.Util.Symbols (symbols, exports)
+import Language.Haskell.Modules.Util.Symbols (symbols, imports, exports)
 import Prelude hiding (writeFile)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitFailure))
@@ -182,18 +182,18 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
 splitModule' _ _ _ = error "splitModule'"
 
 -- | Build an import of the symbols created by a declaration.
-toImportDecl :: S.ModuleName -> [(A.Decl SrcSpanInfo, String)] -> A.ImportDecl SrcSpanInfo
+toImportDecl :: S.ModuleName -> [(A.Decl SrcSpanInfo, String)] -> S.ImportDecl
 toImportDecl (S.ModuleName modName) decls =
-    A.ImportDecl {A.importAnn = def,
-                  A.importModule = A.ModuleName def modName,
-                  A.importQualified = False,
-                  A.importSrc = False,
-                  A.importPkg = Nothing,
-                  A.importAs = Nothing,
-                  A.importSpecs = Just (A.ImportSpecList def False (nub (concatMap toImportSpecs decls)))}
+    S.ImportDecl {S.importLoc = def,
+                  S.importModule = S.ModuleName modName,
+                  S.importQualified = False,
+                  S.importSrc = False,
+                  S.importPkg = Nothing,
+                  S.importAs = Nothing,
+                  S.importSpecs = Just (False, (nub (concatMap toImportSpecs decls)))}
     where
-      toImportSpecs :: (A.Decl SrcSpanInfo, String) -> [A.ImportSpec SrcSpanInfo]
-      toImportSpecs = List.map (A.IVar def) . mapNames . symbols . fst
+      toImportSpecs :: (A.Decl SrcSpanInfo, String) -> [S.ImportSpec]
+      toImportSpecs = imports . fst
 
 -- | Build export specs of the symbols created by a declaration.
 toExportSpecs :: (A.Decl SrcSpanInfo, String) -> [S.ExportSpec]

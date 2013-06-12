@@ -1,3 +1,10 @@
+haskell-module-management (0.8.2) unstable; urgency=low
+
+  * Similar fix to the one in 0.8.1, but for the imports of a split
+    module.
+
+ -- David Fox <dsf@seereason.com>  Wed, 12 Jun 2013 13:27:58 -0700
+
 haskell-module-management (0.8.1) unstable; urgency=low
 
   * Fix handling of declarations with top level and member symbols.  There
