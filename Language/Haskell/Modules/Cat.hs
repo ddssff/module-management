@@ -14,13 +14,13 @@ import Control.Monad.Trans (liftIO)
 import Data.Default (def)
 import Data.Generics (Data, everywhere, mkT, Typeable)
 import Data.List as List (filter, intercalate, isPrefixOf, map)
-import Data.Map as Map (fromList, lookup, Map, member, toAscList)
+import Data.Map as Map (fromList, lookup, Map, member, toAscList, insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), Monoid)
 import Data.Set as Set (fromList, Set, union)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName), ImportDecl(..))
 import Language.Haskell.Exts.Parser (fromParseResult)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
@@ -77,15 +77,15 @@ removeModuleIfPresent name =
 
 -- Update the module 'name' to reflect the result of the cat operation.
 doModule :: MonadClean m => Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
-doModule info input@(first : _) output name =
+doModule info inputs@(first : _) output name =
     do -- The new module will be based on the existing module, unless
        -- name equals output and output does not exist
        let base = if name == output && not (Map.member name info) then first else name
        (m, text) <- maybe (loadModule base) return (Map.lookup name info)
-       let text' = doModule' info input output (name, (m, text))
+       let text' = doModule' info inputs output (name, (m, text))
        return $ if name == output
                 then Modified name text'
-                else if elem name input
+                else if elem name inputs
                      then Removed name
                      else if text /= text'
                           then Modified name text'
@@ -101,6 +101,7 @@ doModule' info inputs output (name, (m, text)) =
         | not (elem name (output : inputs)) -> doOther inputs output (m, text)
         | True -> ""
 
+-- | Create the output module, the destination of the cat.
 doOutput :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
 doOutput info inputs output (m, text) =
     header ++ fromMaybe "" exports ++ fromMaybe "" imports ++ fromMaybe "" decls
@@ -148,6 +149,9 @@ echo _ pre s r = r <> pre <> s
 ignore :: t -> t1 -> t2 -> t3 -> t3
 ignore _ _ _ r = r
 
+-- | Update a module that does not participate in the cat - this
+-- involves changing imports and exports of catted modules.
+-- (Shouldn't this also fix qualified symbols?)
 doOther :: [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
 doOther inputs input@(S.ModuleName input') (m, text) =
     header ++ exports ++ imports ++ decls
@@ -220,9 +224,18 @@ moduleImports old name =
 
 -- | Grab the declarations out of the old modules, fix any
 -- qualified symbol references, prettyprint and return.
+--
+-- Bug: If we cat two modules A and B, and A imported a symbol from B
+-- and referenced that symbol with a qualifier from an "as" import, the
+-- as qualifier needs to be changed to a full qualifier.
+--
+-- In terms of what is going on right here, if m imports any of the
+-- modules in oldmap with an "as" qualifier, identifiers using the
+-- module name in the "as" qualifier must use new instead.
 moduleDecls :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> S.ModuleName -> String
-moduleDecls old new name =
-    let (Just (m, text)) = Map.lookup name old in
+moduleDecls oldmap new name =
+    let (Just (m@(A.Module _ _ _ imports _), text)) = Map.lookup name oldmap in
+    let oldmap' = foldr f oldmap imports in
     foldModule (\ _ _ _ r -> r)
                (\ _ _ _ r -> r)
                (\ _ _ _ r -> r)
@@ -230,24 +243,30 @@ moduleDecls old new name =
                (\ _ _ _ r -> r)
                (\ d pre s r ->
                     let d' = sDecl d
-                        d'' = fixReferences old new d' in
+                        d'' = fixReferences oldmap' new d' in
                     r <>
                     -- Omit the first pre of each module, it probably contains ") where"
                     (if r /= "" then pre else "") <>
                     (if d'' /= d' then "-- Declaration reformatted because module qualifiers changed\n" <> prettyPrintWithMode defaultMode d'' <> "\n\n" else s))
                (\ s r -> r <> s)
                m text "" <> "\n"
+    where
+      f imp@(A.ImportDecl _ m _ _ _ (Just a) specs) mp =
+          case Map.lookup (sModuleName m) oldmap of
+            Just x -> Map.insert (sModuleName a) x mp
+            _ -> mp
+      f _ mp = mp
 
 -- | Change any ModuleName in 'old' to 'new'.  Note that this will
 -- probably mess up the location information, so the result (if
 -- different from the original) should be prettyprinted, not
 -- exactPrinted.
 fixReferences :: (Data a, Typeable a) => Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> a -> a
-fixReferences old new x =
+fixReferences oldmap new x =
     everywhere (mkT moveModuleName) x
     where
       moveModuleName :: S.ModuleName -> S.ModuleName
-      moveModuleName name@(S.ModuleName _) = if Map.member name old then new else name
+      moveModuleName name@(S.ModuleName _) = if Map.member name oldmap then new else name
 
 test1 :: Test
 test1 =
@@ -349,12 +368,12 @@ testModules =
              S.ModuleName "Tmp.File",
              S.ModuleName "Text.Format"]
 
+loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (A.Module SrcSpanInfo, String))
+loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names
+
 loadModule :: MonadClean m => S.ModuleName -> m (A.Module SrcSpanInfo, String)
 loadModule name =
     do path <- modulePath name
        text <- liftIO $ readFile path
        (m, _) <- parseFileWithComments path >>= return . fromParseResult
        return (m, text)
-
-loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (A.Module SrcSpanInfo, String))
-loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names

@@ -6,11 +6,11 @@ module Debian.Repo.Types.Slice
     , NamedSliceList(..)
     ) where
 
-import Debian.Repo.Types.Repo (RepoKey)
+import qualified Debian.Repo.Types.Repo as R (RepoKey)
 import Debian.Sources (DebSource(..), SliceName(..), SourceType(..))
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
 
-data Slice = Slice {sliceRepoKey :: RepoKey, sliceSource :: DebSource} deriving (Eq, Ord, Show)
+data Slice = Slice {sliceRepoKey :: R.RepoKey, sliceSource :: DebSource} deriving (Eq, Ord, Show)
 
 -- | Each line of the sources.list represents a slice of a repository
 data SliceList = SliceList {slices :: [Slice]} deriving (Eq, Ord, Show)

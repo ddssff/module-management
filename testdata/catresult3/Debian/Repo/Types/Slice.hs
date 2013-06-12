@@ -18,7 +18,13 @@ import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
 
 
 
-data Slice = Slice {sliceRepoKey :: RepoKey, sliceSource :: DebSource} deriving (Eq, Ord, Show)
+-- Declaration reformatted because module qualifiers changed
+ 
+data Slice = Slice{sliceRepoKey :: Debian.Repo.Types.Slice.RepoKey,
+                   sliceSource :: DebSource}
+           deriving (Eq, Ord, Show)
+
+
 
 -- | Each line of the sources.list represents a slice of a repository
 data SliceList = SliceList {slices :: [Slice]} deriving (Eq, Ord, Show)

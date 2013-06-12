@@ -1,5 +1,5 @@
 Name:               module-management
-Version:            0.8.2
+Version:            0.8.3
 Synopsis:           Several functions for modifying source files and managing their imports
 Homepage:           https://src.seereason.com/module-management
 License:            BSD3
