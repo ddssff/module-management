@@ -1,6 +1,6 @@
-{-# LANGUAGE FlexibleInstances, StandaloneDeriving, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Debian.Repo.Types.Repo
+module Debian.Repo.Types.Slice
     ( EnvRoot(..), EnvPath(..), outsidePath, appendPath, rootEnvPath, Repo(..), RepoKey(..), repoURI, repoKeyURI, libraryCompatibilityLevel, compatibilityFile, Slice(..), SliceList(..), NamedSliceList(..)
     ) where
 

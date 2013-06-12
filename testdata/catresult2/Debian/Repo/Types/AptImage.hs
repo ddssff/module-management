@@ -7,7 +7,8 @@ module Debian.Repo.Types.AptImage
 import Debian.Arch (Arch(..))
 import Debian.Release (ReleaseName(..))
 import Debian.Repo.Types.AptCache (AptCache(..))
-import Debian.Repo.Types.Common (EnvRoot, SliceList)
+import Debian.Repo.Types.Common (EnvRoot)
+import qualified Debian.Repo.Types.Common as T (SliceList)
 import Debian.Repo.Types.PackageIndex (BinaryPackage, SourcePackage)
 
 {-
@@ -20,7 +21,7 @@ data AptImage =
     AptImage { aptGlobalCacheDir :: FilePath
              , aptImageRoot :: EnvRoot
              , aptImageArch :: Arch
-             , aptImageSliceList :: SliceList
+             , aptImageSliceList :: T.SliceList
              , aptImageReleaseName :: ReleaseName
              , aptImageSourcePackages :: [SourcePackage]
              , aptImageBinaryPackages :: [BinaryPackage]

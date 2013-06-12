@@ -43,8 +43,8 @@ import Debian.Repo.PackageIndex (binaryIndexList, packageIndexPath, sourceIndexL
 import Debian.Repo.Types.AptCache (AptCache(aptArch, rootDir))
 import Debian.Repo.Types.PackageIndex (BinaryPackage(..), BinaryPackageLocal, binaryPackageName, makeBinaryPackageID, makeSourcePackageID, PackageID(..), PackageIndex(..), PackageIndexLocal, SourceControl(..), SourceFileSpec(SourceFileSpec, sourceFileName), SourcePackage(..))
 import Debian.Repo.Types.Release (Release(releaseName))
-import Debian.Repo.Types.Repo (EnvRoot(rootPath), outsidePath, RepoKey, repoKeyURI)
 import Debian.Repo.Types.Repository (LocalRepository, MonadRepoCache, repoRoot)
+import Debian.Repo.Types.Slice (EnvRoot(rootPath), outsidePath, RepoKey, repoKeyURI)
 import Debian.URI (fileFromURIStrict)
 import Debian.Version (DebianVersion, parseDebianVersion)
 import qualified Debian.Version as V (buildDebianVersion, epoch, revision, version)
@@ -54,6 +54,13 @@ import System.FilePath ((</>), takeDirectory)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
 import Text.Regex (matchRegex, mkRegex, splitRegex)
+
+class Constants p where
+    asBool :: p -> Maybe Bool
+    fromBool :: Bool -> p
+
+useConstants :: Constants p => p -> Maybe Bool
+useConstants x = asBool x
 
 uriToString' :: URI -> String
 uriToString' uri = uriToString id uri ""

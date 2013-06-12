@@ -9,7 +9,7 @@ import Debian.Release (ReleaseName(..))
 import Debian.Repo.Types.AptCache (AptCache(..))
 import Debian.Repo.Types.EnvPath (EnvRoot)
 import Debian.Repo.Types.PackageIndex (BinaryPackage, SourcePackage)
-import Debian.Repo.Types.Slice (SliceList)
+import qualified Debian.Repo.Types.Slice as T (SliceList)
 
 {-
 instance Show FileStatus where
@@ -21,7 +21,7 @@ data AptImage =
     AptImage { aptGlobalCacheDir :: FilePath
              , aptImageRoot :: EnvRoot
              , aptImageArch :: Arch
-             , aptImageSliceList :: SliceList
+             , aptImageSliceList :: T.SliceList
              , aptImageReleaseName :: ReleaseName
              , aptImageSourcePackages :: [SourcePackage]
              , aptImageBinaryPackages :: [BinaryPackage]

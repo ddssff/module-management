@@ -59,6 +59,9 @@ class Constants p where
     asBool :: p -> Maybe Bool
     fromBool :: Bool -> p
 
+useConstants :: Constants p => p -> Maybe Bool
+useConstants x = asBool x
+
 uriToString' :: URI -> String
 uriToString' uri = uriToString id uri ""
 

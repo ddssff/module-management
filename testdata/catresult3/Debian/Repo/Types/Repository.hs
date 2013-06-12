@@ -35,7 +35,7 @@ import Debian.Release (parseReleaseName, ReleaseName(..), releaseName', Section,
 import Debian.Repo.Monads.Top (MonadTop, sub)
 import Debian.Repo.Sync (rsync)
 import Debian.Repo.Types.Release (makeReleaseInfo, Release(releaseName))
-import Debian.Repo.Types.Repo (compatibilityFile, EnvPath(EnvPath), EnvRoot(EnvRoot), libraryCompatibilityLevel, outsidePath, Repo(..), RepoKey(..))
+import Debian.Repo.Types.Slice (compatibilityFile, EnvPath(EnvPath), EnvRoot(EnvRoot), libraryCompatibilityLevel, outsidePath, Repo(..), RepoKey(..))
 import Debian.URI (dirFromURI, fileFromURI, fromURI', toURI', URI(uriScheme, uriPath), URI', uriToString')
 import Debian.UTF8 as Deb (decode)
 import Extra.Files (maybeWriteFile)

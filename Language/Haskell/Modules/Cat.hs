@@ -288,9 +288,9 @@ test3 =
            do _ <- catModules
                      (Set.fromList testModules)
                      [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
-                     (S.ModuleName "Debian.Repo.Types.Repo")
+                     (S.ModuleName "Debian.Repo.Types.Slice")
               mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
-         (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "testdata/catresult3", "testdata/copy"] ""
+         (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", "testdata/catresult3", "testdata/copy"] ""
          let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
          assertEqual "catModules3" (ExitSuccess, "", "") (code, out', err)
 
