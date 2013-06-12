@@ -17,18 +17,18 @@ import Data.Set as Set (fromList, intersection, map, null, Set)
 import Data.Set.Extra (gFind)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
 import qualified Language.Haskell.Exts.Annotated as A (Decl, ExportSpec(EVar), ImportDecl(ImportDecl, importAnn, importAs, importModule, importPkg, importQualified, importSpecs, importSrc), ImportSpec(IVar), ImportSpecList(ImportSpecList), Module(Module), ModuleHead(ModuleHead), ModuleName(..), Name(..), QName(UnQual))
-import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
+import Language.Haskell.Exts.Annotated.Simplify (sModuleName, sName)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import Language.Haskell.Modules.Common (mapNames, voidName)
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..), ExportSpec)
+import Language.Haskell.Modules.Common (mapNames)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFileWithComments, runCleanT)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, writeFile)
 import Language.Haskell.Modules.Util.QIO (noisily)
-import Language.Haskell.Modules.Util.Symbols (HasSymbols(symbols))
+import Language.Haskell.Modules.Util.Symbols (symbols, exports)
 import Prelude hiding (writeFile)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitFailure))
@@ -36,11 +36,11 @@ import System.FilePath ((<.>), dropExtension)
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
-subModuleName :: A.ModuleName a -> A.Name b -> A.ModuleName a
-subModuleName (A.ModuleName l moduleName) name =
-    A.ModuleName l (case name of
-                      A.Symbol _ s -> moduleName <.> f s
-                      A.Ident _ s -> moduleName <.> f s)
+subModuleName :: S.ModuleName -> S.Name -> S.ModuleName
+subModuleName (S.ModuleName moduleName) name =
+    S.ModuleName (case name of
+                    S.Symbol s -> moduleName <.> f s
+                    S.Ident s -> moduleName <.> f s)
     where
       f x =
           case List.filter isAlphaNum x of
@@ -82,9 +82,9 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
     where
         -- Build the new modules
         newModules :: Map S.ModuleName String
-        newModules = mapKeys sModuleName $ mapWithKey newModule declMap
+        newModules = mapWithKey newModule declMap
 
-        newModule name'@(A.ModuleName _ modName) modDecls =
+        newModule name'@(S.ModuleName modName) modDecls =
             header <>
             exports <> intercalate ", " (nub (List.map (prettyPrintWithMode defaultMode) newExports)) <>
             imports <> unlines (List.map (prettyPrintWithMode defaultMode) (elems newImports)) <> oldImports <>
@@ -93,7 +93,8 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
               newExports = nub (concatMap toExportSpecs modDecls)
               -- In this module, we need to import any module that declares a symbol
               -- referenced here.
-              referenced = Set.map voidName (gFind modDecls :: Set (A.Name SrcSpanInfo))
+              referenced :: Set S.Name
+              referenced = Set.map sName (gFind modDecls :: Set (A.Name SrcSpanInfo))
               -- newImports :: Map ModuleName ImportDecl
               newImports = mapWithKey toImportDecl (Map.delete name'
                                                            (Map.filter (\ pairs ->
@@ -168,23 +169,23 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                                m text Nothing
 
         -- Build a map from module name to the list of declarations that will be in that module.
-        -- declMap :: Map ModuleName [(Decl, String)]
+        declMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
         declMap =
             foldModule (\ _ _ _ r -> r)
                        (\ _ _ _ r -> r)
                        (\ _ _ _ r -> r)
                        (\ _ _ _ r -> r)
                        (\ _ _ _ r -> r)
-                       (\ d pre s r -> foldr (\ sym mp -> insertWith (++) (subModuleName moduleName sym) [(d, pre <> s)] mp) r (symbols d))
+                       (\ d pre s r -> foldr (\ sym mp -> insertWith (++) (subModuleName (sModuleName moduleName) sym) [(d, pre <> s)] mp) r (symbols d))
                        (\ _ r -> r)
                        m text Map.empty
 splitModule' _ _ _ = error "splitModule'"
 
 -- | Build an import of the symbols created by a declaration.
-toImportDecl :: A.ModuleName SrcSpanInfo -> [(A.Decl SrcSpanInfo, String)] -> A.ImportDecl SrcSpanInfo
-toImportDecl modName decls =
+toImportDecl :: S.ModuleName -> [(A.Decl SrcSpanInfo, String)] -> A.ImportDecl SrcSpanInfo
+toImportDecl (S.ModuleName modName) decls =
     A.ImportDecl {A.importAnn = def,
-                  A.importModule = modName,
+                  A.importModule = A.ModuleName def modName,
                   A.importQualified = False,
                   A.importSrc = False,
                   A.importPkg = Nothing,
@@ -195,8 +196,8 @@ toImportDecl modName decls =
       toImportSpecs = List.map (A.IVar def) . mapNames . symbols . fst
 
 -- | Build export specs of the symbols created by a declaration.
-toExportSpecs :: (A.Decl SrcSpanInfo, String) -> [A.ExportSpec SrcSpanInfo]
-toExportSpecs (x, _) = List.map (\ name -> A.EVar def (A.UnQual def name)) (mapNames (symbols x))
+toExportSpecs :: (A.Decl SrcSpanInfo, String) -> [S.ExportSpec]
+toExportSpecs (x, _) = exports x -- List.map (\ name -> A.EVar def (A.UnQual def name)) (mapNames (symbols x))
 
 tests :: Test
 tests = TestList [test1]

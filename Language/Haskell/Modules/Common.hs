@@ -2,7 +2,6 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.Common
     ( groupBy'
-    , voidName
     , mapNames
     , ModuleResult(..)
     , modulePathBase
@@ -13,7 +12,7 @@ import Control.Exception (bracket)
 import Data.Default (def, Default)
 import Data.List (groupBy, sortBy)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Name(..))
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath ((<.>))
 
@@ -28,14 +27,10 @@ toEq cmp a b =
 groupBy' :: Ord a => (a -> a -> Ordering) -> [a] -> [[a]]
 groupBy' cmp xs = groupBy (toEq cmp) $ sortBy cmp xs
 
-voidName :: A.Name a -> A.Name ()
-voidName (A.Ident _ x) = A.Ident () x
-voidName (A.Symbol _ x) = A.Symbol () x
-
-mapNames :: Default a => [A.Name ()] -> [A.Name a]
+mapNames :: Default a => [S.Name] -> [A.Name a]
 mapNames [] = []
-mapNames (A.Ident () x : more) = A.Ident def x : mapNames more
-mapNames (A.Symbol () x : more) = A.Symbol def x : mapNames more
+mapNames (S.Ident x : more) = A.Ident def x : mapNames more
+mapNames (S.Symbol x : more) = A.Symbol def x : mapNames more
 
 data ModuleResult
     = Unchanged S.ModuleName

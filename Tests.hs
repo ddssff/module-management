@@ -11,7 +11,6 @@ import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold as Fold (test1)
 import Language.Haskell.Modules.Imports as Imports (tests)
 import Language.Haskell.Modules.Split as Split (tests)
-import Language.Haskell.Modules.Util.SrcLoc (untabify)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import Test.HUnit (assertEqual, Counts(..), runTestTT, Test(TestList, TestCase, TestLabel))
 
@@ -34,7 +33,7 @@ withTestData f path = withCurrentDirectory "testdata/original" $
        source <- try (parseFileWithComments defaultParseMode path)
        case (text, source) of
          (Right text', Right (ParseOk (m, comments))) ->
-             f m comments (untabify text')
+             f m comments text'
          (Right _, Right _) -> error "parse failure"
          (Left (e :: SomeException), _) -> error $ "failure: " ++ show e
          (_, Left (e :: SomeException)) -> error $ "failure: " ++ show e

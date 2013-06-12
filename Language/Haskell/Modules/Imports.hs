@@ -21,13 +21,13 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), I
 import Language.Haskell.Exts.Extension (Extension(PackageImports, StandaloneDeriving, TypeSynonymInstances, FlexibleInstances))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..))
+import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (modulePathBase, ModuleResult(..), withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Params (getParams, markForDelete, modifyParams, MonadClean, Params(..), parseFile, parseFileWithComments, runCleanT, scratchDir)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (noisily, qPutStrLn, quietly)
-import Language.Haskell.Modules.Util.Symbols (HasSymbols(symbols))
+import Language.Haskell.Modules.Util.Symbols (symbols)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 import System.Exit (ExitCode(..))
@@ -262,9 +262,9 @@ equalSpecs a b = compareSpecs a b == EQ
 -- dropPrefix :: Eq a => [a] -> [a] -> [a]
 -- dropPrefix pre x = if isPrefixOf pre x then drop (length x) x else x
 
-nameString :: A.Name () -> String
-nameString (A.Ident _ s) = s
-nameString (A.Symbol _ s) = s
+nameString :: S.Name -> String
+nameString (S.Ident s) = s
+nameString (S.Symbol s) = s
 
 tests :: Test
 tests = TestLabel "Clean" (TestList [test1, test2, test3, test4, test5])
