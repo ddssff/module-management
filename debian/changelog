@@ -1,3 +1,9 @@
+haskell-module-management (0.8.4) unstable; urgency=low
+
+  * Preserve imports required to re-export symbols in split modules.
+
+ -- David Fox <dsf@seereason.com>  Wed, 12 Jun 2013 17:02:35 -0700
+
 haskell-module-management (0.8.3) unstable; urgency=low
 
   * Make sure identifiers imported by "as" imports get updated when modules are catted

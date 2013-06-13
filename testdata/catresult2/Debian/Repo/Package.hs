@@ -19,6 +19,8 @@ module Debian.Repo.Package
     , putPackages
     , releaseSourcePackages
     , releaseBinaryPackages
+    , TH.FixityDirection(..)
+    , TH.Fixity(..)
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
@@ -49,6 +51,7 @@ import Debian.URI (fileFromURIStrict)
 import Debian.Version (DebianVersion, parseDebianVersion)
 import qualified Debian.Version as V (buildDebianVersion, epoch, revision, version)
 import Extra.Files (writeAndZipFileWithBackup)
+import qualified Language.Haskell.TH.Syntax as TH (Fixity(..), FixityDirection(..))
 import Network.URI (escapeURIString, URI(..), URIAuth(..), uriToString)
 import System.FilePath ((</>), takeDirectory)
 import System.IO.Unsafe (unsafeInterleaveIO)

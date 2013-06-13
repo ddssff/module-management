@@ -19,6 +19,8 @@ module Debian.Repo.Package
     , putPackages
     , releaseSourcePackages
     , releaseBinaryPackages
+    , TH.FixityDirection(..)
+    , TH.Fixity(..)
     -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
@@ -39,3 +41,4 @@ import Debian.Repo.Package.SourcePackagesOfCachedIndex (sourcePackagesOfCachedIn
 import Debian.Repo.Package.SourcePackagesOfIndex (sourcePackagesOfIndex)
 import Debian.Repo.Package.ToBinaryPackage (toBinaryPackage)
 import Debian.Repo.Package.ToSourcePackage (toSourcePackage)
+import qualified Language.Haskell.TH.Syntax as TH (Fixity(..), FixityDirection(..))
