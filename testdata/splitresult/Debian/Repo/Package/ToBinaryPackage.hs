@@ -1,9 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.ToBinaryPackage
-    ( -- * Source and binary packages
-      toBinaryPackage
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( toBinaryPackage
     ) where
 
 import qualified Data.Text as T (unpack)

@@ -6,9 +6,9 @@ import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileW
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import Language.Haskell.Modules.Cat as Cat (test1, test2)
+import Language.Haskell.Modules.Cat as Cat (tests)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Fold as Fold (test1)
+import Language.Haskell.Modules.Fold as Fold (tests)
 import Language.Haskell.Modules.Imports as Imports (tests)
 import Language.Haskell.Modules.Split as Split (tests)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
@@ -16,9 +16,8 @@ import Test.HUnit (assertEqual, Counts(..), runTestTT, Test(TestList, TestCase, 
 
 main :: IO ()
 main =
-    do counts <- runTestTT (TestList [TestLabel "Cat1" Cat.test1,
-                                      TestLabel "Cat2" Cat.test2,
-                                      TestLabel "Fold" Fold.test1,
+    do counts <- runTestTT (TestList [TestLabel "Cat" Cat.tests,
+                                      TestLabel "Fold" Fold.tests,
                                       TestLabel "Imports" Imports.tests,
                                       TestLabel "Main" Main.tests,
                                       TestLabel "Split" Split.tests])

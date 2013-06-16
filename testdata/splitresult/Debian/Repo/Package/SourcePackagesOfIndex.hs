@@ -1,9 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.SourcePackagesOfIndex
-    ( -- * Source and binary packages
-      sourcePackagesOfIndex
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( sourcePackagesOfIndex
     ) where
 
 import Control.Exception as E (SomeException)

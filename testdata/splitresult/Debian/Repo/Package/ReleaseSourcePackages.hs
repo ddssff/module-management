@@ -1,9 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.ReleaseSourcePackages
-    ( -- * Source and binary packages
-      releaseSourcePackages
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( releaseSourcePackages
     ) where
 
 import Control.Exception as E (SomeException)

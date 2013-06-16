@@ -1,9 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.ToSourcePackage
-    ( -- * Source and binary packages
-      toSourcePackage
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( toSourcePackage
     ) where
 
 import Data.List as List (intercalate, map, partition)

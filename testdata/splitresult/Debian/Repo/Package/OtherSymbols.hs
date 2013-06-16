@@ -1,10 +1,9 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.OtherSymbols
-    ( -- * Source and binary packages
-      (+?+)
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( (+?+)
     ) where
+
 
 
 
@@ -17,7 +16,6 @@ module Debian.Repo.Package.OtherSymbols
       _ -> a ++ "_" ++ b
 
 -- FIXME: assuming the index is part of the cache
-
 (+?+) a ('_' : b) = a +?+ b
 (+?+) "" b = b
 (+?+) a b =
@@ -26,7 +24,6 @@ module Debian.Repo.Package.OtherSymbols
       _ -> a ++ "_" ++ b
 
 -- FIXME: assuming the index is part of the cache
-
 (+?+) a ('_' : b) = a +?+ b
 (+?+) "" b = b
 (+?+) a b =

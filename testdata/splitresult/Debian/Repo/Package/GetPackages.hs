@@ -1,9 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.GetPackages
-    ( -- * Source and binary packages
-      getPackages
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( getPackages
     ) where
 
 import Control.Exception as E (ErrorCall(ErrorCall), SomeException(..), try)

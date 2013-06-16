@@ -1,10 +1,9 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.ParseSourceParagraph
-    ( -- * Source and binary packages
-      parseSourceParagraph
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( parseSourceParagraph
     ) where
+
 
 import Debian.Control (ControlFunctions(stripWS))
 import qualified Debian.Control.Text as B (fieldValue, Paragraph)

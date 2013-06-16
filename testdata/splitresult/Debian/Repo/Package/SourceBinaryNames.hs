@@ -1,10 +1,9 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.SourceBinaryNames
-    ( -- * Source and binary packages
-      sourceBinaryNames
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( sourceBinaryNames
     ) where
+
 
 import Data.List as List (map)
 import qualified Data.Text as T (unpack)
@@ -12,8 +11,6 @@ import Debian.Control (formatParagraph)
 import qualified Debian.Control.Text as B (fieldValue, Paragraph)
 import Debian.Relation (BinPkgName(..))
 import Text.Regex (mkRegex, splitRegex)
-
-
 
 sourceBinaryNames :: B.Paragraph -> [BinPkgName]
 sourceBinaryNames paragraph =

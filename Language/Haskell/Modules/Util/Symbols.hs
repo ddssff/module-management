@@ -6,18 +6,18 @@ module Language.Haskell.Modules.Util.Symbols
     , symbols
     , exports
     , imports
-    , test1
+    , tests
     ) where
 
 import Data.Default (def)
 import Data.List (sort)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Binds(..), ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), Exp(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name(..), Pat(..), PatField(..), QName(..), QualConDecl(..), Rhs(..), RPat(..), Type(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), Exp(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name(..), Pat(..), PatField(..), QName(..), QualConDecl(..), Rhs(..), RPat(..), Type(..))
 import Language.Haskell.Exts.Annotated.Simplify (sName)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportSpec(..), Name(..), ExportSpec(..), CName(..), QName(..))
 import Language.Haskell.Modules.Util.SrcLoc ()
-import Test.HUnit (Test(TestCase), assertEqual)
+import Test.HUnit (Test(TestCase, TestList), assertEqual)
 
 -- | Do a fold over the names that are declared in a declaration (not
 -- every name that appears, just the ones that the declaration is
@@ -43,11 +43,11 @@ instance FoldDeclared (A.Decl a) where
     foldDeclared f r (A.TypeSig _ xs _) = foldl (foldDeclared f) r xs
     foldDeclared f r (A.FunBind _ xs) = foldl (foldDeclared f) r xs
     foldDeclared f r (A.PatBind _ x _ _ _) = foldDeclared f r x
-    foldDeclared f r (A.ForImp _ _ _ _ _ _) = error "ForImp"
-    foldDeclared _ r (A.ForExp _ _ _ _ _) = error "ForExp"
+    foldDeclared _f _r (A.ForImp _ _ _ _ _ _) = error "ForImp"
+    foldDeclared _ _r (A.ForExp _ _ _ _ _) = error "ForExp"
     foldDeclared _ r (A.RulePragmaDecl _ _) = r
     foldDeclared _ r (A.DeprPragmaDecl _ _) = r
-    foldDeclared f r (A.WarnPragmaDecl _ _) = r
+    foldDeclared _f r (A.WarnPragmaDecl _ _) = r
     foldDeclared f r (A.InlineSig _ _ _ x) = foldDeclared f r x
     foldDeclared f r (A.InlineConlikeSig _ _ x) = foldDeclared f r x
     foldDeclared f r (A.SpecSig _ x _) = foldDeclared f r x
@@ -93,12 +93,12 @@ instance FoldDeclared (A.Pat a) where
     foldDeclared f r (A.PatTypeSig _ x _) = foldDeclared f r x	-- pattern with type signature
     foldDeclared f r (A.PViewPat _ _ x) = foldDeclared f r x	-- view patterns of the form (exp -> pat)
     foldDeclared f r (A.PRPat _ rps) = foldl (foldDeclared f) r rps	-- regular list pattern
-    foldDeclared f r (A.PXTag _ xn pxs mp ps) = error "PXTag"	-- XML element pattern
-    foldDeclared f r (A.PXETag _ xn pxs mp) = error "PXETag"	-- XML singleton element pattern
-    foldDeclared f r (A.PXPcdata _ s) = error "XPcdata"	-- XML PCDATA pattern
-    foldDeclared f r (A.PXPatTag _ p) = error "PXPatTag"	-- XML embedded pattern
-    foldDeclared f r (A.PXRPats _ rps) = error "PXRPats"	-- XML regular list pattern
-    foldDeclared f r (A.PExplTypeArg _ _n _t) = error "PExplTypeArg"	-- Explicit generics style type argument e.g. f {| Int |} x = ...
+    foldDeclared _f _r (A.PXTag _ _xn _pxs _mp _ps) = error "PXTag"	-- XML element pattern
+    foldDeclared _f _r (A.PXETag _ _xn _pxs _mp) = error "PXETag"	-- XML singleton element pattern
+    foldDeclared _f _r (A.PXPcdata _ _s) = error "XPcdata"	-- XML PCDATA pattern
+    foldDeclared _f _r (A.PXPatTag _ _p) = error "PXPatTag"	-- XML embedded pattern
+    foldDeclared _f _r (A.PXRPats _ _rps) = error "PXRPats"	-- XML regular list pattern
+    foldDeclared _f _r (A.PExplTypeArg _ _n _t) = error "PExplTypeArg"	-- Explicit generics style type argument e.g. f {| Int |} x = ...
     foldDeclared _ r (A.PQuasiQuote _ _ _) = r	-- quasi quote pattern: [$name| string |]
     foldDeclared f r (A.PBangPat _ x) = foldDeclared f r x	-- strict (bang) pattern: f !x = ...
 instance FoldDeclared (A.PatField a) where
@@ -129,21 +129,21 @@ symbols = foldDeclared (:) []
 
 exports :: (FoldDeclared a, FoldMembers a) => a -> [S.ExportSpec]
 exports x = case (foldDeclared (:) [] x, foldMembers (:) [] x) of
-              ([x], []) -> [S.EVar (S.UnQual x)]
-              ([x], ys) -> [S.EThingWith (S.UnQual x) (sort (map S.VarName ys))]
+              ([n], []) -> [S.EVar (S.UnQual n)]
+              ([n], ms) -> [S.EThingWith (S.UnQual n) (sort (map S.VarName ms))]
               ([], []) -> []
-              ([], ys) -> error "exports: members with no top level name"
-              (xs, []) -> map (S.EVar . S.UnQual) xs
-              (xs, ys) -> error "exports: multiple top level names and member names"
+              ([], _) -> error "exports: members with no top level name"
+              (ns, []) -> map (S.EVar . S.UnQual) ns
+              (_ns, _ms) -> error "exports: multiple top level names and member names"
 
 imports :: (FoldDeclared a, FoldMembers a) => a -> [S.ImportSpec]
 imports x = case (foldDeclared (:) [] x, foldMembers (:) [] x) of
-              ([x], []) -> [S.IVar x]
-              ([x], ys) -> [S.IThingWith x (sort (map S.VarName ys))]
+              ([n], []) -> [S.IVar n]
+              ([n], ms) -> [S.IThingWith n (sort (map S.VarName ms))]
               ([], []) -> []
-              ([], ys) -> error "exports: members with no top level name"
-              (xs, []) -> map S.IVar xs
-              (xs, ys) -> error "exports: multiple top level names and member names"
+              ([], _ms) -> error "exports: members with no top level name"
+              (ns, []) -> map S.IVar ns
+              (_ns, _ms) -> error "exports: multiple top level names and member names"
 
 -- | Fold over the declared members - e.g. the method names of a class declaration, the constructors of a data declaration.
 class FoldMembers a where
@@ -170,6 +170,9 @@ instance FoldDeclared (A.FieldDecl l) where
 
 instance FoldDeclared (A.GadtDecl l) where
     foldDeclared f r (A.GadtDecl _ x _) = foldDeclared f r x
+
+tests :: Test
+tests = TestList [test1, test2, test3, test4]
 
 test1 :: Test
 test1 = TestCase (assertEqual "DefaultDecl" " \ndefault (foo)" (prettyPrint (A.DefaultDecl def [A.TyVar def (A.Ident def "foo")] :: A.Decl SrcSpanInfo)))

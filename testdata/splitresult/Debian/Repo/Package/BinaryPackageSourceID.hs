@@ -1,10 +1,9 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.BinaryPackageSourceID
-    ( -- * Source and binary packages
-      binaryPackageSourceID
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( binaryPackageSourceID
     ) where
+
 
 import qualified Data.Text as T (unpack)
 import qualified Debian.Control.Text as B (fieldValue)
@@ -12,8 +11,6 @@ import Debian.Relation (BinPkgName(..))
 import Debian.Repo.Types.PackageIndex (BinaryPackage(packageID, packageInfo), makeBinaryPackageID, PackageID(..), PackageIndex(PackageIndex))
 import Debian.Version (parseDebianVersion)
 import Text.Regex (matchRegex, mkRegex)
-
-
 
 -- | Parse the /Source/ field of a binary package's control
 -- information, this may specify a version number for the source

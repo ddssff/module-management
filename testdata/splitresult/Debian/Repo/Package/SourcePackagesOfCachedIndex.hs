@@ -1,9 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.SourcePackagesOfCachedIndex
-    ( -- * Source and binary packages
-      sourcePackagesOfCachedIndex
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( sourcePackagesOfCachedIndex
     ) where
 
 import Control.Exception as E (catch)

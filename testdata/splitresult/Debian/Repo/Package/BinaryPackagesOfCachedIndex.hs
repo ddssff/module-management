@@ -1,9 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.BinaryPackagesOfCachedIndex
-    ( -- * Source and binary packages
-      binaryPackagesOfCachedIndex
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( binaryPackagesOfCachedIndex
     ) where
 
 import "mtl" Control.Monad.Trans (MonadIO(..))

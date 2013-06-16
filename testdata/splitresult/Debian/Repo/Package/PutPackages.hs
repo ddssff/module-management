@@ -1,10 +1,9 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.PutPackages
-    ( -- * Source and binary packages
-      putPackages
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( putPackages
     ) where
+
 
 import qualified Data.ByteString.Lazy.Char8 as L (fromChunks)
 import Data.List as List (intercalate, intersperse, map)

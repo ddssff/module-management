@@ -1,10 +1,9 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.SourcePackageBinaryIDs
-    ( -- * Source and binary packages
-      sourcePackageBinaryIDs
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( sourcePackageBinaryIDs
     ) where
+
 
 import Data.List as List (map)
 import qualified Data.Text as T (unpack)
@@ -30,7 +29,6 @@ sourcePackageBinaryIDs arch sourceIndex package =
       info = sourceParagraph package
 
 -- | Get the contents of a package index
-
 sourcePackageBinaryIDs Source _ _ = error "invalid argument"
 sourcePackageBinaryIDs arch sourceIndex package =
     case (B.fieldValue "Version" info, B.fieldValue "Binary" info) of

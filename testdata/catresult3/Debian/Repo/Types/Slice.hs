@@ -16,15 +16,11 @@ import Network.URI (parseURI, URI(uriPath))
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
 
-
-
 -- Declaration reformatted because module qualifiers changed
  
 data Slice = Slice{sliceRepoKey :: Debian.Repo.Types.Slice.RepoKey,
                    sliceSource :: DebSource}
            deriving (Eq, Ord, Show)
-
-
 
 -- | Each line of the sources.list represents a slice of a repository
 data SliceList = SliceList {slices :: [Slice]} deriving (Eq, Ord, Show)
@@ -109,6 +105,5 @@ appendPath suff path = path { envPath = envPath path ++ suff }
 
 rootEnvPath :: FilePath -> EnvPath
 rootEnvPath s = EnvPath { envRoot = EnvRoot "", envPath = s }
-
 
 

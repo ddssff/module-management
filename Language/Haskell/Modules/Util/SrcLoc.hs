@@ -1,19 +1,27 @@
-{-# LANGUAGE BangPatterns, FlexibleInstances, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, FlexibleInstances, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.Util.SrcLoc
-    ( HasSrcSpan(..)
-    , HasSrcLoc(..)
-    , HasEndLoc(..)
+    ( HasSpanInfo(..)
+    , srcSpan
+    , srcLoc
+    , endLoc
+    , textEndLoc
+    , textSpan
+    , covers
     , srcSpanTriple
     , srcLocPairTriple
     , srcSpanText
     , srcPairText
+    , makeTree
     ) where
 
 import Data.Default (def, Default)
-import Data.List (groupBy, intercalate)
+import Data.List (groupBy, intercalate, partition, sort)
+import Data.Set (Set, toList)
+import Data.Tree (Tree(Node), unfoldTree)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ModuleHead(..), ModuleName(..), ModulePragma(..), WarningText(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, SrcSpanInfo(..), srcSpanStart)
+import Prelude hiding (rem)
 
 -- | A version of lines that preserves the presence or absence of a
 -- terminating newline
@@ -50,90 +58,137 @@ type Decl = A.Decl SrcSpanInfo
 -- type Name = A.Name SrcSpanInfo
 -- type Type = A.Type SrcSpanInfo
 
+class HasSpanInfo a where
+    spanInfo :: a -> SrcSpanInfo
+
+instance HasSpanInfo a => HasSpanInfo (Tree a) where
+    spanInfo (Node x _) = spanInfo x
+
+instance HasSpanInfo ModuleHead where
+    spanInfo (A.ModuleHead x _ _ _) = x
+
+instance HasSpanInfo ModuleName where
+    spanInfo (A.ModuleName x _) = x
+
+instance HasSpanInfo ModulePragma where
+    spanInfo (A.LanguagePragma x _) = x
+    spanInfo (A.OptionsPragma x _ _) = x
+    spanInfo (A.AnnModulePragma x _) = x
+
+instance HasSpanInfo WarningText where
+    spanInfo (A.WarnText x _) = x
+    spanInfo (A.DeprText x _) = x
+
+instance HasSpanInfo ExportSpecList where
+    spanInfo (A.ExportSpecList x _) = x
+
+instance HasSpanInfo ExportSpec where
+    spanInfo (A.EVar x _) = x
+    spanInfo (A.EAbs x _) = x
+    spanInfo (A.EThingAll x _) = x
+    spanInfo (A.EThingWith x _ _) = x
+    spanInfo (A.EModuleContents x _) = x
+
+instance HasSpanInfo ImportDecl where
+    spanInfo (A.ImportDecl x _ _ _ _ _ _) = x
+
+instance HasSpanInfo Decl where
+    spanInfo (A.TypeDecl l _ _) = l
+    spanInfo (A.TypeFamDecl l _ _) = l
+    spanInfo (A.DataDecl l _ _ _ _ _) = l
+    spanInfo (A.GDataDecl l _ _ _ _ _ _) = l
+    spanInfo (A.DataFamDecl l _ _ _) = l
+    spanInfo (A.TypeInsDecl l _ _) = l
+    spanInfo (A.DataInsDecl l _ _ _ _) = l
+    spanInfo (A.GDataInsDecl l _ _ _ _ _) = l
+    spanInfo (A.ClassDecl l _ _ _ _) = l
+    spanInfo (A.InstDecl l  _ _ _) = l
+    spanInfo (A.DerivDecl l _ _) = l
+    spanInfo (A.InfixDecl l _ _ _) = l
+    spanInfo (A.DefaultDecl l _) = l
+    spanInfo (A.SpliceDecl l _) = l
+    spanInfo (A.TypeSig l _ _) = l
+    spanInfo (A.FunBind l _) = l
+    spanInfo (A.PatBind l _ _ _ _) = l
+    spanInfo (A.ForImp l _ _ _ _ _) = l
+    spanInfo (A.ForExp l _ _ _ _) = l
+    spanInfo (A.RulePragmaDecl l _) = l
+    spanInfo (A.DeprPragmaDecl l _) = l
+    spanInfo (A.WarnPragmaDecl l _) = l
+    spanInfo (A.InlineSig l _ _ _) = l
+    spanInfo (A.InlineConlikeSig l _ _) = l
+    spanInfo (A.SpecSig l _ _) = l
+    spanInfo (A.SpecInlineSig l _ _ _ _) = l
+    spanInfo (A.InstSig l _ _) = l
+    spanInfo (A.AnnPragma l _) = l
+
+instance HasSpanInfo SrcSpanInfo where
+    spanInfo = id
+
+{-
+data SrcSpanInfo
+  = SrcSpanInfo { srcInfoSpan :: SrcSpan
+                , srcInfoPoints :: [SrcSpan] }
+
+data SrcSpan
+  = SrcSpan {srcSpanFilename :: String,
+             srcSpanStartLine :: Int,
+             srcSpanStartColumn :: Int,
+             srcSpanEndLine :: Int,
+             srcSpanEndColumn :: Int}
+
+data SrcLoc
+  = SrcLoc {srcFilename :: String, srcLine :: Int, srcColumn :: Int}
+-}
+
+srcSpan :: HasSpanInfo x => x -> SrcSpan
+srcSpan = srcInfoSpan . spanInfo
+
+srcLoc :: HasSpanInfo x => x -> SrcLoc
+srcLoc x = let (SrcSpan f b e _ _) = srcSpan x in SrcLoc f b e
+
+endLoc :: HasSpanInfo x => x -> SrcLoc
+endLoc x = let (SrcSpan f _ _ b e) = srcSpan x in SrcLoc f b e
+
+textEndLoc :: String -> SrcLoc
+textEndLoc text =
+    def {srcLine = length ls, srcColumn = length (last ls) + 1}
+    where ls = lines' text
+
+textSpan :: String -> SrcSpanInfo
+textSpan s = let end = textEndLoc s in
+             SrcSpanInfo (def {srcSpanStartLine = 1, srcSpanStartColumn = 1, srcSpanEndLine = srcLine end, srcSpanEndColumn = srcColumn end}) []
+
+{-
 class HasSrcSpan a where
     srcSpan :: a -> SrcSpan
 
-instance HasSrcSpan ModuleHead where
-    srcSpan (A.ModuleHead x _ _ _) = srcSpan x
+-- instance HasSrcSpan SrcSpan where
+--     srcSpan = id
 
-instance HasSrcSpan ModuleName where
-    srcSpan (A.ModuleName x _) = srcSpan x
-
-instance HasSrcSpan ModulePragma where
-    srcSpan (A.LanguagePragma x _) = srcSpan x
-    srcSpan (A.OptionsPragma x _ _) = srcSpan x
-    srcSpan (A.AnnModulePragma x _) = srcSpan x
-
-instance HasSrcSpan WarningText where
-    srcSpan (A.WarnText x _) = srcSpan x
-    srcSpan (A.DeprText x _) = srcSpan x
-
-instance HasSrcSpan ExportSpecList where
-    srcSpan (A.ExportSpecList x _) = srcSpan x
-
-instance HasSrcSpan ExportSpec where
-    srcSpan (A.EVar x _) = srcSpan x
-    srcSpan (A.EAbs x _) = srcSpan x
-    srcSpan (A.EThingAll x _) = srcSpan x
-    srcSpan (A.EThingWith x _ _) = srcSpan x
-    srcSpan (A.EModuleContents x _) = srcSpan x
-
-instance HasSrcSpan SrcSpanInfo where
-    srcSpan = srcInfoSpan
-
-instance HasSrcSpan SrcSpan where
-    srcSpan x = x
-
-instance HasSrcSpan ImportDecl where
-    srcSpan (A.ImportDecl x _ _ _ _ _ _) = srcSpan x
-
-instance HasSrcSpan Decl where
-    srcSpan (A.TypeDecl l _ _) = srcSpan l
-    srcSpan (A.TypeFamDecl l _ _) = srcSpan l
-    srcSpan (A.DataDecl l _ _ _ _ _) = srcSpan l
-    srcSpan (A.GDataDecl l _ _ _ _ _ _) = srcSpan l
-    srcSpan (A.DataFamDecl l _ _ _) = srcSpan l
-    srcSpan (A.TypeInsDecl l _ _) = srcSpan l
-    srcSpan (A.DataInsDecl l _ _ _ _) = srcSpan l
-    srcSpan (A.GDataInsDecl l _ _ _ _ _) = srcSpan l
-    srcSpan (A.ClassDecl l _ _ _ _) = srcSpan l
-    srcSpan (A.InstDecl l  _ _ _) = srcSpan l
-    srcSpan (A.DerivDecl l _ _) = srcSpan l
-    srcSpan (A.InfixDecl l _ _ _) = srcSpan l
-    srcSpan (A.DefaultDecl l _) = srcSpan l
-    srcSpan (A.SpliceDecl l _) = srcSpan l
-    srcSpan (A.TypeSig l _ _) = srcSpan l
-    srcSpan (A.FunBind l _) = srcSpan l
-    srcSpan (A.PatBind l _ _ _ _) = srcSpan l
-    srcSpan (A.ForImp l _ _ _ _ _) = srcSpan l
-    srcSpan (A.ForExp l _ _ _ _) = srcSpan l
-    srcSpan (A.RulePragmaDecl l _) = srcSpan l
-    srcSpan (A.DeprPragmaDecl l _) = srcSpan l
-    srcSpan (A.WarnPragmaDecl l _) = srcSpan l
-    srcSpan (A.InlineSig l _ _ _) = srcSpan l
-    srcSpan (A.InlineConlikeSig l _ _) = srcSpan l
-    srcSpan (A.SpecSig l _ _) = srcSpan l
-    srcSpan (A.SpecInlineSig l _ _ _ _) = srcSpan l
-    srcSpan (A.InstSig l _ _) = srcSpan l
-    srcSpan (A.AnnPragma l _) = srcSpan l
+instance HasSpanInfo a => HasSrcSpan a where
+    srcSpan = srcSpan . spanInfo
 
 -- | Class of values that contain a source location.
 class HasSrcLoc x where
     srcLoc :: x -> SrcLoc
 
-instance HasSrcLoc SrcSpan where
-    srcLoc (SrcSpan f b e _ _) = SrcLoc f b e
+-- instance HasSrcLoc SrcSpan where
+--     srcLoc (SrcSpan f b e _ _) = SrcLoc f b e
+
+instance HasSrcSpan a => HasSrcLoc a where
+    srcLoc = srcLoc . srcSpan
 
 -- | Class of values that contain an end location of a span
 class HasEndLoc x where
     endLoc :: x -> SrcLoc
 
-instance HasEndLoc SrcSpan where
-    endLoc (SrcSpan f _ _ b e) = SrcLoc f b e
+-- instance HasEndLoc SrcSpan where
+--     endLoc (SrcSpan f _ _ b e) = SrcLoc f b e
 
-instance HasEndLoc String where
-    endLoc text = def {srcLine = length ls, srcColumn = length (last ls) + 1}
-        where ls = lines' text
+instance HasSpanInfo a => HasEndLoc a where
+    endLoc = endLoc . srcSpan
+-}
 
 -- | Given a string and a span, return the portion of the text before
 -- the span, the portion within the span, and the portion after.
@@ -175,8 +230,8 @@ splitLine cnt str | cnt < 0 = ("", str)
 splitLine cnt str =
     f 0 "" cnt str
     where
-      f pos hd 0 tl = (reverse hd, tl) -- finished
-      f pos hd _ "" = (reverse hd, "") -- Out of text, emulate splitAt behavior
+      f _pos hd 0 tl = (reverse hd, tl) -- finished
+      f _pos hd _ "" = (reverse hd, "") -- Out of text, emulate splitAt behavior
       f pos hd rem ('\t' : tl) =
           let tab = 8 - mod (pos + 8) 8 in -- How many characters does this tab represent?
           if rem >= tab
@@ -194,3 +249,49 @@ instance Default SrcSpanInfo where
 
 instance Default SrcSpan where
     def = SrcSpan {srcSpanFilename = "<unknown>.hs", srcSpanStartLine = 1, srcSpanEndLine = 1, srcSpanStartColumn = 1, srcSpanEndColumn = 1}
+
+-- | Build a tree of SrcSpanInfo 
+
+makeTree :: (HasSpanInfo a, Show a, Eq a, Ord a) => Set a -> Tree a
+makeTree s =
+    case findRoots (toList s) of
+      [] -> error "No roots"
+      [root] -> unfoldTree f root
+      roots -> error $ "Multiple roots: " ++ show roots
+    where
+      f x = (x, findChildren (toList s) x)
+
+      -- The roots are the nodes that are not covered by any other node.
+      findRoots :: (HasSpanInfo a, Eq a, Ord a) => [a] -> [a]
+      findRoots [] = []
+      findRoots (x : xs) =
+          let (_children, other) = partition (\ y -> x `covers` y) xs
+              (ancestors, cousins) = partition (\ y -> x `coveredBy` y) other in
+          case ancestors of
+            -- If there are no ancestors, x is a root, and there may be other roots among the cousins
+            [] -> x : findRoots cousins
+            -- If there are ancestors, there must be a root among them, and there still may be roots among the cousins.
+            _ -> findRoots (ancestors ++ cousins)
+
+      findChildren :: (HasSpanInfo a, Eq a, Ord a, Show a) => [a] -> a -> [a]
+      findChildren u x = findRoots children where children = sort (filter (\ y -> x `covers` y && x /= y) u)
+
+-- True if a covers b
+covers :: (HasSpanInfo a, HasSpanInfo b) => a -> b -> Bool
+covers a b = srcLoc a <= srcLoc b && endLoc b <= endLoc a
+
+-- True if a is covered by b
+coveredBy :: (HasSpanInfo a, HasSpanInfo b) => a -> b -> Bool
+coveredBy = flip covers
+
+{-
+test3 = TestCase (assertEqual "covers1" True (covers (mkspan (29, 1) (29, 8)) (mkspan (29, 3) (29, 7))))
+test4 = TestCase (assertEqual "covers2" False (covers (mkspan (29, 1) (29, 8)) (mkspan (29, 3) (29, 10))))
+test5 = TestCase (assertEqual "roots1"
+                                  [sp 5 10, sp 11 18]
+                                  (findRoots [sp 5 10,
+                                              sp 11 18,
+                                              sp 6 7,
+                                              sp 8 9,
+                                              sp 12 15]))
+-}

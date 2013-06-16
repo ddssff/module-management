@@ -10,19 +10,18 @@ import Control.Monad.Trans (liftIO)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
 import Data.List as List (filter, intercalate, isPrefixOf, map, nub)
-import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, keys, Map, mapKeys, mapWithKey, toList)
+import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, keys, Map, mapWithKey, toList)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Set as Set (fromList, intersection, map, null, Set)
 import Data.Set.Extra (gFind)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
-import qualified Language.Haskell.Exts.Annotated as A (Decl, ExportSpec(EVar), ImportDecl(ImportDecl, importAnn, importAs, importModule, importPkg, importQualified, importSpecs, importSrc), ImportSpec(IVar), ImportSpecList(ImportSpecList), Module(Module), ModuleHead(ModuleHead), ModuleName(..), Name(..), QName(UnQual))
+import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(Module), ModuleHead(ModuleHead), Name)
 import Language.Haskell.Exts.Annotated.Simplify (sModuleName, sName)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..), ExportSpec, ImportSpec, ImportDecl(..))
-import Language.Haskell.Modules.Common (mapNames)
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFileWithComments, runCleanT)
@@ -77,7 +76,7 @@ splitModule' _ (ParseOk (A.Module _ _ _ _ [_], _)) _ = empty -- One declaration 
 splitModule' (S.ModuleName s) (ParseFailed _ _) _ = throw $ userError $ "Parse of " ++ s ++ " failed"
 splitModule' (S.ModuleName s) (ParseOk (A.Module _ Nothing _ _ _, _)) _ = throw $ userError $ "splitModule: " ++ s ++ " has no explicit header"
 splitModule' (S.ModuleName s) (ParseOk (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _)) _ = throw $ userError $ "splitModule: " ++ s ++ " has no explicit export list"
-splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ _ _), _comments)) text =
+splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ _ _), comments)) text =
     Map.insert name newReExporter $ newModules
     where
         -- Build the new modules
@@ -86,8 +85,10 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
 
         newModule name'@(S.ModuleName modName) modDecls =
             header <>
-            exports <> intercalate ", " (nub (List.map (prettyPrintWithMode defaultMode) newExports)) <>
-            imports <> unlines (List.map (prettyPrintWithMode defaultMode) (elems newImports)) <> oldImports <>
+            exportsPrefix <> "    ( " <>
+            intercalate ", " (nub (List.map (prettyPrintWithMode defaultMode) newExports)) <>
+            "\n    ) where" <>
+            importsPrefix <> unlines (List.map (prettyPrintWithMode defaultMode) (elems newImports)) <> "\n" <> oldImports <>
             declPrefix <> concatMap snd (reverse modDecls) <> "\n"
             where
               newExports = nub (concatMap toExportSpecs modDecls)
@@ -101,84 +102,108 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                                                                             let declared = Set.fromList (concatMap (symbols . fst) pairs) in
                                                                             not (Set.null (Set.intersection declared referenced))) declMap))
               header =
-                  foldModule (\ _p pre s r -> r <> pre <> s)
-                             (\ _n pre _ r -> r <> pre <> modName)
-                             (\ _w pre s r -> r <> pre <> s)
-                             (\ _e _ _ r -> r)
-                             (\ _i _ _ r -> r)
-                             (\ _d _ _ r -> r)
+                  foldModule (\ s r -> r <> s)
+                             (\ _p pref s suff r -> r <> pref <> s <> suff)
+                             (\ _n pref _ suff r -> r <> pref <> modName <> suff)
+                             (\ _w pref s suff r -> r <> pref <> s <> suff)
                              (\ _ r -> r)
-                             m text ""
-              exports = fromMaybe "" $
-                  foldModule (\ _p _ _ r -> r)
-                             (\ _n _ _ r -> r)
-                             (\ _w _ _ r -> r)
-                             (\ _e pre _ r -> (maybe (Just pre) Just r))
-                             (\ _i _ _ r -> r)
-                             (\ _d _ _ r -> r)
+                             (\ _e _ _ _ r -> r)
                              (\ _ r -> r)
-                             m text Nothing
-              imports = fromMaybe "" $
-                  foldModule (\ _p _ _ r -> r)
-                             (\ _n _ _ r -> r)
-                             (\ _w _ _ r -> r)
-                             (\ _e _ _ r -> r)
-                             (\ _i pre _ r -> maybe (Just pre) Just r)
-                             (\ _d _ _ r -> r)
+                             (\ _i _ _ _ r -> r)
+                             (\ _d _ _ _ r -> r)
                              (\ _ r -> r)
-                             m text Nothing
+                             m comments text ""
+              exportsPrefix = fromMaybe "" $
+                  foldModule (\ _ r -> r)
+                             (\ _p _ _ _ r -> r)
+                             (\ _n _ _ _ r -> r)
+                             (\ _w _ _ _ r -> r)
+                             (\ _ r -> r)
+                             (\ _e pref _ _ r -> (maybe (Just pref) Just r))
+                             (\ _ r -> r)
+                             (\ _i _ _ _ r -> r)
+                             (\ _d _ _ _ r -> r)
+                             (\ _ r -> r)
+                             m comments text Nothing
+              importsPrefix = fromMaybe "" $
+                  foldModule (\ _ r -> r)
+                             (\ _p _ _ _ r -> r)
+                             (\ _n _ _ _ r -> r)
+                             (\ _w _ _ _ r -> r)
+                             (\ _ r -> r)
+                             (\ _e _ _ _ r -> r)
+                             (\ _ r -> r)
+                             (\ _i pref _ _ r -> maybe (Just pref) Just r)
+                             (\ _d _ _ _ r -> r)
+                             (\ _ r -> r)
+                             m comments text Nothing
               declPrefix = fromMaybe "" $
-                  foldModule (\ _p _ _ r -> r)
-                             (\ _n _ _ r -> r)
-                             (\ _w _ _ r -> r)
-                             (\ _e _ _ r -> r)
-                             (\ _i _ _ r -> r)
-                             (\ _d pre _ r -> maybe (Just pre) Just r)
+                  foldModule (\ _ r -> r)
+                             (\ _p _ _ _ r -> r)
+                             (\ _n _ _ _ r -> r)
+                             (\ _w _ _ _ r -> r)
                              (\ _ r -> r)
-                             m text Nothing
+                             (\ _e _ _ _ r -> r)
+                             (\ _ r -> r)
+                             (\ _i _ _ _ r -> r)
+                             (\ _d pref _ _ r -> maybe (Just pref) Just r)
+                             (\ _ r -> r)
+                             m comments text Nothing
               -- Grab the old imports
               oldImports = fromMaybe "" $
-                  foldModule (\ _p _ _ r -> r)
-                             (\ _n _ _ r -> r)
-                             (\ _w _ _ r -> r)
-                             (\ _e _ _ r -> r)
-                             (\ _i pre s r -> Just (maybe s (\ l -> l <> pre <> s) r))
-                             (\ _d _ _ r -> r)
+                  foldModule (\ _ r -> r)
+                             (\ _p _ _ _ r -> r)
+                             (\ _n _ _ _ r -> r)
+                             (\ _w _ _ _ r -> r)
                              (\ _ r -> r)
-                             m text Nothing
+                             (\ _e _ _ _ r -> r)
+                             (\ _ r -> r)
+                             (\ _i pref s suff r -> Just (maybe (s <> suff) (\ l -> l <> pref <> s <> suff) r))
+                             (\ _d _ _ _ r -> r)
+                             (\ _ r -> r)
+                             m comments text Nothing
         newReExporter =
-            header <> imports <> "\n" <> unlines (List.map (prettyPrintWithMode defaultMode) (elems (mapWithKey toImportDecl declMap)))
+            header <> oldImports <> "\n" <> unlines (List.map (prettyPrintWithMode defaultMode) (elems (mapWithKey toImportDecl declMap)))
             where
               header =
-                    foldModule (\ _p pre s r -> r <> pre <> s)
-                               (\ _n pre s r -> r <> pre <> s)
-                               (\ _w pre s r -> r <> pre <> s)
-                               (\ _e pre s r -> r <> pre <> s)
-                               (\ _i _ _ r -> r)
-                               (\ _d _ _ r -> r)
+                    foldModule (\ s r -> r <> s)
+                               (\ _p pref s suff r -> r <> pref <> s <> suff)
+                               (\ _n pref s suff r -> r <> pref <> s <> suff)
+                               (\ _w pref s suff r -> r <> pref <> s <> suff)
+                               (\ s r -> r <> s)
+                               (\ _e pref s suff r -> r <> pref <> s <> suff)
+                               (\ s r -> r <> s)
+                               (\ _i _ _ _ r -> r)
+                               (\ _d _ _ _ r -> r)
                                (\ _ r -> r)
-                               m text ""
-              imports = fromMaybe "" $
-                    foldModule (\ _p _ _ r -> r)
-                               (\ _n _ _ r -> r)
-                               (\ _w _ _ r -> r)
-                               (\ _e _ _ r -> r)
-                               (\ _i pre s r -> maybe (Just (pre <> s)) (Just . (<> (pre <> s))) r)
-                               (\ _d _ _ r -> r)
+                               m comments text ""
+              oldImports = fromMaybe "" $
+                    foldModule (\ _ r -> r)
+                               (\ _p _ _ _ r -> r)
+                               (\ _n _ _ _ r -> r)
+                               (\ _w _ _ _ r -> r)
                                (\ _ r -> r)
-                               m text Nothing
+                               (\ _e _ _ _ r -> r)
+                               (\ _ r -> r)
+                               (\ _i pref s suff r -> maybe (Just (pref <> s <> suff)) (Just . (<> (pref <> s <> suff))) r)
+                               (\ _d _ _ _ r -> r)
+                               (\ _ r -> r)
+                               m comments text Nothing
 
         -- Build a map from module name to the list of declarations that will be in that module.
         declMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
         declMap =
-            foldModule (\ _ _ _ r -> r)
-                       (\ _ _ _ r -> r)
-                       (\ _ _ _ r -> r)
-                       (\ _ _ _ r -> r)
-                       (\ _ _ _ r -> r)
-                       (\ d pre s r -> foldr (\ sym mp -> insertWith (++) (subModuleName (sModuleName moduleName) sym) [(d, pre <> s)] mp) r (symbols d))
+            foldModule (\ _ r -> r)
+                       (\ _ _ _ _ r -> r)
+                       (\ _ _ _ _ r -> r)
+                       (\ _ _ _ _ r -> r)
                        (\ _ r -> r)
-                       m text Map.empty
+                       (\ _ _ _ _ r -> r)
+                       (\ _ r -> r)
+                       (\ _ _ _ _ r -> r)
+                       (\ d pref s suff r -> foldr (\ sym mp -> insertWith (++) (subModuleName (sModuleName moduleName) sym) [(d, pref <> s <> suff)] mp) r (symbols d))
+                       (\ _ r -> r)
+                       m comments text Map.empty
 splitModule' _ _ _ = error "splitModule'"
 
 -- | Build an import of the symbols created by a declaration.

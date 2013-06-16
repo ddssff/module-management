@@ -1,14 +1,21 @@
-module Debian.Repo.Sync
+-- Comment above module head
+module Debian.Repo.Sync {-# WARNING "this is a warning" #-}
     ( rsync
+    , foo
+    -- Comment after last export
     ) where
+
+-- Comment before first import
 
 import Control.Monad.Trans (MonadIO)
 import qualified Data.ByteString as B (empty)
 import System.Exit (ExitCode)
 import System.FilePath (dropTrailingPathSeparator)
+-- Comment between two imporrts
 import System.Process (proc)
 import System.Process.Progress (keepResult, runProcessF)
 
+-- Comment before first decl
 rsync :: (Functor m, MonadIO m) => [String] -> FilePath -> FilePath -> m ExitCode
 rsync extra source dest =
     do result <- runProcessF (proc "rsync" (["-aHxSpDt", "--delete"] ++ extra ++
@@ -17,6 +24,10 @@ rsync extra source dest =
        case result of
          [x] -> return x
          _ -> error "Missing or multiple exit codes"
+
+-- Comment between two decls
+foo :: Int
+foo = 1
 
 {-
 handleExit 1 = "Syntax or usage error"

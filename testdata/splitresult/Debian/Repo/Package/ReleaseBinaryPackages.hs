@@ -1,9 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.ReleaseBinaryPackages
-    ( -- * Source and binary packages
-      releaseBinaryPackages
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( releaseBinaryPackages
     ) where
 
 import Data.Either (partitionEithers)

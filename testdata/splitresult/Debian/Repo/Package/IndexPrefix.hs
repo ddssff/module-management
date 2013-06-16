@@ -1,9 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.IndexPrefix
-    ( -- * Source and binary packages
-      indexPrefix
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( indexPrefix
     ) where
 
 import Data.List as List (intercalate)

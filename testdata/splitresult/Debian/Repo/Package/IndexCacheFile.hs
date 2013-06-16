@@ -1,9 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package.IndexCacheFile
-    ( -- * Source and binary packages
-      indexCacheFile
-    -- * Deprecated stuff for interfacing with Debian.Relation
+    ( indexCacheFile
     ) where
 
 import Debian.Arch (Arch(..), prettyArch)
