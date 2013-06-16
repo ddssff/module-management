@@ -1,3 +1,9 @@
+haskell-module-management (0.9) unstable; urgency=low
+
+  * Major revision
+
+ -- David Fox <dsf@seereason.com>  Sun, 16 Jun 2013 10:29:13 -0700
+
 haskell-module-management (0.8.4) unstable; urgency=low
 
   * Preserve imports required to re-export symbols in split modules.
