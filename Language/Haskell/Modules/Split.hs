@@ -24,7 +24,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..), Ex
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFile, runCleanT)
-import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, writeFile)
+import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Symbols (symbols, imports, exports)
 import Prelude hiding (writeFile)
@@ -63,7 +63,7 @@ splitModule name =
        mapM_ (\ name' -> modulePath name' >>= cleanImports) (Map.keys newFiles)
 
 writeModule :: MonadClean m => S.ModuleName -> String -> m ()
-writeModule name text = modulePath name >>= \ path -> writeFile path text
+writeModule name text = modulePath name >>= \ path -> replaceFile tildeBackup path text
 
 -- | If the original module was M, the the split operation creates a
 -- subdirectory M containing a module for each declaration of the

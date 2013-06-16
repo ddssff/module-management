@@ -21,7 +21,7 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, 
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Params (runCleanT, parseFile)
-import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), srcLoc, endLoc, textEndLoc, srcPairText, makeTree, increaseSrcLoc, srcPairTextHead, srcPairTextTail)
+import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), srcLoc, endLoc, srcPairText, makeTree, increaseSrcLoc, srcPairTextHead, srcPairTextTail)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
 type Module = A.Module SrcSpanInfo
@@ -47,12 +47,19 @@ instance Spans (A.ModuleHead SrcSpanInfo) where
 instance Spans (A.ExportSpecList SrcSpanInfo) where
     spans (A.ExportSpecList _ es) = concatMap spans es
 
-instance Spans (A.ExportSpec SrcSpanInfo) where spans x = [spanInfo x]
-instance Spans (A.ModulePragma SrcSpanInfo) where spans x = [spanInfo x]
-instance Spans (A.ImportDecl SrcSpanInfo) where spans x = [spanInfo x]
-instance Spans (A.Decl SrcSpanInfo) where spans x = [spanInfo x]
-instance Spans (A.ModuleName SrcSpanInfo) where spans x = [spanInfo x]
-instance Spans (A.WarningText SrcSpanInfo) where spans x = [spanInfo x]
+instance Spans (A.ExportSpec SrcSpanInfo) where spans x = [fixSpan $ spanInfo x]
+instance Spans (A.ModulePragma SrcSpanInfo) where spans x = [fixSpan $ spanInfo x]
+instance Spans (A.ImportDecl SrcSpanInfo) where spans x = [fixSpan $ spanInfo x]
+instance Spans (A.Decl SrcSpanInfo) where spans x = [fixSpan $ spanInfo x]
+instance Spans (A.ModuleName SrcSpanInfo) where spans x = [fixSpan $ spanInfo x]
+instance Spans (A.WarningText SrcSpanInfo) where spans x = [fixSpan $ spanInfo x]
+
+-- This happens.  Is it a bug in haskell-src-exts?
+fixSpan :: SrcSpanInfo -> SrcSpanInfo
+fixSpan sp =
+    if srcSpanEndColumn (srcInfoSpan sp) == 0
+    then sp {srcInfoSpan = (srcInfoSpan sp) {srcSpanEndColumn = 1}}
+    else sp
 
 -- | Given the result of parseModuleWithComments and the original
 -- module text, this does a fold over the parsed module contents,
@@ -93,24 +100,21 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.M
           maybe return (\ (A.ExportSpecList _ es) -> doList exportf es) me >>=
           doClose postf sp
       doClose f sp r =
-          do (text, l, sps) <- get
+          do (tl, l, sps) <- get
              case l < endLoc sp of
-               True -> do put (text, endLoc sp, sps)
+               True -> do put (srcPairTextTail l (endLoc sp) tl, endLoc sp, sps)
                           return (f (srcPairText l (endLoc sp) text) r)
                False -> return r
       doTail f r =
-          do (text, l, _sps) <- get
-             case l < textEndLoc text of
-               True -> do put (text, textEndLoc text, [])
-                          return $ f (srcPairText l (textEndLoc text) text) r
-               False -> return r
+          do (tl, _, _) <- get
+             return $ f tl r
       doSep :: (String -> r -> r) -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
       doSep f r =
-          do (text, l, sps@(sp : _)) <- get
+          do (tl, l, sps@(sp : _)) <- get
              let l' = srcLoc sp
              case l <= l' of
                True ->
-                   do put (text, l', sps)
+                   do put (srcPairTextTail l l' tl, l', sps)
                       return $ f (srcPairText l l' text) r
                False -> return r
       doList :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> [a] -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
@@ -120,25 +124,27 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.M
       -- Very slow due to uses of srcPairText.
       doItem :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> a -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
       doItem f x r =
-          do (text, l, (sp : sps')) <- get
+          do (tl, l, (sp : sps')) <- get
              let l' = endLoc sp
-                 pre = srcPairText l (srcLoc sp) text
-                 s = srcPairText (srcLoc sp) l' text
-                 post = srcPairText l' (textEndLoc text) text
-                 (w, l'', _post') = adjust post l'
-             put (text, l'', sps')
-             return $ f x pre s w r
+                 pre = srcPairTextHead l (srcLoc sp) tl
+                 tl' = srcPairTextTail l (srcLoc sp) tl
+                 s = srcPairTextHead (srcLoc sp) l' tl'
+                 tl'' = srcPairTextTail (srcLoc sp) l' tl'
+                 l'' = adjust tl'' l'
+                 post = srcPairTextHead l' l'' tl''
+                 tl''' = srcPairTextTail l' l'' tl''
+             put (tl''', l'', sps')
+             return $ f x pre s post r
 
       -- Move to just past the last newline in the leading whitespace
       -- adjust "\n  \n  hello\n" (SrcLoc "<unknown>.hs" 5 5) ->
-      --   ("\n  \n", (SrcLoc "<unknown>.hs" 7 1), "  hello\n")
-      adjust :: String -> SrcLoc -> (String, SrcLoc, String)
+      --   (SrcLoc "<unknown>.hs" 7 1)
+      adjust :: String -> SrcLoc -> SrcLoc
       adjust a l =
-          (w', l', a''')
+          l'
           where
-            (w, a') = break (not . isSpace) a
-            (w', a'') = splitAt (length (takeWhile (elem '\n') (tails w))) w
-            a''' = a'' ++ a'
+            w = takeWhile isSpace a
+            w' = take (length (takeWhile (elem '\n') (tails w))) w
             l' = increaseSrcLoc w' l
 
 foldHeader :: forall r. (Show r) =>
