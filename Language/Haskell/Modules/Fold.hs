@@ -9,9 +9,11 @@ module Language.Haskell.Modules.Fold
     , tests
     ) where
 
+import Control.Monad.State (State, runState, get, put)
 import Control.Monad.Trans (liftIO)
 import Data.Char (isSpace)
 import Data.Default (Default(def))
+import Data.List (tails)
 import Data.Set.Extra as Set (fromList)
 import Data.Tree (Tree(..) {-, drawTree-})
 import Language.Haskell.Exts.Annotated (ParseResult(..))
@@ -19,7 +21,7 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, 
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Params (runCleanT, parseFile)
-import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), srcLoc, endLoc, textEndLoc, srcPairText, makeTree)
+import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), srcLoc, endLoc, textEndLoc, srcPairText, makeTree, increaseSrcLoc, srcPairTextHead, srcPairTextTail)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
 type Module = A.Module SrcSpanInfo
@@ -75,30 +77,69 @@ foldModule :: forall r. (Show r) =>
 foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlPage _ _ _ _ _ _ _) _ _ = error "XmlPage: unsupported"
 foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ = error "XmlHybrid: unsupported"
 foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.Module _ mh ps is ds) text r0 =
-    let (r1, l1, sps1) = doSep text topf (r0, def, spans m)
-        (r2, l2, sps2) = doList text pragmaf ps (r1, l1, sps1)
-        (r8, l8, sps8) =
-            case mh of
-              Nothing -> (r2, l2, sps2)
-              Just (A.ModuleHead sp n mw me) ->
-                  let (r3, l3, sps3) = doItem text namef n (r2, l2, sps2)
-                      (r4, l4, sps4) = case mw of
-                                         Nothing -> (r3, l3, sps3)
-                                         Just w -> doItem text warnf w (r3, l3, sps3)
-                      (r5, l5, sps5) = doSep text pref (r4, l4, sps4)
-                      (r6, l6, sps6) = case me of
-                                         Nothing -> (r5, l5, sps5)
-                                         Just (A.ExportSpecList _ es) -> doList text exportf es (r5, l5, sps5)
-                      -- Do separator text through end of header
-                      (r7, l7, _sps7) = if l6 < endLoc sp
-                                       then (postf (srcPairText l6 (endLoc sp) text) r6, endLoc sp, sps6)
-                                       else (r6, l6, sps6) in
-                  (r7, l7, sps6)
-        (r9, l9, sps9) = doList text importf is (r8, l8, sps8)
-        (r10, l10, _sps10) = doList text declf ds (r9, l9, sps9)
-        r11 = if l10 < textEndLoc text then sepf (srcPairText l10 (textEndLoc text) text) r10 else r10
-    in
-    r11
+    fst $ runState (doModule r0) (text, def, spans m)
+    where
+      doModule r =
+          doSep topf r >>=
+          doList pragmaf ps >>=
+          maybe return doHeader mh >>=
+          doList importf is >>=
+          doList declf ds >>=
+          doTail sepf
+      doHeader (A.ModuleHead sp n mw me) r =
+          doItem namef n r >>=
+          maybe return (doItem warnf) mw >>=
+          doSep pref >>=
+          maybe return (\ (A.ExportSpecList _ es) -> doList exportf es) me >>=
+          doClose postf sp
+      doClose f sp r =
+          do (text, l, sps) <- get
+             case l < endLoc sp of
+               True -> do put (text, endLoc sp, sps)
+                          return (f (srcPairText l (endLoc sp) text) r)
+               False -> return r
+      doTail f r =
+          do (text, l, _sps) <- get
+             case l < textEndLoc text of
+               True -> do put (text, textEndLoc text, [])
+                          return $ f (srcPairText l (textEndLoc text) text) r
+               False -> return r
+      doSep :: (String -> r -> r) -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
+      doSep f r =
+          do (text, l, sps@(sp : _)) <- get
+             let l' = srcLoc sp
+             case l <= l' of
+               True ->
+                   do put (text, l', sps)
+                      return $ f (srcPairText l l' text) r
+               False -> return r
+      doList :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> [a] -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
+      doList _ [] r = return r
+      doList f (x : xs) r = doItem f x r >>= doList f xs
+
+      -- Very slow due to uses of srcPairText.
+      doItem :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> a -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
+      doItem f x r =
+          do (text, l, (sp : sps')) <- get
+             let l' = endLoc sp
+                 pre = srcPairText l (srcLoc sp) text
+                 s = srcPairText (srcLoc sp) l' text
+                 post = srcPairText l' (textEndLoc text) text
+                 (w, l'', _post') = adjust post l'
+             put (text, l'', sps')
+             return $ f x pre s w r
+
+      -- Move to just past the last newline in the leading whitespace
+      -- adjust "\n  \n  hello\n" (SrcLoc "<unknown>.hs" 5 5) ->
+      --   ("\n  \n", (SrcLoc "<unknown>.hs" 7 1), "  hello\n")
+      adjust :: String -> SrcLoc -> (String, SrcLoc, String)
+      adjust a l =
+          (w', l', a''')
+          where
+            (w, a') = break (not . isSpace) a
+            (w', a'') = splitAt (length (takeWhile (elem '\n') (tails w))) w
+            a''' = a'' ++ a'
+            l' = increaseSrcLoc w' l
 
 foldHeader :: forall r. (Show r) =>
               (String -> r -> r)
@@ -145,63 +186,6 @@ foldDecls declf sepf m text r0 =
                (\ _ _ _ _ r -> r)
                declf sepf
                m text r0
-
-doSep :: String
-      -> (String -> r -> r)
-      -> (r, SrcLoc, [SrcSpanInfo])
-      -> (r, SrcLoc, [SrcSpanInfo])
-doSep text sepf (r, l, sps@(sp : _)) =
-    if l <= l' then (r', l', sps) else (r, l, sps)
-    where
-      r' = sepf (srcPairText l l' text) r
-      l' = srcLoc sp
-doSep _ _ (_, _, []) = error "doSep: no spans!"
-
-doList :: (HasSpanInfo a, Show a) =>
-          String
-       -> (a -> String -> String -> String -> r -> r)
-       -> [a]
-       -> (r, SrcLoc, [SrcSpanInfo])
-       -> (r, SrcLoc, [SrcSpanInfo])
-doList _ _ [] (r, l, sps) = (r, l, sps)
-doList text f (x : xs) (r, l, sps) =
-    let (r', l', sps') = doItem text f x (r, l, sps) in
-    doList text f xs (r', l', sps')
-
--- Very slow due to uses of srcPairText.
-doItem :: (HasSpanInfo a, Show a) =>
-          String
-       -> (a -> String -> String -> String -> r -> r)
-       -> a
-       -> (r, SrcLoc, [SrcSpanInfo]) -- The current result value and location in the text
-       -> (r, SrcLoc, [SrcSpanInfo])
-doItem _ _ _ (r, l, []) = (r, l, []) -- error $ "doItem - No Spans: " ++ int x ++ ", l=" ++ show l
-doItem text f x (r, l, (sp : sps')) =
-    (r', l'', sps')
-    where
-      r' = f x pre s w r
-      pre = srcPairText l m text
-      s = srcPairText m l' text
-      post = srcPairText l' (textEndLoc text) text
-      (w, l'', _post') = adjust post l'
-      m = srcLoc sp
-      l' = endLoc sp
-
- -- adjust "\n  \n  hello\n" (SrcLoc "<unknown>.hs" 5 5) -> ("\n  \n", (SrcLoc "<unknown>.hs" 7 1), "  hello\n")
-adjust :: String -> SrcLoc -> (String, SrcLoc, String)
-adjust a l =
-    (w'', l', a''')
-    where
-      (w, a') = break (not . isSpace) a
-      (a'', w') = break (== '\n') (reverse w)
-      w'' = reverse w'
-      a''' = reverse a'' ++ a'
-      l' = adjust' w'' l
-
-adjust' :: String -> SrcLoc -> SrcLoc
-adjust' "" l = l
-adjust' ('\n' : s) (SrcLoc f y _) = adjust' s (SrcLoc f (y + 1) 1)
-adjust' (_ : s) (SrcLoc f y x) = adjust' s (SrcLoc f y (x + 1))
 
 tests :: Test
 tests = TestLabel "Clean" (TestList [test1, test1b, test4, test6])

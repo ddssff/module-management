@@ -6,13 +6,17 @@ module Language.Haskell.Modules.Util.SrcLoc
     , srcLoc
     , endLoc
     , textEndLoc
+    , increaseSrcLoc
     , textSpan
     , covers
     , srcSpanTriple
     , srcLocPairTriple
     , srcSpanText
     , srcPairText
+    , srcPairTextHead
+    , srcPairTextTail
     , makeTree
+    , tests
     ) where
 
 import Data.Default (def, Default)
@@ -22,6 +26,7 @@ import Data.Tree (Tree(Node), unfoldTree)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ModuleHead(..), ModuleName(..), ModulePragma(..), WarningText(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, SrcSpanInfo(..), srcSpanStart)
 import Prelude hiding (rem)
+import Test.HUnit (Test(TestCase, TestList), assertEqual)
 
 -- | A version of lines that preserves the presence or absence of a
 -- terminating newline
@@ -155,6 +160,31 @@ textEndLoc text =
     def {srcLine = length ls, srcColumn = length (last ls) + 1}
     where ls = lines' text
 
+-- | Update a SrcLoc to move it from l past the string argument.
+increaseSrcLoc :: String -> SrcLoc -> SrcLoc
+increaseSrcLoc "" l = l
+increaseSrcLoc ('\n' : s) (SrcLoc f y _) = increaseSrcLoc s (SrcLoc f (y + 1) 1)
+increaseSrcLoc (_ : s) (SrcLoc f y x) = increaseSrcLoc s (SrcLoc f y (x + 1))
+
+tests :: Test
+tests = TestList [test1, test2, test3, test4, test5]
+
+test1 :: Test
+test1 = TestCase (assertEqual "srcPairTextTail1" "hi\tjkl\n" (srcPairTextTail (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 2) "abc\tdef\nghi\tjkl\n"))
+test2 :: Test
+test2 = TestCase (assertEqual "srcPairTextTail2" "kl\n" (srcPairTextTail (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 9) "abc\tdef\nghi\tjkl\n"))
+test3 :: Test
+test3 = TestCase (assertEqual "srcPairTextHead1" "abc\tdef\ng" (srcPairTextHead (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 2) "abc\tdef\nghi\tjkl\n"))
+test4 :: Test
+test4 = TestCase (assertEqual "srcPairTextHead21" "abc\tdef\nghi\tj" (srcPairTextHead (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 9) "abc\tdef\nghi\tjkl\n"))
+test5 :: Test
+test5 = TestCase (assertEqual "srcPairTextTail3"
+                              "{-# OPTIONS_GHC -fno-warn-orphans #-}\nmodule Debian.Repo.Orphans where\n\nimport Data.Text (Text)\nimport qualified Debian.Control.Text as T\n\nderiving instance Show (T.Field' Text)\nderiving instance Ord (T.Field' Text)\nderiving instance Show T.Paragraph\nderiving instance Ord T.Paragraph\n"
+                              (srcPairTextTail
+                                 (SrcLoc "<unknown>.hs" 1 77)
+                                 (SrcLoc "<unknown>.hs" 2 1)
+                                 "\n{-# OPTIONS_GHC -fno-warn-orphans #-}\nmodule Debian.Repo.Orphans where\n\nimport Data.Text (Text)\nimport qualified Debian.Control.Text as T\n\nderiving instance Show (T.Field' Text)\nderiving instance Ord (T.Field' Text)\nderiving instance Show T.Paragraph\nderiving instance Ord T.Paragraph\n"))
+
 textSpan :: String -> SrcSpanInfo
 textSpan s = let end = textEndLoc s in
              SrcSpanInfo (def {srcSpanStartLine = 1, srcSpanStartColumn = 1, srcSpanEndLine = srcLine end, srcSpanEndColumn = srcColumn end}) []
@@ -212,6 +242,36 @@ srcSpanText sp s = let (_, m, _) = srcSpanTriple sp s in m
 
 srcPairText :: SrcLoc -> SrcLoc -> String -> String
 srcPairText b e s = let (_, m, _) = srcLocPairTriple b e s in m
+
+-- | Return the beginning portion of s which the span b thru e covers,
+-- assuming that the beginning of s is at position b - that is, that
+-- the prefix of s from (1,1) to b has already been removed.
+srcPairTextHead :: SrcLoc -> SrcLoc -> String -> String
+srcPairTextHead b0 e0 s0 =
+    f b0 e0 [] s0
+    where
+      f b e r s =
+          if srcLine b < srcLine e
+          then let (r', '\n' : s') = span (/= '\n') s in
+               f (b {srcLine = srcLine b + 1, srcColumn = 1}) e ("\n" : r' : r) s'
+          else if srcColumn b < srcColumn e
+               then case s of
+                      [] -> error $ "srcPairTextHead: b0=" ++ show b0 ++ ", e0=" ++ show e0 ++ ", s0 = " ++ show s0
+                      ('\t' : s') -> f (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e (['\t'] : r) s'
+                      (c : s') -> f (b {srcColumn = srcColumn b + 1}) e ([c] : r) s'
+               else concat (reverse r)
+
+-- | Like srcPairTextHead, but returns the tail of s instead of the head.
+srcPairTextTail :: SrcLoc -> SrcLoc -> String -> String
+srcPairTextTail b e s =
+    if srcLine b < srcLine e
+    then srcPairTextTail (b {srcLine = srcLine b + 1, srcColumn = 1}) e (tail (dropWhile (/= '\n') s))
+    else if srcColumn b < srcColumn e
+         then case s of
+                [] -> error $ "srcPairTextTail: b=" ++ show b ++ ", e=" ++ show e ++ ", s = " ++ show s
+                ('\t' : s') -> srcPairTextTail (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e s'
+                (_ : s') -> srcPairTextTail (b {srcColumn = srcColumn b + 1}) e s'
+         else s
 
 -- | Split text into two regions, before and after the given location
 cutSrcLoc :: SrcLoc -> String -> (String, String)
