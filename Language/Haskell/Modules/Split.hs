@@ -18,13 +18,12 @@ import Data.Set.Extra (gFind)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
 import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(Module), ModuleHead(ModuleHead), Name)
 import Language.Haskell.Exts.Annotated.Simplify (sModuleName, sName)
-import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..), ExportSpec, ImportSpec, ImportDecl(..))
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFileWithComments, runCleanT)
+import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFile, runCleanT)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, writeFile)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Symbols (symbols, imports, exports)
@@ -53,7 +52,7 @@ subModuleName (S.ModuleName moduleName) name =
 splitModule :: MonadClean m => S.ModuleName -> m ()
 splitModule name =
     do path <- modulePath name
-       parsed <- parseFileWithComments path
+       parsed <- parseFile path
        text <- liftIO $ readFile path
        let newFiles = splitModule' name parsed text
        -- Create a subdirectory named after the old module
@@ -70,13 +69,13 @@ writeModule name text = modulePath name >>= \ path -> writeFile path text
 -- subdirectory M containing a module for each declaration of the
 -- original module, and replaces M.hs with a module that imports each
 -- of the split declarations that were originally exported.
-splitModule' :: S.ModuleName -> ParseResult (A.Module SrcSpanInfo, [Comment]) -> String -> Map S.ModuleName String
-splitModule' _ (ParseOk (A.Module _ _ _ _ [], _)) _ = empty -- No declarations - nothing to split
-splitModule' _ (ParseOk (A.Module _ _ _ _ [_], _)) _ = empty -- One declaration - nothing to split
+splitModule' :: S.ModuleName -> ParseResult (A.Module SrcSpanInfo) -> String -> Map S.ModuleName String
+splitModule' _ (ParseOk (A.Module _ _ _ _ [])) _ = empty -- No declarations - nothing to split
+splitModule' _ (ParseOk (A.Module _ _ _ _ [_])) _ = empty -- One declaration - nothing to split
 splitModule' (S.ModuleName s) (ParseFailed _ _) _ = throw $ userError $ "Parse of " ++ s ++ " failed"
-splitModule' (S.ModuleName s) (ParseOk (A.Module _ Nothing _ _ _, _)) _ = throw $ userError $ "splitModule: " ++ s ++ " has no explicit header"
-splitModule' (S.ModuleName s) (ParseOk (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _)) _ = throw $ userError $ "splitModule: " ++ s ++ " has no explicit export list"
-splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ _ _), comments)) text =
+splitModule' (S.ModuleName s) (ParseOk (A.Module _ Nothing _ _ _)) _ = throw $ userError $ "splitModule: " ++ s ++ " has no explicit header"
+splitModule' (S.ModuleName s) (ParseOk (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _)) _ = throw $ userError $ "splitModule: " ++ s ++ " has no explicit export list"
+splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ _ _))) text =
     Map.insert name newReExporter $ newModules
     where
         -- Build the new modules
@@ -112,7 +111,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                              (\ _i _ _ _ r -> r)
                              (\ _d _ _ _ r -> r)
                              (\ _ r -> r)
-                             m comments text ""
+                             m text ""
               exportsPrefix = fromMaybe "" $
                   foldModule (\ _ r -> r)
                              (\ _p _ _ _ r -> r)
@@ -124,7 +123,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                              (\ _i _ _ _ r -> r)
                              (\ _d _ _ _ r -> r)
                              (\ _ r -> r)
-                             m comments text Nothing
+                             m text Nothing
               importsPrefix = fromMaybe "" $
                   foldModule (\ _ r -> r)
                              (\ _p _ _ _ r -> r)
@@ -136,7 +135,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                              (\ _i pref _ _ r -> maybe (Just pref) Just r)
                              (\ _d _ _ _ r -> r)
                              (\ _ r -> r)
-                             m comments text Nothing
+                             m text Nothing
               declPrefix = fromMaybe "" $
                   foldModule (\ _ r -> r)
                              (\ _p _ _ _ r -> r)
@@ -148,7 +147,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                              (\ _i _ _ _ r -> r)
                              (\ _d pref _ _ r -> maybe (Just pref) Just r)
                              (\ _ r -> r)
-                             m comments text Nothing
+                             m text Nothing
               -- Grab the old imports
               oldImports = fromMaybe "" $
                   foldModule (\ _ r -> r)
@@ -161,7 +160,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                              (\ _i pref s suff r -> Just (maybe (s <> suff) (\ l -> l <> pref <> s <> suff) r))
                              (\ _d _ _ _ r -> r)
                              (\ _ r -> r)
-                             m comments text Nothing
+                             m text Nothing
         newReExporter =
             header <> oldImports <> "\n" <> unlines (List.map (prettyPrintWithMode defaultMode) (elems (mapWithKey toImportDecl declMap)))
             where
@@ -176,7 +175,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                                (\ _i _ _ _ r -> r)
                                (\ _d _ _ _ r -> r)
                                (\ _ r -> r)
-                               m comments text ""
+                               m text ""
               oldImports = fromMaybe "" $
                     foldModule (\ _ r -> r)
                                (\ _p _ _ _ r -> r)
@@ -188,7 +187,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                                (\ _i pref s suff r -> maybe (Just (pref <> s <> suff)) (Just . (<> (pref <> s <> suff))) r)
                                (\ _d _ _ _ r -> r)
                                (\ _ r -> r)
-                               m comments text Nothing
+                               m text Nothing
 
         -- Build a map from module name to the list of declarations that will be in that module.
         declMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
@@ -203,7 +202,7 @@ splitModule' name (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Ju
                        (\ _ _ _ _ r -> r)
                        (\ d pref s suff r -> foldr (\ sym mp -> insertWith (++) (subModuleName (sModuleName moduleName) sym) [(d, pref <> s <> suff)] mp) r (symbols d))
                        (\ _ r -> r)
-                       m comments text Map.empty
+                       m text Map.empty
 splitModule' _ _ _ = error "splitModule'"
 
 -- | Build an import of the symbols created by a declaration.

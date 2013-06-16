@@ -22,7 +22,6 @@ import Data.Set as Set (fromList, Set, union)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName), ImportDecl(..))
-import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Parser (fromParseResult)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
@@ -30,7 +29,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents),
 import Language.Haskell.Modules.Common (ModuleResult(..), withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldImports, foldDecls)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFileWithComments, runCleanT)
+import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFile, runCleanT)
 import Language.Haskell.Modules.Util.DryIO (readFileMaybe, removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (noisily, qPutStrLn, quietly)
 import System.Cmd (system)
@@ -78,13 +77,13 @@ removeModuleIfPresent name =
        removeFileIfPresent path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
 
 -- Update the module 'name' to reflect the result of the cat operation.
-doModule :: MonadClean m => Map S.ModuleName (A.Module SrcSpanInfo, [Comment], String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
+doModule :: MonadClean m => Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
 doModule info inputs@(first : _) output name =
     do -- The new module will be based on the existing module, unless
        -- name equals output and output does not exist
        let base = if name == output && not (Map.member name info) then first else name
-       (m, comments, text) <- maybe (loadModule base) return (Map.lookup name info)
-       let text' = doModule' info inputs output (name, (m, comments, text))
+       (m, text) <- maybe (loadModule base) return (Map.lookup name info)
+       let text' = doModule' info inputs output (name, (m, text))
        return $ if name == output
                 then Modified name text'
                 else if elem name inputs
@@ -96,28 +95,28 @@ doModule info inputs@(first : _) output name =
        -- replaceFileIfDifferent (modulePath name) text'
 doModule _ [] _ _ = error "doModule: no inputs"
 
-doModule' :: Map S.ModuleName (A.Module SrcSpanInfo, [Comment], String) -> [S.ModuleName] -> S.ModuleName -> (S.ModuleName, (A.Module SrcSpanInfo, [Comment], String)) -> String
+doModule' :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> (S.ModuleName, (A.Module SrcSpanInfo, String)) -> String
 doModule' _ [] _ _ = error "doModule'"
-doModule' info inputs output (name, (m, comments, text)) =
+doModule' info inputs output (name, (m, text)) =
     case () of
-      _ | name == output -> doOutput info inputs output (m, comments, text)
-        | not (elem name (output : inputs)) -> doOther inputs output (m, comments, text)
+      _ | name == output -> doOutput info inputs output (m, text)
+        | not (elem name (output : inputs)) -> doOther inputs output (m, text)
         | True -> ""
 
 -- | Create the output module, the destination of the cat.
-doOutput :: Map S.ModuleName (A.Module SrcSpanInfo, [Comment], String) -> [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, [Comment], String) -> String
-doOutput info inNames outName (m, comments, text) =
+doOutput :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
+doOutput info inNames outName (m, text) =
     header ++ exports ++ imports ++ decls
     where
-      header = foldHeader (\ s r -> r <> s) echo (\ _ pref _ suff r -> r <> pref <> prettyPrintWithMode defaultMode outName <> suff) echo m comments text "" <>
-               foldExports (\ s r -> r <> s <> maybe "" (intercalate ", " . List.map (prettyPrintWithMode defaultMode)) (mergeExports info outName) <> "\n") ignore (\ _ r -> r) m comments text ""
-      exports = fromMaybe "" (foldExports (\ _ r -> r) (\ _e pref _ _ r -> maybe (Just pref) Just r) (\ _ r -> r) m comments text Nothing)
-      imports = foldExports (\ _ r -> r) ignore (\ s r -> r <> s {-where-}) m comments text "" <>
+      header = foldHeader (\ s r -> r <> s) echo (\ _ pref _ suff r -> r <> pref <> prettyPrintWithMode defaultMode outName <> suff) echo m text "" <>
+               foldExports (\ s r -> r <> s <> maybe "" (intercalate ", " . List.map (prettyPrintWithMode defaultMode)) (mergeExports info outName) <> "\n") ignore (\ _ r -> r) m text ""
+      exports = fromMaybe "" (foldExports (\ _ r -> r) (\ _e pref _ _ r -> maybe (Just pref) Just r) (\ _ r -> r) m text Nothing)
+      imports = foldExports (\ _ r -> r) ignore (\ s r -> r <> s {-where-}) m text "" <>
                 -- Insert the new imports just after the first "pre" string of the imports
-                fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just (pref <> unlines (List.map (moduleImports info) inNames))) Just r) m comments text Nothing) <>
-                -- foldExports (\ _ r -> r) ignore (\ s r -> r <> unlines (List.map (moduleImports info) inNames)) m comments text "" <>
-                foldImports (\ _i pref s suff r -> r <> pref <> s <> suff) m comments text ""
-      decls = fromMaybe "" (foldDecls (\ _d _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls info outName) inNames)) r)) (\ s r -> Just (maybe s (<> s) r)) m comments text Nothing)
+                fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just (pref <> unlines (List.map (moduleImports info) inNames))) Just r) m text Nothing) <>
+                -- foldExports (\ _ r -> r) ignore (\ s r -> r <> unlines (List.map (moduleImports info) inNames)) m text "" <>
+                foldImports (\ _i pref s suff r -> r <> pref <> s <> suff) m text ""
+      decls = fromMaybe "" (foldDecls (\ _d _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls info outName) inNames)) r)) (\ s r -> Just (maybe s (<> s) r)) m text Nothing)
 
 echo :: Monoid m => t -> m -> m -> m -> m -> m
 echo _ pref s suff r = r <> pref <> s <> suff
@@ -128,19 +127,19 @@ ignore _ _ _ _ r = r
 -- | Update a module that does not participate in the cat - this
 -- involves changing imports and exports of catted modules.
 -- (Shouldn't this also fix qualified symbols?)
-doOther :: [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, [Comment], String) -> String
-doOther inputs input@(S.ModuleName input') (m, comments, text) =
+doOther :: [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
+doOther inputs input@(S.ModuleName input') (m, text) =
     header ++ exports ++ imports ++ decls
     where
-      header = foldModule (\ s r -> r <> s) echo echo echo (\ s r -> r <> s) ignore (\ _ r -> r) ignore ignore (\ _ r -> r) m comments text ""
-      exports = foldModule (\ _ r -> r) ignore ignore ignore (\ _ r -> r) fixModuleExport (\ s r -> r <> s) ignore ignore (\ _ r -> r) m comments text ""
+      header = foldModule (\ s r -> r <> s) echo echo echo (\ s r -> r <> s) ignore (\ _ r -> r) ignore ignore (\ _ r -> r) m text ""
+      exports = foldModule (\ _ r -> r) ignore ignore ignore (\ _ r -> r) fixModuleExport (\ s r -> r <> s) ignore ignore (\ _ r -> r) m text ""
       imports =
           foldImports (\ x pref s suff r ->
                            r <> pref <> (if elem (sModuleName (A.importModule x)) inputs
                                          then prettyPrintWithMode defaultMode (x {A.importModule = A.ModuleName def input'})
                                          else s) <> suff)
-                      m comments text ""
-      decls = foldDecls echo (\ s r -> r <> s) m comments text ""
+                      m text ""
+      decls = foldDecls echo (\ s r -> r <> s) m text ""
 
       fixModuleExport x pref s suff r =
           r <> case sExportSpec x of
@@ -149,16 +148,16 @@ doOther inputs input@(S.ModuleName input') (m, comments, text) =
                          "\n     , " <> prettyPrintWithMode defaultMode (S.EModuleContents input) <> suff
                  _ -> pref <> s <> suff
 
-mergeExports :: Map S.ModuleName (A.Module SrcSpanInfo, [Comment], String) -> S.ModuleName -> Maybe [S.ExportSpec]
+mergeExports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> Maybe [S.ExportSpec]
 mergeExports old new =
     Just (concatMap mergeExports' (Map.toAscList old))
     where
-      mergeExports' (_, (A.Module _ Nothing _ _ _, _, _)) = error "catModules: no explicit export list"
-      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _, _)) = error "catModules: no explicit export list"
-      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ (Just (A.ExportSpecList _ e)))) _ _ _, _, _)) = updateModuleContentsExports old new (List.map sExportSpec e)
+      mergeExports' (_, (A.Module _ Nothing _ _ _, _)) = error "catModules: no explicit export list"
+      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _)) = error "catModules: no explicit export list"
+      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ (Just (A.ExportSpecList _ e)))) _ _ _, _)) = updateModuleContentsExports old new (List.map sExportSpec e)
       mergeExports' (_, _) = error "mergeExports'"
 
-updateModuleContentsExports :: Map S.ModuleName (A.Module SrcSpanInfo, [Comment], String) -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
+updateModuleContentsExports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
 updateModuleContentsExports old new es =
     foldl f [] es
     where
@@ -168,9 +167,9 @@ updateModuleContentsExports old new es =
           ys ++ if elem e' ys then [] else [e']
       f ys e = ys ++ [e]
 
-moduleImports :: Map S.ModuleName (A.Module SrcSpanInfo, [Comment], String) -> S.ModuleName -> String
+moduleImports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> String
 moduleImports old name =
-    let (Just (m, comments, text)) = Map.lookup name old in
+    let (Just (m, text)) = Map.lookup name old in
     foldModule (\ _ r -> r)
                (\ _ _ _ _ r -> r)
                (\ _ _ _ _ r -> r)
@@ -185,7 +184,7 @@ moduleImports old name =
                     <> if Map.member (sModuleName (A.importModule x)) old then "" else (s <> suff))
                (\ _ _ _ _ r -> r)
                (\ _ r -> r)
-               m comments text "" <> "\n"
+               m text "" <> "\n"
 
 -- | Grab the declarations out of the old modules, fix any
 -- qualified symbol references, prettyprint and return.
@@ -197,9 +196,9 @@ moduleImports old name =
 -- In terms of what is going on right here, if m imports any of the
 -- modules in oldmap with an "as" qualifier, identifiers using the
 -- module name in the "as" qualifier must use new instead.
-moduleDecls :: Map S.ModuleName (A.Module SrcSpanInfo, [Comment], String) -> S.ModuleName -> S.ModuleName -> String
+moduleDecls :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> S.ModuleName -> String
 moduleDecls oldmap new name =
-    let (Just (m@(A.Module _ _ _ imports _), comments, text)) = Map.lookup name oldmap in
+    let (Just (m@(A.Module _ _ _ imports _), text)) = Map.lookup name oldmap in
     let oldmap' = foldr f oldmap imports in
     foldModule (\ _ r -> r)
                (\ _ _ _ _ r -> r)
@@ -217,7 +216,7 @@ moduleDecls oldmap new name =
                     (if r /= "" then pref else "") <>
                     (if d'' /= d' then "-- Declaration reformatted because module qualifiers changed\n" <> prettyPrintWithMode defaultMode d'' <> "\n\n" else (s <> suff)))
                (\ s r -> r <> s)
-               m comments text "" <> "\n"
+               m text "" <> "\n"
     where
       f (A.ImportDecl _ m _ _ _ (Just a) _specs) mp =
           case Map.lookup (sModuleName m) oldmap of
@@ -229,7 +228,7 @@ moduleDecls oldmap new name =
 -- probably mess up the location information, so the result (if
 -- different from the original) should be prettyprinted, not
 -- exactPrinted.
-fixReferences :: (Data a, Typeable a) => Map S.ModuleName (A.Module SrcSpanInfo, [Comment], String) -> S.ModuleName -> a -> a
+fixReferences :: (Data a, Typeable a) => Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> a -> a
 fixReferences oldmap new x =
     everywhere (mkT moveModuleName) x
     where
@@ -339,12 +338,12 @@ testModules =
              S.ModuleName "Tmp.File",
              S.ModuleName "Text.Format"]
 
-loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (A.Module SrcSpanInfo, [Comment], String))
+loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (A.Module SrcSpanInfo, String))
 loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names
 
-loadModule :: MonadClean m => S.ModuleName -> m (A.Module SrcSpanInfo, [Comment], String)
+loadModule :: MonadClean m => S.ModuleName -> m (A.Module SrcSpanInfo, String)
 loadModule name =
     do path <- modulePath name
        text <- liftIO $ readFile path
-       (m, comments) <- parseFileWithComments path >>= return . fromParseResult
-       return (m, comments, text)
+       m <- parseFile path >>= return . fromParseResult
+       return (m, text)

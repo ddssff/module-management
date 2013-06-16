@@ -16,10 +16,9 @@ import Data.Set.Extra as Set (fromList)
 import Data.Tree (Tree(..) {-, drawTree-})
 import Language.Haskell.Exts.Annotated (ParseResult(..))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpecList(ExportSpecList), ImportDecl, ExportSpec(..), Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
-import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Params (runCleanT, parseFileWithComments)
+import Language.Haskell.Modules.Params (runCleanT, parseFile)
 import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), srcLoc, endLoc, textEndLoc, srcPairText, makeTree)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
@@ -72,10 +71,10 @@ foldModule :: forall r. (Show r) =>
            -> (ImportDecl -> String -> String -> String -> r -> r)
            -> (Decl -> String -> String -> String -> r -> r)
            -> (String -> r -> r)
-           -> Module -> [Comment] -> String -> r -> r
-foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlPage _ _ _ _ _ _ _) _ _ _ = error "XmlPage: unsupported"
-foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ _ = error "XmlHybrid: unsupported"
-foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.Module _ mh ps is ds) _comments text r0 =
+           -> Module -> String -> r -> r
+foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlPage _ _ _ _ _ _ _) _ _ = error "XmlPage: unsupported"
+foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ = error "XmlHybrid: unsupported"
+foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.Module _ mh ps is ds) text r0 =
     let (r1, l1, sps1) = doSep text topf (r0, def, spans m)
         (r2, l2, sps2) = doList text pragmaf ps (r1, l1, sps1)
         (r8, l8, sps8) =
@@ -106,46 +105,46 @@ foldHeader :: forall r. (Show r) =>
            -> (ModulePragma -> String -> String -> String -> r -> r)
            -> (ModuleName -> String -> String -> String -> r -> r)
            -> (WarningText -> String -> String -> String -> r -> r)
-           -> Module -> [Comment] -> String -> r -> r
-foldHeader topf pragmaf namef warnf m comments text r0 =
+           -> Module -> String -> r -> r
+foldHeader topf pragmaf namef warnf m text r0 =
     foldModule topf pragmaf namef warnf
                (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ r -> r)
                (\ _ _ _ _ r -> r)
                (\ _ _ _ _ r -> r) (\ _ r -> r)
-               m comments text r0
+               m text r0
 
 foldExports :: forall r. (Show r) =>
                (String -> r -> r)
             -> (ExportSpec -> String -> String -> String -> r -> r)
             -> (String -> r -> r)
-            -> Module -> [Comment] -> String -> r -> r
-foldExports pref exportf postf m comments text r0 =
+            -> Module -> String -> r -> r
+foldExports pref exportf postf m text r0 =
     foldModule (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r)
                pref exportf postf
                (\ _ _ _ _ r -> r)
                (\ _ _ _ _ r -> r) (\ _ r -> r)
-               m comments text r0
+               m text r0
 
 foldImports :: forall r. (Show r) =>
                (ImportDecl -> String -> String -> String -> r -> r)
-            -> Module -> [Comment] -> String -> r -> r
-foldImports importf m comments text r0 =
+            -> Module -> String -> r -> r
+foldImports importf m text r0 =
     foldModule (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r)
                (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ r -> r)
                importf
                (\ _ _ _ _ r -> r) (\ _ r -> r)
-               m comments text r0
+               m text r0
 
 foldDecls :: forall r. (Show r) =>
              (Decl -> String -> String -> String -> r -> r)
           -> (String -> r -> r)
-          -> Module -> [Comment] -> String -> r -> r
-foldDecls declf sepf m comments text r0 =
+          -> Module -> String -> r -> r
+foldDecls declf sepf m text r0 =
     foldModule (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r)
                (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ r -> r)
                (\ _ _ _ _ r -> r)
                declf sepf
-               m comments text r0
+               m text r0
 
 doSep :: String
       -> (String -> r -> r)
@@ -212,13 +211,13 @@ test1 =
     TestLabel "test1" $ TestCase $ withCurrentDirectory "testdata/original" $
     do let path = "Debian/Repo/Orphans.hs"
        text <- liftIO $ readFile path
-       ParseOk (m, comments) <- runCleanT $ parseFileWithComments path
-       let (output, original) = test m comments text
+       ParseOk m <- runCleanT $ parseFile path
+       let (output, original) = test m text
        assertEqual "echo" original output
     where
-      test :: Module -> [Comment] -> String -> (String, String)
-      test m comments text =
-          (foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m comments text "", text)
+      test :: Module -> String -> (String, String)
+      test m text =
+          (foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m text "", text)
           where
             pragmaf :: ModulePragma -> String -> String -> String -> String -> String
             pragmaf _x pref s suff r = r ++ pref ++ s ++ suff
@@ -248,7 +247,7 @@ test1b =
     TestLabel "test1b" $ TestCase $ withCurrentDirectory "testdata/original" $
     do let path = "Debian/Repo/Sync.hs"
        text <- liftIO $ readFile path
-       ParseOk m <- runCleanT $ parseFileWithComments path
+       ParseOk m <- runCleanT $ parseFile path
        let output = test m text
        assertEqual "echo"
                    [("-- Comment above module head\nmodule ","","",""),
@@ -271,9 +270,9 @@ test1b =
                     ("{-\nhandleExit 1 = \"Syntax or usage error\"\nhandleExit 2 = \"Protocol incompatibility\"\nhandleExit 3 = \"Errors selecting input/output files, dirs\"\nhandleExit 4 = \"Requested action not supported: an attempt was made to manipulate 64-bit files on a platform that cannot support them; or an option was specified that is supported by the client and not by the server.\"\nhandleExit 5 = \"Error starting client-server protocol\"\nhandleExit 6 = \"Daemon unable to append to log-file\"\nhandleExit 10 = \"Error in socket I/O\"\nhandleExit 11 = \"Error in file I/O\"\nhandleExit 12 = \"Error in rsync protocol data stream\"\nhandleExit 13 = \"Errors with program diagnostics\"\nhandleExit 14 = \"Error in IPC code\"\nhandleExit 20 = \"Received SIGUSR1 or SIGINT\"\nhandleExit 21 = \"Some error returned by waitpid()\"\nhandleExit 22 = \"Error allocating core memory buffers\"\nhandleExit 23 = \"Partial transfer due to error\"\nhandleExit 24 = \"Partial transfer due to vanished source files\"\nhandleExit 25 = \"The --max-delete limit stopped deletions\"\nhandleExit 30 = \"Timeout in data send/receive\"\nhandleExit 35 = \"Timeout waiting for daemon connection\"\n-}\n","","","")]
                    output
     where
-      test :: (Module, [Comment]) -> String -> [(String, String, String, String)]
-      test (m, comments) text =
-          foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m comments text []
+      test :: Module -> String -> [(String, String, String, String)]
+      test m text =
+          foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m text []
           where
             pragmaf :: ModulePragma -> String -> String -> String -> [(String, String, String, String)] -> [(String, String, String, String)]
             pragmaf x pref s suff r = r ++ [(pref, s, suff,int (spanInfo x))]
