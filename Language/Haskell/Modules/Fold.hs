@@ -125,7 +125,10 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.M
       doItem :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> a -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
       doItem f x r =
           do (tl, l, (sp : sps')) <- get
-             let l' = endLoc sp
+             let -- Another haskell-src-exts bug?  If a module ends
+                 -- with no newline, endLoc will be at the beginning
+                 -- of the following (nonexistant) line.
+                 l' = endLoc sp
                  pre = srcPairTextHead l (srcLoc sp) tl
                  tl' = srcPairTextTail l (srcLoc sp) tl
                  s = srcPairTextHead (srcLoc sp) l' tl'
@@ -194,7 +197,7 @@ foldDecls declf sepf m text r0 =
                m text r0
 
 tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test1b, test4, test6])
+tests = TestLabel "Clean" (TestList [test1, test1b, test3, test4, test6])
 
 test1 :: Test
 test1 =
@@ -281,6 +284,27 @@ test1b =
 
 int :: HasSpanInfo a => a -> String
 int x = let (SrcSpanInfo (SrcSpan _ a b c d) _) = spanInfo x in "[" ++ show a ++ "." ++ show b ++ ":" ++ show c ++ "." ++ show d ++ "]"
+
+test3 :: Test
+test3 =
+    TestLabel "test3" $ TestCase $ withCurrentDirectory "testdata" $
+    do let path = "Equal.hs"
+       text <- liftIO $ readFile path
+       ParseOk m <- runCleanT $ parseFile path
+       let (output, original) = test m text
+       assertEqual "echo" original output
+    where
+      test :: Module -> String -> (String, String)
+      test m text =
+          (foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m text "", text)
+          where
+            pragmaf _x pref s suff r = r ++ pref ++ s ++ suff
+            namef _x pref s suff r = r ++ pref ++ s ++ suff
+            warningf _x pref s suff r = r ++ pref ++ s ++ suff
+            exportf _x pref s suff r = r ++ pref ++ s ++ suff
+            importf _x pref s suff r = r ++ pref ++ s ++ suff
+            declf _x pref s suff r = r ++ pref ++ s ++ suff
+            tailf s r = r ++ s
 
 test6 :: Test
 test6 = TestCase (assertEqual "tree1"

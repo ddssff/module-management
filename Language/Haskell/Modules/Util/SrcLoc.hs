@@ -252,11 +252,22 @@ srcPairTextHead b0 e0 s0 =
     where
       f b e r s =
           if srcLine b < srcLine e
-          then let (r', '\n' : s') = span (/= '\n') s in
-               f (b {srcLine = srcLine b + 1, srcColumn = 1}) e ("\n" : r' : r) s'
+          then case span (/= '\n') s of
+                 (r', '\n' : s') ->
+                     f (b {srcLine = srcLine b + 1, srcColumn = 1}) e ("\n" : r' : r) s'
+                 (r', "") ->
+                     -- This should not happen, but if the last line
+                     -- lacks a newline terminator, haskell-src-exts
+                     -- will set the end location as if the terminator
+                     -- was present.
+                     case s of
+                       "" -> concat (reverse r)
+                       ('\t' : s') -> f (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e (['\t'] : r) s'
+                       (c : s') -> f (b {srcColumn = srcColumn b + 1}) e ([c] : r) s'
+                 _ -> error $ "srcPairTextHead: " ++ show (b, e, s)
           else if srcColumn b < srcColumn e
                then case s of
-                      [] -> error $ "srcPairTextHead: b0=" ++ show b0 ++ ", e0=" ++ show e0 ++ ", s0 = " ++ show s0
+                      [] -> error $ "srcPairTextHead: " ++ show (b0, e0, s0)
                       ('\t' : s') -> f (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e (['\t'] : r) s'
                       (c : s') -> f (b {srcColumn = srcColumn b + 1}) e ([c] : r) s'
                else concat (reverse r)
@@ -265,7 +276,15 @@ srcPairTextHead b0 e0 s0 =
 srcPairTextTail :: SrcLoc -> SrcLoc -> String -> String
 srcPairTextTail b e s =
     if srcLine b < srcLine e
-    then srcPairTextTail (b {srcLine = srcLine b + 1, srcColumn = 1}) e (tail (dropWhile (/= '\n') s))
+    then case dropWhile (/= '\n') s of
+           ('\n' : s') -> srcPairTextTail (b {srcLine = srcLine b + 1, srcColumn = 1}) e s'
+           -- This should not happen, but if the last line lacks a
+           -- newline terminator, haskell-src-exts will set the end
+           -- location as if the terminator was present.
+           [] -> case s of
+                   [] -> ""
+                   ('\t' : s') -> srcPairTextTail (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e s'
+                   (_ : s') -> srcPairTextTail (b {srcColumn = srcColumn b + 1}) e s'
     else if srcColumn b < srcColumn e
          then case s of
                 [] -> error $ "srcPairTextTail: b=" ++ show b ++ ", e=" ++ show e ++ ", s = " ++ show s
