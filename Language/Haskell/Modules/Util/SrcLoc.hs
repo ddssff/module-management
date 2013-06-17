@@ -8,11 +8,6 @@ module Language.Haskell.Modules.Util.SrcLoc
     , textEndLoc
     , increaseSrcLoc
     , textSpan
-    , covers
-    , srcSpanTriple
-    , srcLocPairTriple
-    , srcSpanText
-    , srcPairText
     , srcPairTextHead
     , srcPairTextTail
     , makeTree
@@ -20,11 +15,11 @@ module Language.Haskell.Modules.Util.SrcLoc
     ) where
 
 import Data.Default (def, Default)
-import Data.List (groupBy, intercalate, partition, sort)
+import Data.List (groupBy, partition, sort)
 import Data.Set (Set, toList)
 import Data.Tree (Tree(Node), unfoldTree)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ModuleHead(..), ModuleName(..), ModulePragma(..), WarningText(..))
-import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), srcSpanEnd, SrcSpanInfo(..), srcSpanStart)
+import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Prelude hiding (rem)
 import Test.HUnit (Test(TestCase, TestList), assertEqual)
 
@@ -189,60 +184,6 @@ textSpan :: String -> SrcSpanInfo
 textSpan s = let end = textEndLoc s in
              SrcSpanInfo (def {srcSpanStartLine = 1, srcSpanStartColumn = 1, srcSpanEndLine = srcLine end, srcSpanEndColumn = srcColumn end}) []
 
-{-
-class HasSrcSpan a where
-    srcSpan :: a -> SrcSpan
-
--- instance HasSrcSpan SrcSpan where
---     srcSpan = id
-
-instance HasSpanInfo a => HasSrcSpan a where
-    srcSpan = srcSpan . spanInfo
-
--- | Class of values that contain a source location.
-class HasSrcLoc x where
-    srcLoc :: x -> SrcLoc
-
--- instance HasSrcLoc SrcSpan where
---     srcLoc (SrcSpan f b e _ _) = SrcLoc f b e
-
-instance HasSrcSpan a => HasSrcLoc a where
-    srcLoc = srcLoc . srcSpan
-
--- | Class of values that contain an end location of a span
-class HasEndLoc x where
-    endLoc :: x -> SrcLoc
-
--- instance HasEndLoc SrcSpan where
---     endLoc (SrcSpan f _ _ b e) = SrcLoc f b e
-
-instance HasSpanInfo a => HasEndLoc a where
-    endLoc = endLoc . srcSpan
--}
-
--- | Given a string and a span, return the portion of the text before
--- the span, the portion within the span, and the portion after.
-srcSpanTriple :: SrcSpan -> String -> (String, String, String)
-srcSpanTriple sp s =
-    srcLocPairTriple srcSpanStart' srcSpanEnd' s
-    where
-      srcSpanStart' :: SrcLoc
-      srcSpanStart' = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanStart sp)
-      srcSpanEnd' :: SrcLoc
-      srcSpanEnd' = uncurry (SrcLoc (srcSpanFilename sp)) (srcSpanEnd sp)
-
-srcLocPairTriple :: SrcLoc -> SrcLoc -> String -> (String, String, String)
-srcLocPairTriple b e s =
-    let (bmtext, etext) = cutSrcLoc e s
-        (btext, mtext) = cutSrcLoc b bmtext in
-    (btext, mtext, etext)
-
-srcSpanText :: SrcSpan -> String -> String
-srcSpanText sp s = let (_, m, _) = srcSpanTriple sp s in m
-
-srcPairText :: SrcLoc -> SrcLoc -> String -> String
-srcPairText b e s = let (_, m, _) = srcLocPairTriple b e s in m
-
 -- | Return the beginning portion of s which the span b thru e covers,
 -- assuming that the beginning of s is at position b - that is, that
 -- the prefix of s from (1,1) to b has already been removed.
@@ -255,7 +196,7 @@ srcPairTextHead b0 e0 s0 =
           then case span (/= '\n') s of
                  (r', '\n' : s') ->
                      f (b {srcLine = srcLine b + 1, srcColumn = 1}) e ("\n" : r' : r) s'
-                 (r', "") ->
+                 (_, "") ->
                      -- This should not happen, but if the last line
                      -- lacks a newline terminator, haskell-src-exts
                      -- will set the end location as if the terminator
@@ -285,40 +226,13 @@ srcPairTextTail b e s =
                    [] -> ""
                    ('\t' : s') -> srcPairTextTail (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e s'
                    (_ : s') -> srcPairTextTail (b {srcColumn = srcColumn b + 1}) e s'
+           _ -> error $ "srcPairTextTail: b=" ++ show b ++ ", e=" ++ show e ++ ", s = " ++ show s
     else if srcColumn b < srcColumn e
          then case s of
                 [] -> error $ "srcPairTextTail: b=" ++ show b ++ ", e=" ++ show e ++ ", s = " ++ show s
                 ('\t' : s') -> srcPairTextTail (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e s'
                 (_ : s') -> srcPairTextTail (b {srcColumn = srcColumn b + 1}) e s'
          else s
-
--- | Split text into two regions, before and after the given location
-cutSrcLoc :: SrcLoc -> String -> (String, String)
-cutSrcLoc loc s =
-    case splitAt (srcLine loc - 1) (lines' s) of
-      (beforeLines, lastLine : afterLines) ->
-          case splitLine (srcColumn loc - 1) lastLine of
-            ("", "") -> (unlines beforeLines, intercalate "\n" afterLines)
-            (startOfLine, "") -> (intercalate "\n" (beforeLines ++ [startOfLine]), intercalate "\n" ("" : afterLines))
-            ("", endOfLine) -> (unlines beforeLines, intercalate "\n" ([endOfLine] ++ afterLines))
-            (startOfLine, endOfLine) -> (intercalate "\n" (beforeLines ++ [startOfLine]), intercalate "\n" ([endOfLine] ++ afterLines))
-      (beforeLines, []) -> (intercalate "\n" beforeLines, "")
-
-splitLine :: Int -> String -> (String, String)
-splitLine cnt str | cnt < 0 = ("", str)
-splitLine cnt str =
-    f 0 "" cnt str
-    where
-      f _pos hd 0 tl = (reverse hd, tl) -- finished
-      f _pos hd _ "" = (reverse hd, "") -- Out of text, emulate splitAt behavior
-      f pos hd rem ('\t' : tl) =
-          let tab = 8 - mod (pos + 8) 8 in -- How many characters does this tab represent?
-          if rem >= tab
-          then f (pos + tab) ('\t' : hd) (rem - tab) tl -- the goal position is after the end of the tab
-          else error $ "splitLine - attempt to subdivide a tab, " ++ show (cnt, str)
-          -- else f pos hd rem (replicate tab ' ' ++ tl) -- the goal position is in the middle of a tab, untabify
-      f pos hd rem (c : tl) =
-          f (pos + 1) (c : hd) (rem - 1) tl
 
 instance Default SrcLoc where
     def = SrcLoc "<unknown>.hs" 1 1

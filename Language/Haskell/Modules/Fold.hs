@@ -21,7 +21,7 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, 
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Params (runCleanT, parseFile)
-import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), srcLoc, endLoc, srcPairText, makeTree, increaseSrcLoc, srcPairTextHead, srcPairTextTail)
+import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), srcLoc, endLoc, makeTree, increaseSrcLoc, srcPairTextHead, srcPairTextTail)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
 type Module = A.Module SrcSpanInfo
@@ -103,7 +103,7 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.M
           do (tl, l, sps) <- get
              case l < endLoc sp of
                True -> do put (srcPairTextTail l (endLoc sp) tl, endLoc sp, sps)
-                          return (f (srcPairText l (endLoc sp) text) r)
+                          return (f (srcPairTextHead l (endLoc sp) tl) r)
                False -> return r
       doTail f r =
           do (tl, _, _) <- get
@@ -115,7 +115,7 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.M
              case l <= l' of
                True ->
                    do put (srcPairTextTail l l' tl, l', sps)
-                      return $ f (srcPairText l l' text) r
+                      return $ f (srcPairTextHead l l' tl) r
                False -> return r
       doList :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> [a] -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
       doList _ [] r = return r
