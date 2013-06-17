@@ -18,7 +18,7 @@ import Data.List as List (filter, intercalate, isPrefixOf, map)
 import Data.Map as Map (fromList, lookup, Map, member, toAscList, insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), Monoid)
-import Data.Set as Set (fromList, Set, union)
+import Data.Set as Set (fromList, insert, Set, union, difference)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName), ImportDecl(..))
@@ -29,7 +29,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents),
 import Language.Haskell.Modules.Common (ModuleResult(..), withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldImports, foldDecls)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFile, runCleanT)
+import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse), parseFile, runCleanT, getParams)
 import Language.Haskell.Modules.Util.DryIO (readFileMaybe, removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (noisily, qPutStrLn, quietly)
 import System.Cmd (system)
@@ -45,17 +45,32 @@ import Test.HUnit (assertEqual, Test(TestCase, TestList))
 -- merge.
 catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
 catModules univ inputs output =
-    catModulesIO univ inputs output >>= Set.mapM clean
+    do testModuVerse univ
+       result <- catModulesIO univ inputs output
+       modifyParams (\ p -> p {moduVerse = fmap updateVerse (moduVerse p)})
+       Set.mapM clean result
     where
+      -- The inputs disappear and the output appears, unless it is in the inputs
+      updateVerse :: Set S.ModuleName -> Set S.ModuleName
+      updateVerse s = difference (Set.insert output s) (Set.fromList inputs)
       clean (Modified name _) = modulePath name >>= cleanImports
       clean x = return x
+
+testModuVerse :: MonadClean m => Set S.ModuleName -> m ()
+testModuVerse s =
+    getParams >>= \ p ->
+    if moduVerse p /= Just s
+    then error ("moduVerse mismatch, expected " ++ show (Just s) ++ ", saw " ++ show (moduVerse p))
+    else return ()
 
 catModulesIO :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
 catModulesIO _ [] _ = throw $ userError "catModules: invalid argument"
 catModulesIO univ inputs output =
     do let univ' = union univ (Set.fromList (output : inputs))
        info <- loadModules inputs
-       Set.mapM (doModule info inputs output) univ' >>= Set.mapM doResult
+       result <- Set.mapM (doModule info inputs output) univ' >>= Set.mapM doResult
+       modifyParams (\ p -> p {moduVerse = fmap (\ s -> Set.insert output (Set.difference s (Set.fromList inputs))) (moduVerse p)})
+       return result
        {- >>= return . Set.map (\ x -> if elem x inputs then output else x) . Set.fromList -}
        -- List.mapM_ (removeFileIfPresent . modulePath) inputs
        -- return changed
@@ -243,9 +258,9 @@ test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _result <- runCleanT $ noisily $ noisily $
-           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"]})
+           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just testModules})
               _ <- catModules
-                     (Set.fromList testModules)
+                     testModules
                      [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
                      (S.ModuleName "Debian.Repo.Cache")
               mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
@@ -258,9 +273,9 @@ test2 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _result <- runCleanT . noisily $
-           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"]})
+           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just testModules})
               _ <- catModules
-                     (Set.fromList testModules)
+                     testModules
                      [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Common")
               mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
@@ -274,9 +289,12 @@ test3 =
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _result <- withCurrentDirectory "testdata/copy" $
                    runCleanT . noisily $
-           do _ <- catModules
-                     (Set.fromList testModules)
-                     [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
+           do modifyParams (\ p -> p {moduVerse = Just testModules})
+              _ <- catModules
+                     testModules
+                     [S.ModuleName "Debian.Repo.Types.Slice",
+                      S.ModuleName "Debian.Repo.Types.Repo",
+                      S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Slice")
               mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", "testdata/catresult3", "testdata/copy"] ""
@@ -312,8 +330,9 @@ junk =
     , "Debian/Repo/Types.hs~"
     , "Debian/Repo/Monads/Apt.hs~" ]
 
-testModules :: [S.ModuleName]
+testModules :: Set S.ModuleName
 testModules =
+    Set.fromList
             [S.ModuleName "Debian.Repo.Sync",
              S.ModuleName "Debian.Repo.Slice",
              S.ModuleName "Debian.Repo.SourcesList",

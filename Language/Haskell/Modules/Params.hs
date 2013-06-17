@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Params
-    ( Params(Params, dryRun, hsFlags, extensions, sourceDirs, junk, removeEmptyImports, scratchDir)
+    ( Params(Params, dryRun, hsFlags, extensions, sourceDirs, moduVerse, junk, removeEmptyImports, scratchDir)
     , MonadClean
     , runCleanT
     , getParams
@@ -45,6 +45,9 @@ data Params
       -- imports.  These directories would be the value used in the
       -- hs-source-dirs parameter of a cabal file, and passed to ghc
       -- via the -i option.
+      , moduVerse :: Maybe (Set S.ModuleName)
+      -- ^ The set of modules that catModules will check for imports
+      -- of symbols that moved.
       , junk :: Set FilePath
       -- ^ Paths added to this list are removed as the monad finishes.
       , removeEmptyImports :: Bool
@@ -83,6 +86,7 @@ runCleanT action =
                                                      hsFlags = [],
                                                      Language.Haskell.Modules.Params.extensions = Exts.extensions defaultParseMode,
                                                      sourceDirs = ["."],
+                                                     moduVerse = Nothing,
                                                      junk = empty,
                                                      removeEmptyImports = True})
        mapM_ (\ x -> liftIO (try (removeFile x)) >>= \ (_ :: Either SomeException ()) -> return ()) (toList (junk params))

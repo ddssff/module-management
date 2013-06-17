@@ -13,7 +13,7 @@ import Data.List as List (filter, intercalate, isPrefixOf, map, nub)
 import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, keys, Map, mapWithKey, toList)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
-import Data.Set as Set (fromList, intersection, map, null, Set)
+import Data.Set as Set (fromList, intersection, map, null, Set, union)
 import Data.Set.Extra (gFind)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
 import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(Module), ModuleHead(ModuleHead), Name)
@@ -23,7 +23,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..), ExportSpec, ImportSpec, ImportDecl(..))
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs), parseFile, runCleanT)
+import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse), parseFile, runCleanT)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Symbols (symbols, imports, exports)
@@ -61,6 +61,8 @@ splitModule name =
        mapM_ (uncurry writeModule) (Map.toList newFiles)
        -- Clean the new modules
        mapM_ (\ name' -> modulePath name' >>= cleanImports) (Map.keys newFiles)
+       -- We have created some new modules, add them to the moduVerse
+       modifyParams (\ p -> p {moduVerse = fmap (union (fromList (keys newFiles))) (moduVerse p)})
 
 writeModule :: MonadClean m => S.ModuleName -> String -> m ()
 writeModule name text = modulePath name >>= \ path -> replaceFile tildeBackup path text
