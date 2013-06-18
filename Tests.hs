@@ -3,7 +3,7 @@
 
 import Control.Exception (SomeException, try)
 import Data.List (filter, isPrefixOf)
-import Data.Set (Set, fromList, difference)
+import Data.Set (Set, fromList, difference, union)
 import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
@@ -157,13 +157,22 @@ test2b u =
             splitModule (ModuleName "Data.Logic.Classes.Literal")
             noisily (qPutStrLn "cat1")
             catModules
-              u
+              u'
               [ModuleName "Data.Logic.Classes.FirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
               (ModuleName "Data.Logic.Classes.FirstOrder")
             noisily (qPutStrLn "cat2")
             return ()
+    where
+      u' = union (fromList [ModuleName "Data.Logic.Classes.Literal.FixityLiteral",
+                            ModuleName "Data.Logic.Classes.Literal.FoldAtomsLiteral",
+                            ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
+                            ModuleName "Data.Logic.Classes.Literal.FromLiteral",
+                            ModuleName "Data.Logic.Classes.Literal.Literal",
+                            ModuleName "Data.Logic.Classes.Literal.PrettyLit",
+                            ModuleName "Data.Logic.Classes.Literal.ToPropositional",
+                            ModuleName "Data.Logic.Classes.Literal.ZipLiterals"]) u
 
 test2c :: MonadClean m => Set ModuleName -> m ()
 test2c u =

@@ -18,7 +18,7 @@ import Data.List as List (filter, intercalate, isPrefixOf, map)
 import Data.Map as Map (fromList, lookup, Map, member, toAscList, insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), Monoid)
-import Data.Set as Set (fromList, insert, Set, union, difference)
+import Data.Set as Set (fromList, insert, Set, union, difference, toList, null)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName), ImportDecl(..))
@@ -50,9 +50,10 @@ catModules univ inputs output =
        modifyParams (\ p -> p {moduVerse = fmap updateVerse (moduVerse p)})
        Set.mapM clean result
     where
-      -- The inputs disappear and the output appears, unless it is in the inputs
+      -- The inputs disappear and the output appears.  If the output is one
+      -- of the inputs, it does not disappear.
       updateVerse :: Set S.ModuleName -> Set S.ModuleName
-      updateVerse s = difference (Set.insert output s) (Set.fromList inputs)
+      updateVerse s = Set.insert output (difference s (Set.fromList inputs))
       clean x =
           do doClean <- getParams >>= return . not . testMode
              case x of
@@ -61,10 +62,12 @@ catModules univ inputs output =
 
 testModuVerse :: MonadClean m => Set S.ModuleName -> m ()
 testModuVerse s =
-    getParams >>= \ p ->
-    if moduVerse p /= Just s
-    then error ("moduVerse mismatch, expected " ++ show (Just s) ++ ", saw " ++ show (moduVerse p))
-    else return ()
+    getParams >>= maybe (error "ModuVerse not set") message . moduVerse
+    where
+      message p =
+          case (difference s p, difference p s) of
+            (extra, missing) | not (Set.null extra && Set.null missing) -> error $ "moduVerse mismatch, missing: " ++ show (toList extra) ++ ", extra: " ++ show (toList missing)
+            _ -> return ()
 
 catModulesIO :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
 catModulesIO _ [] _ = throw $ userError "catModules: invalid argument"
