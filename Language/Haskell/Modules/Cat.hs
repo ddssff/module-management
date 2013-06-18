@@ -26,7 +26,7 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(Exp
 import Language.Haskell.Exts.Parser (fromParseResult)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(importModule), ModuleName(..))
+import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(..), ModuleName(..))
 import Language.Haskell.Modules.Common (ModuleResult(..), withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldHeader, foldExports, foldImports, foldDecls)
 import Language.Haskell.Modules.Imports (cleanImports)
@@ -114,20 +114,23 @@ doOutput inputInfo inNames outName (m, text) =
 doOther :: [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
 doOther inputs output (m, text) =
     foldHeader echo2 echo echo echo m text "" <>
-    foldExports echo2 fixModuleExport echo2 m text "" <>
-    foldImports fixModuleImport m text "" <>
+    foldExports echo2 (\ x pref s suff r -> r <> pref <> fromMaybe s (fixModuleExport inputs output (sExportSpec x)) <> suff) echo2 m text "" <>
+    foldImports (\ x pref s suff r -> r <> pref <> fromMaybe s (fixModuleImport inputs output (sImportDecl x)) <> suff) m text "" <>
     foldDecls echo echo2 m text ""
-    where
-      fixModuleExport x pref s suff r =
-          r <> case sExportSpec x of
-                 S.EModuleContents y
-                     | elem y inputs ->
-                         "\n     , " <> prettyPrint (S.EModuleContents output) <> suff
-                 _ -> pref <> s <> suff
-      fixModuleImport x pref s suff r =
-          r <> pref <> (if elem (sModuleName (A.importModule x)) inputs
-                        then prettyPrint ((sImportDecl x) {S.importModule = output})
-                        else s) <> suff
+
+fixModuleExport :: [S.ModuleName] -> S.ModuleName -> S.ExportSpec -> Maybe String
+fixModuleExport inputs output x =
+          case x of
+            S.EModuleContents y
+                | elem y inputs -> Just (prettyPrint (S.EModuleContents output))
+            _ -> Nothing
+
+fixModuleImport :: [S.ModuleName] -> S.ModuleName -> S.ImportDecl -> Maybe String
+fixModuleImport inputs output x =
+          case x of
+            S.ImportDecl {S.importModule = y}
+                | elem y inputs -> Just (prettyPrint (x {S.importModule = output}))
+            _ -> Nothing
 
 mergeExports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> Maybe [S.ExportSpec]
 mergeExports old new =

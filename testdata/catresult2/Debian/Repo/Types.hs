@@ -1,7 +1,6 @@
 module Debian.Repo.Types
     ( module Debian.Repo.Types.AptImage
-
-     , module Debian.Repo.Types.Common
+    , module Debian.Repo.Types.Common
     , module Debian.Repo.Types.PackageIndex
     , module Debian.Repo.Types.Release
     ) where
