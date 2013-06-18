@@ -10,9 +10,7 @@ module Language.Haskell.Modules.Cat
     , logicModules
     ) where
 
-import Control.Exception (throw)
 import Control.Monad as List (mapM)
-import Control.Monad.CatchIO (catch)
 import Control.Monad.Trans (liftIO)
 import Data.Generics (Data, everywhere, mkT, Typeable)
 import Data.List as List (filter, intercalate, isPrefixOf, map)
@@ -27,15 +25,12 @@ import Language.Haskell.Exts.Parser (fromParseResult)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(..), ModuleName(..))
-import Language.Haskell.Modules.Common (ModuleResult(..), withCurrentDirectory)
+import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldHeader, foldExports, foldImports, foldDecls, echo, echo2, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runCleanT, getParams)
-import Language.Haskell.Modules.Util.DryIO (removeFileIfPresent, replaceFile, tildeBackup)
-import Language.Haskell.Modules.Util.QIO (qPutStrLn, quietly)
+import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runCleanT, getParams, ModuleResult(..), doResult)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess))
-import System.IO.Error (isDoesNotExistError)
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
@@ -59,23 +54,6 @@ catModules univ inputs output =
              case x of
                (Modified name _) | flag -> modulePath name >>= cleanImports
                _ -> return x
-
-      doResult :: MonadClean m => ModuleResult -> m ModuleResult
-      doResult x@(Unchanged _name) = quietly (qPutStrLn ("unchanged: " ++ show _name)) >> return x
-      doResult x@(Removed name) = removeModuleIfPresent name >> return x
-      doResult x@(Modified name text) = replaceModule name text >> return x
-
-      replaceModule :: MonadClean m => S.ModuleName -> String -> m Bool
-      replaceModule name newText =
-          do path <- modulePath name
-             qPutStrLn ("catModules: modifying " ++ show path)
-             replaceFile tildeBackup path newText
-             return True
-
-      removeModuleIfPresent :: MonadClean m => S.ModuleName -> m ()
-      removeModuleIfPresent name =
-          do path <- modulePath name
-             removeFileIfPresent path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
 
 -- Process one of the modules in the moduVerse and return the result.
 -- The output module may not (yet) be an element of the moduVerse, in

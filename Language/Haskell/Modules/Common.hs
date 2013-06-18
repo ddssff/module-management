@@ -3,7 +3,6 @@
 module Language.Haskell.Modules.Common
     ( groupBy'
     , mapNames
-    , ModuleResult(..)
     , modulePathBase
     , withCurrentDirectory
     ) where
@@ -31,12 +30,6 @@ mapNames :: Default a => [S.Name] -> [A.Name a]
 mapNames [] = []
 mapNames (S.Ident x : more) = A.Ident def x : mapNames more
 mapNames (S.Symbol x : more) = A.Symbol def x : mapNames more
-
-data ModuleResult
-    = Unchanged S.ModuleName
-    | Removed S.ModuleName
-    | Modified S.ModuleName String
-    deriving (Show, Eq, Ord)
 
 -- | Construct the base of a module path.
 modulePathBase :: S.ModuleName -> FilePath

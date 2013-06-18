@@ -10,6 +10,8 @@ module Language.Haskell.Modules.Params
     , parseFile
     , modulePath
     , markForDelete
+    , ModuleResult(..)
+    , doResult
     ) where
 
 import Control.Applicative ((<$>))
@@ -25,11 +27,12 @@ import Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensi
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 import Language.Haskell.Modules.Common (modulePathBase)
-import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..))
-import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
+import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..), replaceFile, tildeBackup, removeFileIfPresent)
+import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), quietly, qPutStrLn)
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
 import System.FilePath ((</>))
+import System.IO.Error (isDoesNotExistError)
 
 data Params
     = Params
@@ -135,3 +138,29 @@ modulePath name =
 
 markForDelete :: MonadClean m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk = insert x (junk p)})
+
+data ModuleResult
+    = Unchanged S.ModuleName
+    | Removed S.ModuleName
+    | Modified S.ModuleName String
+    deriving (Show, Eq, Ord)
+
+doResult :: MonadClean m => ModuleResult -> m ModuleResult
+doResult x@(Unchanged _name) =
+    quietly (qPutStrLn ("unchanged: " ++ show _name)) >> return x
+doResult x@(Removed name) =
+    removeModuleIfPresent >> return x
+    where
+      removeModuleIfPresent :: MonadClean m => m ()
+      removeModuleIfPresent =
+          do path <- modulePath name
+             removeFileIfPresent path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+doResult x@(Modified name text) =
+    replaceModule >> return x
+    where
+      replaceModule :: MonadClean m => m Bool
+      replaceModule =
+          do path <- modulePath name
+             qPutStrLn ("catModules: modifying " ++ show path)
+             replaceFile tildeBackup path text
+             return True
