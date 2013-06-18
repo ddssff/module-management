@@ -27,6 +27,8 @@ To Do:
 
   1. Make sure original file is left as backup, not some intermediate
   2. Add a mode where no import cleanup is done after a split or cat
+  3. SplitModules should not create a re-exporter, it needs to update
+     the imports of the moduVerse the way catModules does.
 
 Questions:
 
