@@ -25,4 +25,9 @@ Bugs:
 
 To Do:
 
-  1. Don't expand tabs in output files
+  1. Make sure original file is left as backup, not some intermediate
+  2. Add a mode where no import cleanup is done after a split or cat
+
+Questions:
+
+  1. Does GHC omit Prelude imports even when NoImplicitPrelude option is given?
