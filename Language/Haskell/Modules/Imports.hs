@@ -26,7 +26,7 @@ import Language.Haskell.Modules.Common (modulePathBase, ModuleResult(..), withCu
 import Language.Haskell.Modules.Fold (foldHeader, foldExports, foldImports, foldDecls)
 import Language.Haskell.Modules.Params (getParams, markForDelete, modifyParams, MonadClean, Params(..), parseFile, parseFile, runCleanT, scratchDir)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
-import Language.Haskell.Modules.Util.QIO (noisily, qPutStrLn, quietly)
+import Language.Haskell.Modules.Util.QIO (qPutStrLn, quietly)
 import Language.Haskell.Modules.Util.Symbols (symbols)
 import System.Cmd (system)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
@@ -310,7 +310,7 @@ test2 =
 test3 :: Test
 test3 =
     TestCase
-      (runCleanT (noisily $ noisily $ modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/NotMain.hs") >>
+      (runCleanT (modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/NotMain.hs") >>
        assertEqual "module name" () ())
 
 -- | Preserve imports with a "hiding" clause
@@ -318,7 +318,7 @@ test4 :: Test
 test4 =
     TestCase
       (system "cp testdata/HidingOrig.hs testdata/Hiding.hs" >>
-       runCleanT (noisily $ noisily $ modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/Hiding.hs") >>
+       runCleanT (modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/Hiding.hs") >>
        -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
        assertEqual "module name" () ())
 
@@ -327,10 +327,9 @@ test5 :: Test
 test5 =
     TestCase
       (do _ <- system "cp testdata/DerivingOrig.hs testdata/Deriving.hs"
-          _ <- runCleanT (noisily $ noisily $
-                                    modifyParams (\ p -> p {extensions = extensions p ++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances],
-                                                            sourceDirs = ["testdata"]}) >>
-                                    cleanImports "testdata/Deriving.hs")
+          _ <- runCleanT (modifyParams (\ p -> p {extensions = extensions p ++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances],
+                                                  sourceDirs = ["testdata"]}) >>
+                          cleanImports "testdata/Deriving.hs")
           (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/DerivingOrig.hs", "testdata/Deriving.hs"] ""
           assertEqual "standalone deriving"
                       (ExitFailure 1,

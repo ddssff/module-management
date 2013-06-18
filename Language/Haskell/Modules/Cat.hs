@@ -31,7 +31,7 @@ import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldI
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runCleanT, getParams)
 import Language.Haskell.Modules.Util.DryIO (readFileMaybe, removeFileIfPresent, replaceFile, tildeBackup)
-import Language.Haskell.Modules.Util.QIO (noisily, qPutStrLn, quietly)
+import Language.Haskell.Modules.Util.QIO (qPutStrLn, quietly)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess))
 import System.FilePath ((</>))
@@ -262,7 +262,7 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         _result <- runCleanT $ noisily $ noisily $
+         _result <- runCleanT $
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just testModules})
               _ <- catModules
                      testModules
@@ -277,7 +277,7 @@ test2 :: Test
 test2 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         _result <- runCleanT . noisily $
+         _result <- runCleanT $
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just testModules})
               _ <- catModules
                      testModules
@@ -293,7 +293,7 @@ test3 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _result <- withCurrentDirectory "testdata/copy" $
-                   runCleanT . noisily $
+                   runCleanT $
            do modifyParams (\ p -> p {moduVerse = Just testModules})
               _ <- catModules
                      testModules

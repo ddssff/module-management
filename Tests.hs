@@ -8,11 +8,11 @@ import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileW
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import Language.Haskell.Modules (withCurrentDirectory, MonadClean, Extension(..), Params(extensions, moduVerse), runCleanT, modifyParams, ModuleName(ModuleName), splitModule, catModules, noisily, qPutStrLn)
-import Language.Haskell.Modules.Cat as Cat (tests)
-import Language.Haskell.Modules.Fold as Fold (tests)
-import Language.Haskell.Modules.Imports as Imports (tests)
-import Language.Haskell.Modules.Split as Split (tests)
+import Language.Haskell.Modules (withCurrentDirectory, MonadClean, Extension(..), Params(extensions, moduVerse, testMode), runCleanT, modifyParams, ModuleName(ModuleName), splitModule, catModules, noisily, qPutStrLn)
+import qualified Language.Haskell.Modules.Cat as Cat (tests)
+import qualified Language.Haskell.Modules.Fold as Fold (tests)
+import qualified Language.Haskell.Modules.Imports as Imports (tests)
+import qualified Language.Haskell.Modules.Split as Split (tests)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.Process (readProcess, readProcessWithExitCode)
@@ -20,11 +20,7 @@ import Test.HUnit (assertEqual, Counts(..), runTestTT, Test(TestList, TestCase, 
 
 main :: IO ()
 main =
-    do counts <- runTestTT (TestList [TestLabel "Cat" Cat.tests,
-                                      TestLabel "Fold" Fold.tests,
-                                      TestLabel "Imports" Imports.tests,
-                                      TestLabel "Main" Main.tests,
-                                      TestLabel "Split" Split.tests])
+    do counts <- runTestTT (TestList [TestLabel "Main" Main.tests])
        putStrLn (show counts)
        case (errors counts + failures counts) of
          0 -> exitWith ExitSuccess
@@ -42,10 +38,15 @@ withTestData f path = withCurrentDirectory "testdata/original" $
          (_, Left (e :: SomeException)) -> error $ "failure: " ++ show e
 
 tests :: Test
-tests = TestList [Main.test1,
-                  Main.logictest "split" test2a,
-                  Main.logictest "split-cat" test2b,
-                  Main.logictest "split-cat-cat" test2c]
+tests = TestList [ Main.test1
+                 , Main.logictest "split" test2a
+                 -- , Main.logictest "split-cat" test2b
+                 -- , Main.logictest "split-cat-cat" test2c
+                 , TestLabel "Cat" Cat.tests
+                 , TestLabel "Fold" Fold.tests
+                 , TestLabel "Imports" Imports.tests
+                 , TestLabel "Split" Split.tests
+                 ]
 
 test1 :: Test
 test1 =
@@ -152,7 +153,8 @@ test2a u =
 test2b :: MonadClean m => Set ModuleName -> m ()
 test2b u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
-                                    moduVerse = Just u})
+                                    moduVerse = Just u,
+                                    testMode = True})
             noisily (qPutStrLn "split")
             splitModule (ModuleName "Data.Logic.Classes.Literal")
             noisily (qPutStrLn "cat1")

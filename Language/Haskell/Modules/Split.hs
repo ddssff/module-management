@@ -26,7 +26,6 @@ import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, getParams, Params(sourceDirs, moduVerse, testMode), parseFile, runCleanT)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, replaceFile, tildeBackup)
-import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Symbols (symbols, imports, exports)
 import Prelude hiding (writeFile)
 import System.Cmd (system)
@@ -237,7 +236,7 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         runCleanT . noisily $
+         runCleanT $
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"]})
               splitModule (S.ModuleName "Debian.Repo.Package")
          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/splitresult", "testdata/copy"] ""
