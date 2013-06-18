@@ -3,12 +3,12 @@
 
 import Control.Exception (SomeException, try)
 import Data.List (filter, isPrefixOf)
-import Data.Set (fromList, difference)
+import Data.Set (Set, fromList, difference)
 import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import Language.Haskell.Modules (withCurrentDirectory, Extension(..), Params(extensions, moduVerse), runCleanT, modifyParams, ModuleName(ModuleName), splitModule, catModules, noisily, qPutStrLn)
+import Language.Haskell.Modules (withCurrentDirectory, MonadClean, Extension(..), Params(extensions, moduVerse), runCleanT, modifyParams, ModuleName(ModuleName), splitModule, catModules, noisily, qPutStrLn)
 import Language.Haskell.Modules.Cat as Cat (tests)
 import Language.Haskell.Modules.Fold as Fold (tests)
 import Language.Haskell.Modules.Imports as Imports (tests)
@@ -42,7 +42,10 @@ withTestData f path = withCurrentDirectory "testdata/original" $
          (_, Left (e :: SomeException)) -> error $ "failure: " ++ show e
 
 tests :: Test
-tests = TestList [Main.test1, Main.test2]
+tests = TestList [Main.test1,
+                  Main.logictest "split" test2a,
+                  Main.logictest "split-cat" test2b,
+                  Main.logictest "split-cat-cat" test2c]
 
 test1 :: Test
 test1 =
@@ -55,38 +58,15 @@ test1 =
     where
       test parsed comments text = return (exactPrint parsed comments, text)
 
-test2 :: Test
-test2 =
-    TestLabel "split-cat-cat" $ TestCase $
+-- logictest :: MonadClean m => String -> (Set ModuleName -> m ()) -> Test
+logictest s f =
+    TestLabel s $ TestCase $
     do _ <- readProcess "rsync" ["-aHxS", "--delete", {-"-v",-} "testdata/logic/", "testdata/copy"] ""
-       _ <- withCurrentDirectory "testdata/copy" $ runCleanT $
-         do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
-                                    moduVerse = Just u})
-            noisily (qPutStrLn "split")
-            splitModule (ModuleName "Data.Logic.Classes.Literal")
-            noisily (qPutStrLn "cat1")
-            catModules
-              u
-              [ModuleName "Data.Logic.Classes.FirstOrder",
-               ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
-               ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
-              (ModuleName "Data.Logic.Classes.FirstOrder")
-            noisily (qPutStrLn "cat2")
-            catModules
-              u'
-              [ModuleName "Data.Logic.Classes.Literal.FixityLiteral",
-               ModuleName "Data.Logic.Classes.Literal.FoldAtomsLiteral",
-               ModuleName "Data.Logic.Classes.Literal.Literal",
-               ModuleName "Data.Logic.Classes.Literal.PrettyLit",
-               ModuleName "Data.Logic.Classes.Literal.ToPropositional",
-               ModuleName "Data.Logic.Classes.Literal.ZipLiterals"]
-              (ModuleName "Data.Logic.Classes.Literal")
-       (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", "testdata/split-cat-cat-result", "testdata/copy"] ""
+       _ <- withCurrentDirectory "testdata/copy" $ runCleanT $ f u
+       (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", "testdata/" ++ s ++ "-result", "testdata/copy"] ""
        let out' = unlines (filter (not . isPrefixOf "Binary files") . map (takeWhile (/= '\t')) $ (lines out))
-       assertEqual "split-cat-cat" (ExitSuccess, "", "") (code, out', err)
+       assertEqual s (ExitSuccess, "", "") (code, out', err)
     where
-      u' = difference u (fromList [ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
-                                       ModuleName "Data.Logic.Classes.Literal.FromLiteral"])
       u = fromList
             (map ModuleName 
                       ["Data.Boolean.SatSolver",
@@ -159,12 +139,56 @@ test2 =
                        "Data.Logic.Classes.ClauseNormalForm",
                        "Data.Logic.Classes.Term",
                        "Data.Logic.Classes.Literal",
-                       "Data.Logic.Classes.Literal.FoldAtomsLiteral",
-                       "Data.Logic.Classes.Literal.ToPropositional",
-                       "Data.Logic.Classes.Literal.FromFirstOrder",
-                       "Data.Logic.Classes.Literal.FixityLiteral",
-                       "Data.Logic.Classes.Literal.FromLiteral",
-                       "Data.Logic.Classes.Literal.PrettyLit",
-                       "Data.Logic.Classes.Literal.ZipLiterals",
-                       "Data.Logic.Classes.Literal.Literal",
                        "Data.Logic.Satisfiable"])
+
+test2a :: MonadClean m => Set ModuleName -> m ()
+test2a u =
+         do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
+                                    moduVerse = Just u})
+            noisily (qPutStrLn "split")
+            splitModule (ModuleName "Data.Logic.Classes.Literal")
+            return ()
+
+test2b :: MonadClean m => Set ModuleName -> m ()
+test2b u =
+         do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
+                                    moduVerse = Just u})
+            noisily (qPutStrLn "split")
+            splitModule (ModuleName "Data.Logic.Classes.Literal")
+            noisily (qPutStrLn "cat1")
+            catModules
+              u
+              [ModuleName "Data.Logic.Classes.FirstOrder",
+               ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
+               ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
+              (ModuleName "Data.Logic.Classes.FirstOrder")
+            noisily (qPutStrLn "cat2")
+            return ()
+
+test2c :: MonadClean m => Set ModuleName -> m ()
+test2c u =
+         do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
+                                    moduVerse = Just u})
+            noisily (qPutStrLn "split")
+            splitModule (ModuleName "Data.Logic.Classes.Literal")
+            noisily (qPutStrLn "cat1")
+            catModules
+              u
+              [ModuleName "Data.Logic.Classes.FirstOrder",
+               ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
+               ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
+              (ModuleName "Data.Logic.Classes.FirstOrder")
+            noisily (qPutStrLn "cat2")
+            catModules
+              u'
+              [ModuleName "Data.Logic.Classes.Literal.FixityLiteral",
+               ModuleName "Data.Logic.Classes.Literal.FoldAtomsLiteral",
+               ModuleName "Data.Logic.Classes.Literal.Literal",
+               ModuleName "Data.Logic.Classes.Literal.PrettyLit",
+               ModuleName "Data.Logic.Classes.Literal.ToPropositional",
+               ModuleName "Data.Logic.Classes.Literal.ZipLiterals"]
+              (ModuleName "Data.Logic.Classes.Literal")
+            return ()
+    where
+      u' = difference u (fromList [ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
+                                       ModuleName "Data.Logic.Classes.Literal.FromLiteral"])
