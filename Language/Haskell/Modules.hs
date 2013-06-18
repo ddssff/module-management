@@ -5,7 +5,7 @@ module Language.Haskell.Modules
     , catModules
     , MonadClean
     , runCleanT
-    , Params(extensions, hsFlags, sourceDirs, moduVerse, removeEmptyImports)
+    , Params(extensions, hsFlags, sourceDirs, moduVerse, removeEmptyImports, testMode)
     , modifyParams
     , MonadDryRun(..)
     , quietly

@@ -29,7 +29,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents),
 import Language.Haskell.Modules.Common (ModuleResult(..), withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldImports, foldDecls)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse), parseFile, runCleanT, getParams)
+import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runCleanT, getParams)
 import Language.Haskell.Modules.Util.DryIO (readFileMaybe, removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (noisily, qPutStrLn, quietly)
 import System.Cmd (system)
@@ -53,8 +53,11 @@ catModules univ inputs output =
       -- The inputs disappear and the output appears, unless it is in the inputs
       updateVerse :: Set S.ModuleName -> Set S.ModuleName
       updateVerse s = difference (Set.insert output s) (Set.fromList inputs)
-      clean (Modified name _) = modulePath name >>= cleanImports
-      clean x = return x
+      clean x =
+          do doClean <- getParams >>= return . not . testMode
+             case x of
+               (Modified name _) | doClean -> modulePath name >>= cleanImports
+               x -> return x
 
 testModuVerse :: MonadClean m => Set S.ModuleName -> m ()
 testModuVerse s =

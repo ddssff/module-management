@@ -6,6 +6,7 @@ module Language.Haskell.Modules.Split
     ) where
 
 import Control.Exception (throw)
+import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
@@ -23,7 +24,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..), ExportSpec, ImportSpec, ImportDecl(..))
 import Language.Haskell.Modules.Fold (foldModule)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse), parseFile, runCleanT)
+import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, getParams, Params(sourceDirs, moduVerse, testMode), parseFile, runCleanT)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Symbols (symbols, imports, exports)
@@ -60,9 +61,13 @@ splitModule name =
        -- Write the new modules
        mapM_ (uncurry writeModule) (Map.toList newFiles)
        -- Clean the new modules
-       mapM_ (\ name' -> modulePath name' >>= cleanImports) (Map.keys newFiles)
+       mapM_ doClean (Map.keys newFiles)
        -- We have created some new modules, add them to the moduVerse
        modifyParams (\ p -> p {moduVerse = fmap (union (fromList (keys newFiles))) (moduVerse p)})
+    where
+      doClean name' =
+          do flag <- getParams >>= return . not . testMode
+             when flag (modulePath name' >>= cleanImports >> return ())
 
 writeModule :: MonadClean m => S.ModuleName -> String -> m ()
 writeModule name text = modulePath name >>= \ path -> replaceFile tildeBackup path text

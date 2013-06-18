@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Params
-    ( Params(Params, dryRun, hsFlags, extensions, sourceDirs, moduVerse, junk, removeEmptyImports, scratchDir)
+    ( Params(Params, dryRun, hsFlags, extensions, sourceDirs, moduVerse, junk, removeEmptyImports, testMode, scratchDir)
     , MonadClean
     , runCleanT
     , getParams
@@ -56,6 +56,9 @@ data Params
       -- instances it contains, but usually it is not.  Note that this
       -- option does not affect imports that started empty and end
       -- empty.
+      , testMode :: Bool
+      -- ^ For testing, do not run cleanImports on the results of the
+      -- splitModule and catModules operations.
       } deriving (Eq, Ord, Show)
 
 class (MonadIO m, MonadCatchIO m, Functor m) => MonadClean m where
@@ -88,7 +91,8 @@ runCleanT action =
                                                      sourceDirs = ["."],
                                                      moduVerse = Nothing,
                                                      junk = empty,
-                                                     removeEmptyImports = True})
+                                                     removeEmptyImports = True,
+                                                     testMode = False})
        mapM_ (\ x -> liftIO (try (removeFile x)) >>= \ (_ :: Either SomeException ()) -> return ()) (toList (junk params))
        return result
 
