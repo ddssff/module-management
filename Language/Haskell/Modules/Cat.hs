@@ -6,13 +6,14 @@ module Language.Haskell.Modules.Cat
     , test1
     , test2
     , test3
+    , repoModules
+    , logicModules
     ) where
 
 import Control.Exception (throw)
 import Control.Monad as List (mapM)
 import Control.Monad.CatchIO (catch)
 import Control.Monad.Trans (liftIO)
-import Data.Default (def)
 import Data.Generics (Data, everywhere, mkT, Typeable)
 import Data.List as List (filter, intercalate, isPrefixOf, map)
 import Data.Map as Map (fromList, lookup, Map, member, toAscList, insert)
@@ -20,21 +21,20 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), Monoid)
 import Data.Set as Set (fromList, insert, Set, union, difference, toList, null)
 import Data.Set.Extra as Set (mapM)
-import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(importModule), Module(Module), ModuleHead(ModuleHead), ModuleName(ModuleName), ImportDecl(..))
+import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName, sImportDecl)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), Module(Module), ModuleHead(ModuleHead), ImportDecl(..))
 import Language.Haskell.Exts.Parser (fromParseResult)
-import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode)
+import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
+import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(importModule), ModuleName(..))
 import Language.Haskell.Modules.Common (ModuleResult(..), withCurrentDirectory)
-import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldImports, foldDecls)
+import Language.Haskell.Modules.Fold (foldHeader, foldExports, foldImports, foldDecls)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runCleanT, getParams)
-import Language.Haskell.Modules.Util.DryIO (readFileMaybe, removeFileIfPresent, replaceFile, tildeBackup)
+import Language.Haskell.Modules.Util.DryIO (removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qPutStrLn, quietly)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess))
-import System.FilePath ((</>))
 import System.IO.Error (isDoesNotExistError)
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
@@ -46,128 +46,88 @@ import Test.HUnit (assertEqual, Test(TestCase, TestList))
 catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
 catModules univ inputs output =
     do testModuVerse univ
-       result <- catModulesIO univ inputs output
-       modifyParams (\ p -> p {moduVerse = fmap updateVerse (moduVerse p)})
-       Set.mapM clean result
-    where
+       let univ' = union univ (Set.fromList (output : inputs))
+       inputInfo <- loadModules inputs
+       result <- Set.mapM (doModule inputInfo inputs output) univ' >>= Set.mapM doResult
       -- The inputs disappear and the output appears.  If the output is one
       -- of the inputs, it does not disappear.
-      updateVerse :: Set S.ModuleName -> Set S.ModuleName
-      updateVerse s = Set.insert output (difference s (Set.fromList inputs))
-      clean x =
-          do doClean <- getParams >>= return . not . testMode
-             case x of
-               (Modified name _) | doClean -> modulePath name >>= cleanImports
-               x -> return x
-
-testModuVerse :: MonadClean m => Set S.ModuleName -> m ()
-testModuVerse s =
-    getParams >>= maybe (error "ModuVerse not set") message . moduVerse
-    where
-      message p =
-          case (difference s p, difference p s) of
-            (extra, missing) | not (Set.null extra && Set.null missing) -> error $ "moduVerse mismatch, missing: " ++ show (toList extra) ++ ", extra: " ++ show (toList missing)
-            _ -> return ()
-
-catModulesIO :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
-catModulesIO _ [] _ = throw $ userError "catModules: invalid argument"
-catModulesIO univ inputs output =
-    do let univ' = union univ (Set.fromList (output : inputs))
-       info <- loadModules inputs
-       result <- Set.mapM (doModule info inputs output) univ' >>= Set.mapM doResult
        modifyParams (\ p -> p {moduVerse = fmap (\ s -> Set.insert output (Set.difference s (Set.fromList inputs))) (moduVerse p)})
-       return result
-       {- >>= return . Set.map (\ x -> if elem x inputs then output else x) . Set.fromList -}
-       -- List.mapM_ (removeFileIfPresent . modulePath) inputs
-       -- return changed
+       Set.mapM clean result
     where
+      clean x =
+          do flag <- getParams >>= return . not . testMode
+             case x of
+               (Modified name _) | flag -> modulePath name >>= cleanImports
+               _ -> return x
+
       doResult :: MonadClean m => ModuleResult -> m ModuleResult
       doResult x@(Unchanged _name) = quietly (qPutStrLn ("unchanged: " ++ show _name)) >> return x
       doResult x@(Removed name) = removeModuleIfPresent name >> return x
-      doResult x@(Modified name text) = replaceModuleIfDifferent name text >> return x
+      doResult x@(Modified name text) = replaceModule name text >> return x
 
-replaceModuleIfDifferent :: MonadClean m => S.ModuleName -> String -> m Bool
-replaceModuleIfDifferent name newText =
-    do path <- modulePath name
-       oldText <- liftIO $ readFileMaybe path
-       if oldText == Just newText then return False else qPutStrLn ("catModules: modifying " ++ show path) >> replaceFile tildeBackup path newText >> return True
+      replaceModule :: MonadClean m => S.ModuleName -> String -> m Bool
+      replaceModule name newText =
+          do path <- modulePath name
+             qPutStrLn ("catModules: modifying " ++ show path)
+             replaceFile tildeBackup path newText
+             return True
 
-removeModuleIfPresent :: MonadClean m => S.ModuleName -> m ()
-removeModuleIfPresent name =
-    do path <- modulePath name
-       removeFileIfPresent path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+      removeModuleIfPresent :: MonadClean m => S.ModuleName -> m ()
+      removeModuleIfPresent name =
+          do path <- modulePath name
+             removeFileIfPresent path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
 
--- Update the module 'name' to reflect the result of the cat operation.
+-- Process one of the modules in the moduVerse and return the result.
+-- The output module may not (yet) be an element of the moduVerse, in
+-- that case choose the first input modules to convert into the output
+-- module.
 doModule :: MonadClean m => Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
-doModule info inputs@(first : _) output name =
+doModule inputInfo inputs@(first : _) output name =
     do -- The new module will be based on the existing module, unless
        -- name equals output and output does not exist
-       let base = if name == output && not (Map.member name info) then first else name
-       (m, text) <- maybe (loadModule base) return (Map.lookup name info)
-       let text' = doModule' info inputs output (name, (m, text))
-       return $ if name == output
-                then Modified name text'
-                else if elem name inputs
-                     then Removed name
-                     else if text /= text'
-                          then Modified name text'
-                          else Unchanged name
-       -- if base /= name || text' /= text then (replaceFile (const Nothing) (modulePath name) text' >> return True) else return False
-       -- replaceFileIfDifferent (modulePath name) text'
+       let oldName = if name == output && not (Map.member name inputInfo) then first else name
+       (m, text) <- maybe (loadModule oldName) return (Map.lookup name inputInfo)
+       return $ case () of
+         _ | name == output -> Modified name (doOutput inputInfo inputs output (m, text))
+           | elem name inputs -> Removed name
+         _ -> let text' = doOther inputs output (m, text) in
+              if text /= text' then Modified name text' else Unchanged name
 doModule _ [] _ _ = error "doModule: no inputs"
-
-doModule' :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> (S.ModuleName, (A.Module SrcSpanInfo, String)) -> String
-doModule' _ [] _ _ = error "doModule'"
-doModule' info inputs output (name, (m, text)) =
-    case () of
-      _ | name == output -> doOutput info inputs output (m, text)
-        | not (elem name (output : inputs)) -> doOther inputs output (m, text)
-        | True -> ""
 
 -- | Create the output module, the destination of the cat.
 doOutput :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
-doOutput info inNames outName (m, text) =
+doOutput inputInfo inNames outName (m, text) =
     header ++ exports ++ imports ++ decls
     where
-      header = foldHeader (\ s r -> r <> s) echo (\ _ pref _ suff r -> r <> pref <> prettyPrintWithMode defaultMode outName <> suff) echo m text "" <>
-               foldExports (\ s r -> r <> s <> maybe "" (intercalate ", " . List.map (prettyPrintWithMode defaultMode)) (mergeExports info outName) <> "\n") ignore (\ _ r -> r) m text ""
-      exports = fromMaybe "" (foldExports (\ _ r -> r) (\ _e pref _ _ r -> maybe (Just pref) Just r) (\ _ r -> r) m text Nothing)
-      imports = foldExports (\ _ r -> r) ignore (\ s r -> r <> s {-where-}) m text "" <>
+      header = foldHeader echo2 echo (\ _ pref _ suff r -> r <> pref <> prettyPrint outName <> suff) echo m text "" <>
+               foldExports (\ s r -> r <> s <> maybe "" (intercalate ", " . List.map (prettyPrint)) (mergeExports inputInfo outName) <> "\n") ignore ignore2 m text ""
+      exports = fromMaybe "" (foldExports ignore2 (\ _e pref _ _ r -> maybe (Just pref) Just r) ignore2 m text Nothing)
+      imports = foldExports ignore2 ignore (\ s r -> r <> s {-where-}) m text "" <>
                 -- Insert the new imports just after the first "pre" string of the imports
-                fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just (pref <> unlines (List.map (moduleImports info) inNames))) Just r) m text Nothing) <>
-                -- foldExports (\ _ r -> r) ignore (\ s r -> r <> unlines (List.map (moduleImports info) inNames)) m text "" <>
-                foldImports (\ _i pref s suff r -> r <> pref <> s <> suff) m text ""
-      decls = fromMaybe "" (foldDecls (\ _d _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls info outName) inNames)) r)) (\ s r -> Just (maybe s (<> s) r)) m text Nothing)
-
-echo :: Monoid m => t -> m -> m -> m -> m -> m
-echo _ pref s suff r = r <> pref <> s <> suff
-
-ignore :: t -> m -> m -> m -> r -> r
-ignore _ _ _ _ r = r
+                (fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just (pref <> unlines (List.map (moduleImports inputInfo) inNames))) Just r) m text Nothing)) <>
+                (foldImports (\ _i pref s suff r -> r <> pref <> s <> suff) m text "")
+      decls = fromMaybe "" (foldDecls (\ _d _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls inputInfo outName) inNames)) r)) (\ s r -> Just (maybe s (<> s) r)) m text Nothing)
 
 -- | Update a module that does not participate in the cat - this
 -- involves changing imports and exports of catted modules.
 -- (Shouldn't this also fix qualified symbols?)
 doOther :: [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
-doOther inputs input@(S.ModuleName input') (m, text) =
-    header ++ exports ++ imports ++ decls
+doOther inputs output (m, text) =
+    foldHeader echo2 echo echo echo m text "" <>
+    foldExports echo2 fixModuleExport echo2 m text "" <>
+    foldImports fixModuleImport m text "" <>
+    foldDecls echo echo2 m text ""
     where
-      header = foldModule (\ s r -> r <> s) echo echo echo (\ s r -> r <> s) ignore (\ _ r -> r) ignore ignore (\ _ r -> r) m text ""
-      exports = foldModule (\ _ r -> r) ignore ignore ignore (\ _ r -> r) fixModuleExport (\ s r -> r <> s) ignore ignore (\ _ r -> r) m text ""
-      imports =
-          foldImports (\ x pref s suff r ->
-                           r <> pref <> (if elem (sModuleName (A.importModule x)) inputs
-                                         then prettyPrintWithMode defaultMode (x {A.importModule = A.ModuleName def input'})
-                                         else s) <> suff)
-                      m text ""
-      decls = foldDecls echo (\ s r -> r <> s) m text ""
-
       fixModuleExport x pref s suff r =
           r <> case sExportSpec x of
                  S.EModuleContents y
                      | elem y inputs ->
-                         "\n     , " <> prettyPrintWithMode defaultMode (S.EModuleContents input) <> suff
+                         "\n     , " <> prettyPrint (S.EModuleContents output) <> suff
                  _ -> pref <> s <> suff
+      fixModuleImport x pref s suff r =
+          r <> pref <> (if elem (sModuleName (A.importModule x)) inputs
+                        then prettyPrint ((sImportDecl x) {S.importModule = output})
+                        else s) <> suff
 
 mergeExports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> Maybe [S.ExportSpec]
 mergeExports old new =
@@ -191,21 +151,12 @@ updateModuleContentsExports old new es =
 moduleImports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> String
 moduleImports old name =
     let (Just (m, text)) = Map.lookup name old in
-    foldModule (\ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               (\ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               (\ _ r -> r)
-               (\ x pref s suff r ->
+    foldImports (\ x pref s suff r ->
                     r
                     -- If this is the first import, omit the prefix, it includes the ") where" text.
                     <> (if r == "" then "" else pref)
                     <> if Map.member (sModuleName (A.importModule x)) old then "" else (s <> suff))
-               (\ _ _ _ _ r -> r)
-               (\ _ r -> r)
-               m text "" <> "\n"
+                m text "" <> "\n"
 
 -- | Grab the declarations out of the old modules, fix any
 -- qualified symbol references, prettyprint and return.
@@ -221,22 +172,13 @@ moduleDecls :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -
 moduleDecls oldmap new name =
     let (Just (m@(A.Module _ _ _ imports _), text)) = Map.lookup name oldmap in
     let oldmap' = foldr f oldmap imports in
-    foldModule (\ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               (\ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               (\ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               (\ d pref s suff r ->
+    foldDecls (\ d pref s suff r ->
                     let d' = sDecl d
                         d'' = fixReferences oldmap' new d' in
-                    r <>
-                    pref <>
-                    (if d'' /= d' then "-- Declaration reformatted because module qualifiers changed\n" <> prettyPrintWithMode defaultMode d'' <> "\n\n" else (s <> suff)))
-               (\ s r -> r <> s)
-               m text "" <> "\n"
+                    r <> pref <>
+                    (if d'' /= d' then "-- Declaration reformatted because module qualifiers changed\n" <> prettyPrint d'' <> "\n\n" else (s <> suff)))
+              echo2
+              m text "" <> "\n"
     where
       f (A.ImportDecl _ m _ _ _ (Just a) _specs) mp =
           case Map.lookup (sModuleName m) oldmap of
@@ -255,6 +197,28 @@ fixReferences oldmap new x =
       moveModuleName :: S.ModuleName -> S.ModuleName
       moveModuleName name@(S.ModuleName _) = if Map.member name oldmap then new else name
 
+echo :: Monoid m => t -> m -> m -> m -> m -> m
+echo _ pref s suff r = r <> pref <> s <> suff
+
+echo2 :: Monoid m => m -> m -> m
+echo2 s r = r <> s
+
+ignore :: t -> m -> m -> m -> r -> r
+ignore _ _ _ _ r = r
+
+ignore2 :: m -> r -> r
+ignore2 _ r = r
+
+-- Just for testing
+testModuVerse :: MonadClean m => Set S.ModuleName -> m ()
+testModuVerse s =
+    getParams >>= maybe (error "ModuVerse not set") message . moduVerse
+    where
+      message p =
+          case (difference s p, difference p s) of
+            (extra, missing) | not (Set.null extra && Set.null missing) -> error $ "moduVerse mismatch, missing: " ++ show (toList extra) ++ ", extra: " ++ show (toList missing)
+            _ -> return ()
+
 tests :: Test
 tests = TestList [test1, test2, test3]
 
@@ -263,13 +227,13 @@ test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _result <- runCleanT $
-           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just testModules})
-              _ <- catModules
-                     testModules
+           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
+              catModules
+                     repoModules
                      [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
                      (S.ModuleName "Debian.Repo.Cache")
-              mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
-         (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/catresult1", "testdata/copy"] ""
+              -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
+         (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", "testdata/catresult1", "testdata/copy"] ""
          let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
          assertEqual "catModules1" (ExitSuccess, "", "") (code, out', err)
 
@@ -278,13 +242,13 @@ test2 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _result <- runCleanT $
-           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just testModules})
-              _ <- catModules
-                     testModules
+           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
+              catModules
+                     repoModules
                      [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Common")
-              mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
-         (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "testdata/catresult2", "testdata/copy"] ""
+              -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
+         (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", "testdata/catresult2", "testdata/copy"] ""
          let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
          assertEqual "catModules2" (ExitSuccess, "", "") (code, out', err)
 
@@ -294,49 +258,33 @@ test3 =
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _result <- withCurrentDirectory "testdata/copy" $
                    runCleanT $
-           do modifyParams (\ p -> p {moduVerse = Just testModules})
-              _ <- catModules
-                     testModules
+           do modifyParams (\ p -> p {moduVerse = Just repoModules})
+              catModules
+                     repoModules
                      [S.ModuleName "Debian.Repo.Types.Slice",
                       S.ModuleName "Debian.Repo.Types.Repo",
                       S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Slice")
-              mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
+              -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", "testdata/catresult3", "testdata/copy"] ""
          let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
          assertEqual "catModules3" (ExitSuccess, "", "") (code, out', err)
 
-junk :: [String]
-junk =
-    [ "Debian.Repo.Monads.Apt.imports"
-    , "Debian.Repo.Monads.Top.imports"
-    , "Debian.Repo.Orphans.imports"
-    , "Debian.Repo.PackageIndex.imports"
-    , "Debian.Repo.SourcesList.imports"
-    , "Debian.Repo.Sync.imports"
-    , "Debian.Repo.Types.PackageIndex.imports"
-    , "Debian.Repo.Types.Release.imports"
-    , "Text.Format.imports"
-    , "Tmp.File.imports"
-    , "Debian/Repo/Package.hs~"
-    , "Debian/Repo/PackageIndex.hs~"
-    , "Debian/Repo/Types/AptBuildCache.hs~"
-    , "Debian/Repo/Types/EnvPath.hs~"
-    , "Debian/Repo/Types/Repo.hs~"
-    , "Debian/Repo/Types/AptImage.hs~"
-    , "Debian/Repo/Types/AptCache.hs~"
-    , "Debian/Repo/Types/Repository.hs~"
-    , "Debian/Repo/Types/Common.hs~"
-    , "Debian/Repo/AptCache.hs~"
-    , "Debian/Repo/AptImage.hs~"
-    , "Debian/Repo/Cache.hs~"
-    , "Debian/Repo/Slice.hs~"
-    , "Debian/Repo/AptCache.hs~"
-    , "Debian/Repo/Types.hs~"
-    , "Debian/Repo/Monads/Apt.hs~" ]
+-- junk :: String -> Bool
+-- junk s = isSuffixOf ".imports" s || isSuffixOf "~" s
 
-testModules :: Set S.ModuleName
-testModules =
+loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (A.Module SrcSpanInfo, String))
+loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names
+
+loadModule :: MonadClean m => S.ModuleName -> m (A.Module SrcSpanInfo, String)
+loadModule name =
+    do path <- modulePath name
+       text <- liftIO $ readFile path
+       m <- parseFile path >>= return . fromParseResult
+       return (m, text)
+
+repoModules :: Set S.ModuleName
+repoModules =
     Set.fromList
             [S.ModuleName "Debian.Repo.Sync",
              S.ModuleName "Debian.Repo.Slice",
@@ -362,12 +310,77 @@ testModules =
              S.ModuleName "Tmp.File",
              S.ModuleName "Text.Format"]
 
-loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (A.Module SrcSpanInfo, String))
-loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names
-
-loadModule :: MonadClean m => S.ModuleName -> m (A.Module SrcSpanInfo, String)
-loadModule name =
-    do path <- modulePath name
-       text <- liftIO $ readFile path
-       m <- parseFile path >>= return . fromParseResult
-       return (m, text)
+logicModules :: Set S.ModuleName
+logicModules =
+    Set.fromList
+       [ S.ModuleName "Data.Boolean.SatSolver"
+       , S.ModuleName "Data.Boolean"
+       , S.ModuleName "Data.Logic.Resolution"
+       , S.ModuleName "Data.Logic.KnowledgeBase"
+       , S.ModuleName "Data.Logic.Types.FirstOrder"
+       , S.ModuleName "Data.Logic.Types.Common"
+       , S.ModuleName "Data.Logic.Types.Harrison.Formulas.FirstOrder"
+       , S.ModuleName "Data.Logic.Types.Harrison.Formulas.Propositional"
+       , S.ModuleName "Data.Logic.Types.Harrison.Prop"
+       , S.ModuleName "Data.Logic.Types.Harrison.Equal"
+       , S.ModuleName "Data.Logic.Types.Harrison.FOL"
+       , S.ModuleName "Data.Logic.Types.Propositional"
+       , S.ModuleName "Data.Logic.Types.FirstOrderPublic"
+       , S.ModuleName "Data.Logic.Harrison.Unif"
+       , S.ModuleName "Data.Logic.Harrison.Meson"
+       , S.ModuleName "Data.Logic.Harrison.Herbrand"
+       , S.ModuleName "Data.Logic.Harrison.Formulas.FirstOrder"
+       , S.ModuleName "Data.Logic.Harrison.Formulas.Propositional"
+       , S.ModuleName "Data.Logic.Harrison.Tests"
+       , S.ModuleName "Data.Logic.Harrison.Resolution"
+       , S.ModuleName "Data.Logic.Harrison.DefCNF"
+       , S.ModuleName "Data.Logic.Harrison.Skolem"
+       , S.ModuleName "Data.Logic.Harrison.Prop"
+       , S.ModuleName "Data.Logic.Harrison.DP"
+       , S.ModuleName "Data.Logic.Harrison.Lib"
+       , S.ModuleName "Data.Logic.Harrison.PropExamples"
+       , S.ModuleName "Data.Logic.Harrison.Prolog"
+       , S.ModuleName "Data.Logic.Harrison.Tableaux"
+       , S.ModuleName "Data.Logic.Harrison.Equal"
+       , S.ModuleName "Data.Logic.Harrison.Normal"
+       , S.ModuleName "Data.Logic.Harrison.FOL"
+       , S.ModuleName "Data.Logic.Tests.TPTP"
+       , S.ModuleName "Data.Logic.Tests.Common"
+       , S.ModuleName "Data.Logic.Tests.Harrison.Unif"
+       , S.ModuleName "Data.Logic.Tests.Harrison.Meson"
+       , S.ModuleName "Data.Logic.Tests.Harrison.Resolution"
+       , S.ModuleName "Data.Logic.Tests.Harrison.Common"
+       , S.ModuleName "Data.Logic.Tests.Harrison.Skolem"
+       , S.ModuleName "Data.Logic.Tests.Harrison.Prop"
+       , S.ModuleName "Data.Logic.Tests.Harrison.Main"
+       , S.ModuleName "Data.Logic.Tests.Harrison.Equal"
+       , S.ModuleName "Data.Logic.Tests.Harrison.FOL"
+       , S.ModuleName "Data.Logic.Tests.Main"
+       , S.ModuleName "Data.Logic.Tests.Logic"
+       , S.ModuleName "Data.Logic.Tests.Data"
+       , S.ModuleName "Data.Logic.Tests.HUnit"
+       , S.ModuleName "Data.Logic.Tests.Chiou0"
+       , S.ModuleName "Data.Logic.Failing"
+       , S.ModuleName "Data.Logic.Instances.SatSolver"
+       , S.ModuleName "Data.Logic.Instances.TPTP"
+       , S.ModuleName "Data.Logic.Instances.Chiou"
+       , S.ModuleName "Data.Logic.Instances.PropLogic"
+       , S.ModuleName "Data.Logic.Normal.Clause"
+       , S.ModuleName "Data.Logic.Normal.Implicative"
+       , S.ModuleName "Data.Logic.Classes.FirstOrder"
+       , S.ModuleName "Data.Logic.Classes.Variable"
+       , S.ModuleName "Data.Logic.Classes.Apply"
+       , S.ModuleName "Data.Logic.Classes.Negate"
+       , S.ModuleName "Data.Logic.Classes.Pretty"
+       , S.ModuleName "Data.Logic.Classes.Arity"
+       , S.ModuleName "Data.Logic.Classes.Skolem"
+       , S.ModuleName "Data.Logic.Classes.Combine"
+       , S.ModuleName "Data.Logic.Classes.Constants"
+       , S.ModuleName "Data.Logic.Classes.Equals"
+       , S.ModuleName "Data.Logic.Classes.Propositional"
+       , S.ModuleName "Data.Logic.Classes.Atom"
+       , S.ModuleName "Data.Logic.Classes.Formula"
+       , S.ModuleName "Data.Logic.Classes.ClauseNormalForm"
+       , S.ModuleName "Data.Logic.Classes.Term"
+       , S.ModuleName "Data.Logic.Classes.Literal"
+       , S.ModuleName "Data.Logic.Satisfiable" ]
