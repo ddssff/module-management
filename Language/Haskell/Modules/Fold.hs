@@ -6,6 +6,10 @@ module Language.Haskell.Modules.Fold
     , foldExports
     , foldImports
     , foldDecls
+    , echo
+    , echo2
+    , ignore
+    , ignore2
     , tests
     ) where
 
@@ -14,6 +18,7 @@ import Control.Monad.Trans (liftIO)
 import Data.Char (isSpace)
 import Data.Default (Default(def))
 import Data.List (tails)
+import Data.Monoid (Monoid, (<>))
 import Data.Set.Extra as Set (fromList)
 import Data.Tree (Tree(..) {-, drawTree-})
 import Language.Haskell.Exts.Annotated (ParseResult(..))
@@ -157,11 +162,7 @@ foldHeader :: forall r. (Show r) =>
            -> (WarningText -> String -> String -> String -> r -> r)
            -> Module -> String -> r -> r
 foldHeader topf pragmaf namef warnf m text r0 =
-    foldModule topf pragmaf namef warnf
-               (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               (\ _ _ _ _ r -> r) (\ _ r -> r)
-               m text r0
+    foldModule topf pragmaf namef warnf ignore2 ignore ignore2 ignore ignore ignore2 m text r0
 
 foldExports :: forall r. (Show r) =>
                (String -> r -> r)
@@ -169,32 +170,32 @@ foldExports :: forall r. (Show r) =>
             -> (String -> r -> r)
             -> Module -> String -> r -> r
 foldExports pref exportf postf m text r0 =
-    foldModule (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r)
-               pref exportf postf
-               (\ _ _ _ _ r -> r)
-               (\ _ _ _ _ r -> r) (\ _ r -> r)
-               m text r0
+    foldModule ignore2 ignore ignore ignore pref exportf postf ignore ignore ignore2 m text r0
 
 foldImports :: forall r. (Show r) =>
                (ImportDecl -> String -> String -> String -> r -> r)
             -> Module -> String -> r -> r
 foldImports importf m text r0 =
-    foldModule (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r)
-               (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ r -> r)
-               importf
-               (\ _ _ _ _ r -> r) (\ _ r -> r)
-               m text r0
+    foldModule ignore2 ignore ignore ignore ignore2 ignore ignore2 importf ignore ignore2 m text r0
 
 foldDecls :: forall r. (Show r) =>
              (Decl -> String -> String -> String -> r -> r)
           -> (String -> r -> r)
           -> Module -> String -> r -> r
 foldDecls declf sepf m text r0 =
-    foldModule (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r) (\ _ _ _ _ r -> r)
-               (\ _ r -> r) (\ _ _ _ _ r -> r) (\ _ r -> r)
-               (\ _ _ _ _ r -> r)
-               declf sepf
-               m text r0
+    foldModule ignore2 ignore ignore ignore ignore2 ignore ignore2 ignore declf sepf m text r0
+
+echo :: Monoid m => t -> m -> m -> m -> m -> m
+echo _ pref s suff r = r <> pref <> s <> suff
+
+echo2 :: Monoid m => m -> m -> m
+echo2 s r = r <> s
+
+ignore :: t -> m -> m -> m -> r -> r
+ignore _ _ _ _ r = r
+
+ignore2 :: m -> r -> r
+ignore2 _ r = r
 
 tests :: Test
 tests = TestLabel "Clean" (TestList [test1, test1b, test3, test4, test6])
@@ -209,31 +210,7 @@ test1 =
        assertEqual "echo" original output
     where
       test :: Module -> String -> (String, String)
-      test m text =
-          (foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m text "", text)
-          where
-            pragmaf :: ModulePragma -> String -> String -> String -> String -> String
-            pragmaf _x pref s suff r = r ++ pref ++ s ++ suff
-            -- pragmaf _x pre s r = r ++ "pragma: " ++ show s ++ "\n"
-            namef :: ModuleName -> String -> String -> String -> String -> String
-            namef _x pref s suff r = r ++ pref ++ s ++ suff
-            -- namef _x pre s r = r ++ "name: " ++ show s ++ "\n"
-            warningf :: WarningText -> String -> String -> String -> String -> String
-            warningf _x pref s suff r = r ++ pref ++ s ++ suff
-            -- warningf _x pre s r = r ++ "warning: " ++ show s ++ "\n"
-            exportf :: ExportSpec -> String -> String -> String -> String -> String
-            exportf _x pref s suff r = r ++ pref ++ s ++ suff
-            -- exportf _x pre s r = r ++ "export: " ++ show s ++ "\n"
-            importf :: ImportDecl -> String -> String -> String -> String -> String
-            importf _x pref s suff r = r ++ pref ++ s ++ suff
-            -- importf _x pre s r = r ++ "import: " ++ show s ++ "\n"
-            declf :: Decl -> String -> String -> String -> String -> String
-            declf _x pref s suff r = r ++ pref ++ s ++ suff
-            -- declf _x pre s r = r ++ "decl: " ++ show s ++ "\n"
-            tailf :: String -> String -> String
-            tailf s r = r ++ s
-            -- spacef "" r = r
-            -- spacef s r = r ++ "space: " ++ show s ++ "\n"
+      test m text = (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m text "", text)
 
 test1b :: Test
 test1b =
@@ -295,16 +272,7 @@ test3 =
        assertEqual "echo" original output
     where
       test :: Module -> String -> (String, String)
-      test m text =
-          (foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m text "", text)
-          where
-            pragmaf _x pref s suff r = r ++ pref ++ s ++ suff
-            namef _x pref s suff r = r ++ pref ++ s ++ suff
-            warningf _x pref s suff r = r ++ pref ++ s ++ suff
-            exportf _x pref s suff r = r ++ pref ++ s ++ suff
-            importf _x pref s suff r = r ++ pref ++ s ++ suff
-            declf _x pref s suff r = r ++ pref ++ s ++ suff
-            tailf s r = r ++ s
+      test m text = (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m text "", text)
 
 test6 :: Test
 test6 = TestCase (assertEqual "tree1"

@@ -18,7 +18,7 @@ import Data.Generics (Data, everywhere, mkT, Typeable)
 import Data.List as List (filter, intercalate, isPrefixOf, map)
 import Data.Map as Map (fromList, lookup, Map, member, toAscList, insert)
 import Data.Maybe (fromMaybe)
-import Data.Monoid ((<>), Monoid)
+import Data.Monoid ((<>))
 import Data.Set as Set (fromList, insert, Set, union, difference, toList, null)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName, sImportDecl)
@@ -28,7 +28,7 @@ import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(..), ModuleName(..))
 import Language.Haskell.Modules.Common (ModuleResult(..), withCurrentDirectory)
-import Language.Haskell.Modules.Fold (foldHeader, foldExports, foldImports, foldDecls)
+import Language.Haskell.Modules.Fold (foldHeader, foldExports, foldImports, foldDecls, echo, echo2, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runCleanT, getParams)
 import Language.Haskell.Modules.Util.DryIO (removeFileIfPresent, replaceFile, tildeBackup)
@@ -199,18 +199,6 @@ fixReferences oldmap new x =
     where
       moveModuleName :: S.ModuleName -> S.ModuleName
       moveModuleName name@(S.ModuleName _) = if Map.member name oldmap then new else name
-
-echo :: Monoid m => t -> m -> m -> m -> m -> m
-echo _ pref s suff r = r <> pref <> s <> suff
-
-echo2 :: Monoid m => m -> m -> m
-echo2 s r = r <> s
-
-ignore :: t -> m -> m -> m -> r -> r
-ignore _ _ _ _ r = r
-
-ignore2 :: m -> r -> r
-ignore2 _ r = r
 
 -- Just for testing
 testModuVerse :: MonadClean m => Set S.ModuleName -> m ()
