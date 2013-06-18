@@ -24,7 +24,7 @@ modifyVerbosity f = getVerbosity >>= putVerbosity . f
 
 quietly :: MonadVerbosity m => m a -> m a
 quietly action =
-    do modifyVerbosity ((-) 1)
+    do modifyVerbosity (\x->x-1)
        result <- action
        modifyVerbosity (+ 1)
        return result
@@ -33,7 +33,7 @@ noisily :: MonadVerbosity m => m a -> m a
 noisily action =
     do modifyVerbosity (+ 1)
        result <- action
-       modifyVerbosity ((-) 1)
+       modifyVerbosity (\x->x-1)
        return result
 
 qIO :: MonadVerbosity m => m () -> m ()
