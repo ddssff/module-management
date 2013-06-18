@@ -27,11 +27,12 @@ import Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensi
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 import Language.Haskell.Modules.Common (modulePathBase)
-import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..), replaceFile, tildeBackup, removeFileIfPresent)
+import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..), createDirectoryIfMissing, replaceFile, tildeBackup, removeFileIfPresent, writeFile)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), quietly, qPutStrLn)
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
+import Prelude hiding (writeFile)
 import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
-import System.FilePath ((</>))
+import System.FilePath ((</>), dropExtension, takeDirectory)
 import System.IO.Error (isDoesNotExistError)
 
 data Params
@@ -143,24 +144,28 @@ data ModuleResult
     = Unchanged S.ModuleName
     | Removed S.ModuleName
     | Modified S.ModuleName String
+    | Created S.ModuleName String
     deriving (Show, Eq, Ord)
 
 doResult :: MonadClean m => ModuleResult -> m ModuleResult
 doResult x@(Unchanged _name) =
-    quietly (qPutStrLn ("unchanged: " ++ show _name)) >> return x
+    do quietly (qPutStrLn ("unchanged: " ++ show _name))
+       return x
 doResult x@(Removed name) =
-    removeModuleIfPresent >> return x
-    where
-      removeModuleIfPresent :: MonadClean m => m ()
-      removeModuleIfPresent =
-          do path <- modulePath name
-             removeFileIfPresent path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+    do path <- modulePath name
+       -- I think this event handler is redundant.
+       removeFileIfPresent path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+       return x
+
 doResult x@(Modified name text) =
-    replaceModule >> return x
-    where
-      replaceModule :: MonadClean m => m Bool
-      replaceModule =
-          do path <- modulePath name
-             qPutStrLn ("catModules: modifying " ++ show path)
-             replaceFile tildeBackup path text
-             return True
+    do path <- modulePath name
+       qPutStrLn ("catModules: modifying " ++ show path)
+       replaceFile tildeBackup path text
+       return x
+
+doResult x@(Created name text) =
+    do path <- modulePath name
+       qPutStrLn ("catModules: creating " ++ show path)
+       createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
+       writeFile path text
+       return x
