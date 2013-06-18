@@ -233,8 +233,7 @@ moduleDecls oldmap new name =
                     let d' = sDecl d
                         d'' = fixReferences oldmap' new d' in
                     r <>
-                    -- Omit the first pre of each module, it probably contains ") where"
-                    (if r /= "" then pref else "") <>
+                    pref <>
                     (if d'' /= d' then "-- Declaration reformatted because module qualifiers changed\n" <> prettyPrintWithMode defaultMode d'' <> "\n\n" else (s <> suff)))
                (\ s r -> r <> s)
                m text "" <> "\n"

@@ -90,6 +90,9 @@ repoKeyURI (Local path) = fromJust . parseURI $ "file://" ++ envPath path
 repoKeyURI (Remote uri) = fromURI' uri
 
 
+
+
+-- |The root directory of an OS image.
 data EnvRoot = EnvRoot { rootPath :: FilePath } deriving (Ord, Eq, Read, Show)
 
 -- |A directory inside of an OS image.
