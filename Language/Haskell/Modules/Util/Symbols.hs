@@ -11,7 +11,7 @@ module Language.Haskell.Modules.Util.Symbols
 
 import Data.Default (def)
 import Data.List (sort)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), Exp(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name(..), Pat(..), PatField(..), QName(..), QualConDecl(..), Rhs(..), RPat(..), Type(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), Exp(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), ExportSpec(..), InstHead(..), Match(..), Name(..), Pat(..), PatField(..), QName(..), QualConDecl(..), Rhs(..), RPat(..), Type(..))
 import Language.Haskell.Exts.Annotated.Simplify (sName)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
@@ -123,6 +123,13 @@ instance FoldDeclared (A.ImportSpec l) where
     foldDeclared f r (A.IAbs _ name) = foldDeclared f r name
     foldDeclared f r (A.IThingAll _ name) = foldDeclared f r name
     foldDeclared f r (A.IThingWith _ name _) = foldDeclared f r name
+
+instance FoldDeclared (A.ExportSpec l) where
+    foldDeclared f r (A.EVar _ name) = foldDeclared f r name
+    foldDeclared f r (A.EAbs _ name) = foldDeclared f r name
+    foldDeclared f r (A.EThingAll _ name) = foldDeclared f r name
+    foldDeclared f r (A.EThingWith _ name _) = foldDeclared f r name
+    foldDeclared _ r (A.EModuleContents _ _) = r -- This probably won't work correctly
 
 symbols :: FoldDeclared a => a -> [S.Name]
 symbols = foldDeclared (:) []

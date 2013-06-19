@@ -147,6 +147,10 @@ data ModuleResult
     | Created S.ModuleName String
     deriving (Show, Eq, Ord)
 
+-- | It is tempting to put import cleaning into these operations, but
+-- that needs to be done after all of these operations are completed
+-- so that all the compiles required for import cleaning succeed.  On
+-- the other hand, we might be able to maintain the moduVerse here.
 doResult :: MonadClean m => ModuleResult -> m ModuleResult
 doResult x@(Unchanged _name) =
     do quietly (qPutStrLn ("unchanged: " ++ show _name))

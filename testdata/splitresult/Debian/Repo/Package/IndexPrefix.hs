@@ -6,7 +6,7 @@ module Debian.Repo.Package.IndexPrefix
 
 import Data.List as List (intercalate)
 import Debian.Release (releaseName', sectionName')
-import Debian.Repo.Package.OtherSymbols ((+?+))
+import Debian.Repo.Package ((+?+))
 import Debian.Repo.Package.UriToString (uriToString')
 import Debian.Repo.Types.PackageIndex (PackageIndex(packageIndexComponent))
 import Debian.Repo.Types.Release (Release(releaseName))
