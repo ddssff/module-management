@@ -14,7 +14,7 @@ import Data.List as List (filter, intercalate, isPrefixOf, map, nub)
 import Data.Map as Map (delete, elems, empty, filter, insertWith, Map, mapWithKey, insert, lookup)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
-import Data.Set as Set (fromList, intersection, map, null, Set, union, toList, delete, fold, insert, empty, member)
+import Data.Set as Set (fromList, intersection, map, null, Set, union, toList, delete, fold, insert, empty, member, singleton)
 import Data.Set.Extra as Set (gFind, mapM)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed), fromParseResult)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(Module), ModuleHead(ModuleHead), Name, ImportDecl(..), ImportSpecList(..))
@@ -252,7 +252,7 @@ toImportDecl (S.ModuleName modName) decls =
                   S.importSpecs = Just (False, nub (concatMap (imports . fst) decls))}
 
 tests :: Test
-tests = TestList [test1]
+tests = TestList [test1, test2]
 
 test1 :: Test
 test1 =
@@ -264,3 +264,14 @@ test1 =
          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/splitresult", "testdata/copy"] ""
          let out' = unlines (List.filter (not . isPrefixOf "Only") (lines out))
          assertEqual "splitModule" (ExitFailure 1, "", "") (code, out', err)
+
+test2 :: Test
+test2 =
+    TestCase $
+    do _ <- system "rsync -aHxS --delete testdata/split2/ testdata/copy"
+       runCleanT $
+         do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just (singleton (S.ModuleName "Split"))})
+            splitModule (S.ModuleName "Split")
+       (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/split2-result", "testdata/copy"] ""
+       let out' = unlines (List.filter (not . isPrefixOf "Only") (lines out))
+       assertEqual "split2" (ExitFailure 1, "", "") (code, out', err)
