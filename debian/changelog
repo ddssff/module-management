@@ -1,3 +1,12 @@
+haskell-module-management (0.9.2) unstable; urgency=low
+
+  * Add a simple CLI (from Cliff Beshers)
+  * splitModule: Put instance declarations into an Instances module
+  * splitModule: Put re-exports into a ReExported module
+  * splitModule: Put previously private declarations into an Internal subdir
+
+ -- David Fox <dsf@seereason.com>  Fri, 21 Jun 2013 12:39:52 -0700
+
 haskell-module-management (0.9.1) unstable; urgency=low
 
   * Fix verbosity handling
