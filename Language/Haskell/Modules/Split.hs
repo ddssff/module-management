@@ -5,21 +5,19 @@ module Language.Haskell.Modules.Split
     , tests
     ) where
 
-import Debug.Trace
-
 import Control.Exception (throw)
 import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
 import Data.List as List (filter, intercalate, map, nub)
-import Data.Map as Map (delete, elems, empty, filter, insertWith, Map, mapWithKey, insert, lookup, keys)
+import Data.Map as Map (delete, elems, empty, filter, insertWith, Map, mapWithKey, lookup)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
-import Data.Set as Set (fromList, intersection, map, null, Set, union, toList, delete, fold, insert, empty, member, singleton, difference, filter, unions)
+import Data.Set as Set (intersection, map, null, Set, union, toList, delete, fold, insert, empty, member, singleton, difference, filter, unions)
 import Data.Set.Extra as Set (gFind, mapM)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed), fromParseResult)
-import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(Module), ModuleHead(ModuleHead), Name, ImportDecl(..), ImportSpecList(..), ExportSpec(..))
+import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(Module), ModuleHead(ModuleHead), Name, ImportDecl(..), ImportSpecList(..))
 import Language.Haskell.Exts.Annotated.Simplify (sModuleName, sName, sImportDecl, sImportSpec)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode, prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
@@ -36,6 +34,7 @@ import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((<.>))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
+setAny :: (a -> Bool) -> Set a -> Bool
 setAny f s = not (Set.null (Set.filter f s))
 
 setMapMaybe :: Ord b => (a -> Maybe b) -> Set a -> Set b
@@ -112,10 +111,10 @@ doSplit text univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ 
       -- declarations, in which case we want an Instances module to
       -- appear in newModuleNames below.
       declared :: Set (Maybe S.Name)
-      declared = foldDecls (\ d pref s suff r -> Set.union (symbols d) r) ignore2 m text Set.empty
+      declared = foldDecls (\ d _pref _s _suff r -> Set.union (symbols d) r) ignore2 m text Set.empty
 
       exported :: Set S.Name
-      exported = foldExports ignore2 (\ e pref s suff r -> Set.union (justs (symbols e)) r) ignore2 m text Set.empty
+      exported = foldExports ignore2 (\ e _pref _s _suff r -> Set.union (justs (symbols e)) r) ignore2 m text Set.empty
 
       reExported :: Set S.Name
       reExported = difference exported (justs declared)
@@ -159,7 +158,7 @@ doSplit text univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ 
                 foldHeader echo2 echo (\ _n pref _ suff r -> r <> pref <> modName <> suff) echo m text "" <>
                 foldExports echo2 ignore ignore2 m text "" <>
                 doSeps (foldExports ignore2 (\ e pref s suff r -> r <> if setAny (`member` reExported) (justs (symbols e)) then [(pref, s <> suff)] else []) (\ s r -> r ++ [("", s)]) m text []) <>
-                foldImports (\ i pref s suff r -> r <> pref <> s <> suff) m text ""
+                foldImports (\ _i pref s suff r -> r <> pref <> s <> suff) m text ""
             Just modDecls ->
                 -- Change the module name in the header
                 foldHeader echo2 echo (\ _n pref _ suff r -> r <> pref <> modName <> suff) echo m text "" <>

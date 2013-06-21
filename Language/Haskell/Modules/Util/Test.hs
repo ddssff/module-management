@@ -5,12 +5,10 @@ module Language.Haskell.Modules.Util.Test
     , find
     ) where
 
-import Debug.Trace
-
-import Control.Monad (foldM, filterM)
-import Data.List as List (filter, intercalate, isPrefixOf, map, isSuffixOf)
+import Control.Monad (foldM)
+import Data.List as List (filter, isPrefixOf, map)
 import Data.Set as Set (Set, fromList)
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..))
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents)
 import System.Exit (ExitCode)
 import System.FilePath ((</>))
@@ -125,16 +123,15 @@ diff a b =
        return (code, out', err)
 
 find :: (FilePath -> Bool) -> FilePath -> IO [FilePath]
-find pred path =
-    doPath [] path
+find f top =
+    doPath [] top
     where
       doPath r path =
           do dir <- doesDirectoryExist path
              reg <- doesFileExist path
-             if dir
-             then doDirectory r path
-             else if reg && pred path
-                  then return (path : r)
-                  else return r
+             case () of
+               _ | dir -> doDirectory r path
+               _ | reg && f path -> return (path : r)
+               _ -> return r
       doDirectory r path =
           getDirectoryContents path >>= foldM doPath r . map (path </>) . filter (\ x -> x /= "." && x /= "..")
