@@ -114,6 +114,6 @@ logicModules =
 
 diff :: FilePath -> FilePath -> IO (ExitCode, String, String)
 diff a b =
-    do (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", a, b] ""
+    do (code, out, err) <- readProcessWithExitCode "diff" ["-ru", {-"--unidirectional-new-file",-} "--exclude=*~", "--exclude=*.imports", a, b] ""
        let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
        return (code, out', err)

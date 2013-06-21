@@ -16,7 +16,7 @@ import Data.List as List (filter, intercalate, map, nub)
 import Data.Map as Map (delete, elems, empty, filter, insertWith, Map, mapWithKey, insert, lookup, keys)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>))
-import Data.Set as Set (fromList, intersection, map, null, Set, union, toList, delete, fold, insert, empty, member, singleton, difference)
+import Data.Set as Set (fromList, intersection, map, null, Set, union, toList, delete, fold, insert, empty, member, singleton, difference, filter, unions)
 import Data.Set.Extra as Set (gFind, mapM)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed), fromParseResult)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(Module), ModuleHead(ModuleHead), Name, ImportDecl(..), ImportSpecList(..), ExportSpec(..))
@@ -35,6 +35,8 @@ import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((<.>))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
+
+setAny f s = not (Set.null (Set.filter f s))
 
 setMapMaybe :: Ord b => (a -> Maybe b) -> Set a -> Set b
 setMapMaybe p s = Set.fold f Set.empty s
@@ -84,6 +86,9 @@ splitModule old =
           do flag <- getParams >>= return . not . testMode
              when flag (modulePath m >>= cleanImports >> return ())
 
+justs :: Ord a => Set (Maybe a) -> Set a
+justs = Set.fold (\ mx s -> maybe s (`Set.insert` s) mx) Set.empty
+
 -- | Create the set of module results implied by the split -
 -- creations, removals, and modifications.  This includes the changes
 -- to the imports in modules that imported the original module.
@@ -101,32 +106,27 @@ doSplit text univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ 
       -- in moduleName.
 
       moduleDeclMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
-      moduleDeclMap = foldDecls (\ d pref s suff r -> foldr (\ sym mp -> insertWith (++) (subModuleName reExported internal old sym) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 m text Map.empty
+      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (subModuleName reExported internal old sym) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 m text Map.empty
 
-      declared :: Set S.Name
-      declared = foldDecls (\ d pref s suff r -> Set.union (fromList (symbols d)) r) ignore2 m text Set.empty
+      -- This returns a set of maybe because there may be instance
+      -- declarations, in which case we want an Instances module to
+      -- appear in newModuleNames below.
+      declared :: Set (Maybe S.Name)
+      declared = foldDecls (\ d pref s suff r -> Set.union (symbols d) r) ignore2 m text Set.empty
 
       exported :: Set S.Name
-      exported = foldExports ignore2 (\ e pref s suff r -> Set.union (fromList (symbols e)) r) ignore2 m text Set.empty
+      exported = foldExports ignore2 (\ e pref s suff r -> Set.union (justs (symbols e)) r) ignore2 m text Set.empty
 
       reExported :: Set S.Name
-      reExported = difference exported declared
+      reExported = difference exported (justs declared)
 
       internal :: Set S.Name
-      internal = difference declared exported
+      internal = difference (justs declared) exported
 
       univ' = Set.delete old univ
 
       newModuleNames :: Set S.ModuleName
-      newModuleNames = Set.map (subModuleName reExported internal old) (union declared exported)
-
-{-
-      newModules :: Set ModuleResult
-      newModules = Set.map (\ name -> if member declared name
-                                      then newModule name
-                                      else 
-                                        Nothing -> 
--}
+      newModuleNames = Set.map (subModuleName reExported internal old) (union declared (Set.map Just exported))
 
       -- The modules created from 'old'
       splitModules :: Set ModuleResult
@@ -134,13 +134,13 @@ doSplit text univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ 
           union (Set.map newModule newModuleNames)
                 (if member old newModuleNames then Set.empty else singleton (Removed old))
 
-      -- Map from symbol name to the module that symbol will move to, plus the declaration of that symbol.
-      symbolToModule :: Map S.Name S.ModuleName
+      -- Map from symbol name to the module that symbol will move to
+      symbolToModule :: Map (Maybe S.Name) S.ModuleName
       symbolToModule =
           mp'
           where
-            mp' = foldExports ignore2 (\ e _ _ _ r -> foldr f r (symbols e)) ignore2 m text mp
-            mp = foldDecls (\ d _ _ _ r -> foldr f r (symbols d)) ignore2 m text Map.empty
+            mp' = foldExports ignore2 (\ e _ _ _ r -> Set.fold f r (symbols e)) ignore2 m text mp
+            mp = foldDecls (\ d _ _ _ r -> Set.fold f r (symbols d)) ignore2 m text Map.empty
             f sym mp'' =
                 Map.insertWith
                    (\ a b -> if a /= b then error ("symbolToModule - two modules for " ++ show sym ++ ": " ++ show (a, b)) else a)
@@ -158,7 +158,7 @@ doSplit text univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ 
                 -- Build a module that re-exports a symbol
                 foldHeader echo2 echo (\ _n pref _ suff r -> r <> pref <> modName <> suff) echo m text "" <>
                 foldExports echo2 ignore ignore2 m text "" <>
-                doSeps (foldExports ignore2 (\ e pref s suff r -> r <> if any (`member` reExported) (symbols e) then [(pref, s <> suff)] else []) (\ s r -> r ++ [("", s)]) m text []) <>
+                doSeps (foldExports ignore2 (\ e pref s suff r -> r <> if setAny (`member` reExported) (justs (symbols e)) then [(pref, s <> suff)] else []) (\ s r -> r ++ [("", s)]) m text []) <>
                 foldImports (\ i pref s suff r -> r <> pref <> s <> suff) m text ""
             Just modDecls ->
                 -- Change the module name in the header
@@ -180,7 +180,7 @@ doSplit text univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ 
                 newImports modDecls =
                     mapWithKey toImportDecl (Map.delete name'
                                              (Map.filter (\ pairs ->
-                                                              let declared = Set.fromList (concatMap (symbols . fst) pairs) in
+                                                              let declared = justs (Set.unions (List.map (symbols . fst) pairs)) in
                                                               not (Set.null (Set.intersection declared (referenced modDecls)))) moduleDeclMap))
                 -- In this module, we need to import any module that declares a symbol
                 -- referenced here.
@@ -193,7 +193,7 @@ doSeps [] = ""
 doSeps ((_, hd) : tl) = hd <> concatMap (\ (a, b) -> a <> b) tl
 
 -- | Update the imports to reflect the changed module names in symbolToModule.
-updateImports :: MonadClean m => S.ModuleName -> Map S.Name S.ModuleName -> S.ModuleName -> m ModuleResult
+updateImports :: MonadClean m => S.ModuleName -> Map (Maybe S.Name) S.ModuleName -> S.ModuleName -> m ModuleResult
 updateImports old symbolToModule name =
     do path <- modulePath name
        text' <- liftIO $ readFile path
@@ -217,7 +217,7 @@ updateImports old symbolToModule name =
       updateImportSpecs i Nothing = List.map (\ x -> (sImportDecl i) {S.importModule = x}) (Map.elems symbolToModule)
       -- If flag is True this is a "hiding" import
       updateImportSpecs i (Just (A.ImportSpecList _ flag specs)) =
-          concatMap (\ spec -> let xs = mapMaybe (\ sym -> Map.lookup sym symbolToModule) (symbols spec) in
+          concatMap (\ spec -> let xs = mapMaybe (\ sym -> Map.lookup sym symbolToModule) (toList (symbols spec)) in
                                List.map (\ x -> (sImportDecl i) {S.importModule = x, S.importSpecs = Just (flag, [sImportSpec spec])}) xs) specs
 
 {-
@@ -248,21 +248,24 @@ splitModule' _ _ _ = error "splitModule'"
 -}
 
 -- | What module should this symbol be moved to?
-subModuleName :: Set S.Name -> Set S.Name -> S.ModuleName -> S.Name -> S.ModuleName
+subModuleName :: Set S.Name -> Set S.Name -> S.ModuleName -> Maybe S.Name -> S.ModuleName
 subModuleName reExported internal (S.ModuleName moduleName) name =
     S.ModuleName (moduleName <.> f (case name of
-                                      S.Symbol s -> s
-                                      S.Ident s -> s))
+                                      Nothing -> "Instances"
+                                      Just (S.Symbol s) -> s
+                                      Just (S.Ident s) -> s))
     where
       f x =
-          if member name reExported
-          then "ReExported"
-          else (if member name internal then "Internal." else "") <>
-               case x of
-                 -- Any symbol that starts with a letter is converted to a module name
-                 -- by capitalizing and keeping the remaining alphaNum characters.
-                 (c : s) | isAlpha c -> toUpper c : List.filter isAlphaNum s
-                 _ -> "OtherSymbols"
+          case name of
+            Nothing -> "Instances"
+            Just name' | member name' reExported -> "ReExported"
+            Just name' ->
+                (if member name' internal then "Internal." else "") <>
+                case x of
+                  -- Any symbol that starts with a letter is converted to a module name
+                  -- by capitalizing and keeping the remaining alphaNum characters.
+                  (c : s) | isAlpha c -> toUpper c : List.filter isAlphaNum s
+                  _ -> "OtherSymbols"
 
 -- | Build an import of the symbols created by a declaration.
 toImportDecl :: S.ModuleName -> [(A.Decl SrcSpanInfo, String)] -> S.ImportDecl
@@ -296,4 +299,4 @@ test2 =
          do modifyParams (\ p -> p {testMode = True, sourceDirs = ["testdata/copy"], moduVerse = Just (singleton (S.ModuleName "Split"))})
             splitModule (S.ModuleName "Split")
        (code, out, err) <- diff "testdata/split2-result" "testdata/copy"
-       assertEqual "split2" (ExitFailure 1, "diff -ru --unidirectional-new-file '--exclude=*~' '--exclude=*.imports' testdata/split2-result/Split/ReExported.hs testdata/copy/Split/ReExported.hs\n--- testdata/split2-result/Split/ReExported.hs\n+++ testdata/copy/Split/ReExported.hs\n@@ -4,6 +4,5 @@\n       dropWhile\n     ) where\n \n--- Due to http://hackage.haskell.org/trac/ghc/ticket/8000 this import gets deleted.\n import Data.List (dropWhile)\n \n", "") (code, out, err)
+       assertEqual "split2" (ExitFailure 1, "diff -ru '--exclude=*~' '--exclude=*.imports' testdata/split2-result/Split/ReExported.hs testdata/copy/Split/ReExported.hs\n--- testdata/split2-result/Split/ReExported.hs\n+++ testdata/copy/Split/ReExported.hs\n@@ -4,6 +4,5 @@\n       dropWhile\n     ) where\n \n--- Due to http://hackage.haskell.org/trac/ghc/ticket/8000 this import gets deleted.\n import Data.List (dropWhile)\n \n", "") (code, out, err)

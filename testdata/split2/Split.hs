@@ -19,3 +19,8 @@ foo = 1
 -- Unexported symbols go into the Internal module
 unexp :: Int
 unexp = 3
+
+newtype Bar = Bar Int
+
+instance Show Bar where
+    show (Bar n) = "Bar " ++ show n

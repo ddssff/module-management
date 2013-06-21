@@ -16,20 +16,4 @@ module Debian.Repo.Package.Internal.OtherSymbols
       _ -> a ++ "_" ++ b
 
 -- FIXME: assuming the index is part of the cache
-(+?+) a ('_' : b) = a +?+ b
-(+?+) "" b = b
-(+?+) a b =
-    case last a of
-      '_' -> (init a) +?+ b
-      _ -> a ++ "_" ++ b
-
--- FIXME: assuming the index is part of the cache
-(+?+) a ('_' : b) = a +?+ b
-(+?+) "" b = b
-(+?+) a b =
-    case last a of
-      '_' -> (init a) +?+ b
-      _ -> a ++ "_" ++ b
-
--- FIXME: assuming the index is part of the cache
 

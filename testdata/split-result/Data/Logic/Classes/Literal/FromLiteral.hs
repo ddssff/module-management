@@ -10,8 +10,6 @@ import Data.Logic.Classes.Formula (Formula(atomic))
 import Data.Logic.Classes.Literal.Literal (Literal(foldLiteral))
 import Data.Logic.Classes.Negate ((.~.))
 
--- |Literals are the building blocks of the clause and implicative normal
--- |forms.  They support negation and must include True and False elements.
 fromLiteral :: forall lit atom v fof atom2. (Literal lit atom, FOF.FirstOrderFormula fof atom2 v) =>
                (atom -> atom2) -> lit -> fof
 fromLiteral ca lit = foldLiteral (\ p -> (.~.) (fromLiteral ca p)) fromBool (atomic . ca) lit

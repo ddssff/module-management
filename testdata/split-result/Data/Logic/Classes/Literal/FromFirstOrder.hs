@@ -12,8 +12,6 @@ import Data.Logic.Classes.Literal.Literal (Literal)
 import Data.Logic.Classes.Negate ((.~.))
 import Data.Logic.Failing (Failing(..))
 
--- |Literals are the building blocks of the clause and implicative normal
--- |forms.  They support negation and must include True and False elements.
 fromFirstOrder :: forall formula atom v lit atom2.
                   (Formula lit atom2, FOF.FirstOrderFormula formula atom v, Literal lit atom2) =>
                   (atom -> atom2) -> formula -> Failing lit

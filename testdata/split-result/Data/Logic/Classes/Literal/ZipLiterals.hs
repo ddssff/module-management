@@ -6,8 +6,6 @@ module Data.Logic.Classes.Literal.ZipLiterals
 
 import Data.Logic.Classes.Literal.Literal (Literal(foldLiteral))
 
--- |Literals are the building blocks of the clause and implicative normal
--- |forms.  They support negation and must include True and False elements.
 zipLiterals :: Literal lit atom =>
                (lit -> lit -> Maybe r)
             -> (Bool -> Bool -> Maybe r)

@@ -12,7 +12,4 @@ tryParseRel :: Maybe B.Field -> B.Relations
 tryParseRel (Just (B.Field (_, relStr))) = either (error . show) id (B.parseRelations relStr)
 tryParseRel _ = []
 
-tryParseRel (Just (B.Field (_, relStr))) = either (error . show) id (B.parseRelations relStr)
-tryParseRel _ = []
-
 

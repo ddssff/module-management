@@ -4,14 +4,12 @@ module Data.Logic.Classes.Literal.PrettyLit
     ( prettyLit
     ) where
 
-import Data.Logic.Classes.Literal.FixityLiteral (fixityLiteral)
+import Data.Logic.Classes.Literal.Internal.FixityLiteral (fixityLiteral)
 import Data.Logic.Classes.Literal.Literal (Literal(foldLiteral))
 import Data.Logic.Classes.Negate (negated)
 import Data.Logic.Classes.Pretty (Fixity(Fixity))
 import Text.PrettyPrint ((<>), Doc, nest, parens, text)
 
--- |Literals are the building blocks of the clause and implicative normal
--- |forms.  They support negation and must include True and False elements.
 {-
 prettyLit :: forall lit atom term v p f. (Literal lit atom v, Apply atom p term, Term term v f) =>
               (v -> Doc)

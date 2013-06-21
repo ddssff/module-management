@@ -40,9 +40,9 @@ withTestData f path = withCurrentDirectory "testdata/original" $
 
 tests :: Test
 tests = TestList [ Main.test1
-                 -- , Main.logictest "split" test2a
-                 -- , Main.logictest "split-cat" test2b
-                 -- , Main.logictest "split-cat-cat" test2c
+                 , Main.logictest "split" test2a
+                 , Main.logictest "split-cat" test2b
+                 , Main.logictest "split-cat-cat" test2c
                  , TestLabel "Cat" Cat.tests
                  , TestLabel "Fold" Fold.tests
                  , TestLabel "Imports" Imports.tests

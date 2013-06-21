@@ -5,10 +5,7 @@ import Control.Applicative.Error (Failing(..))
 import Data.Char (isDigit)
 import Data.Generics (Data, Typeable)
 import Data.String (IsString(..))
-import Data.Logic.Classes.Pretty (Pretty(..))
-import Data.Logic.Classes.Skolem (Skolem(..))
-import Data.Logic.Classes.Term (Term(..))
-import Data.Logic.Classes.Variable (Variable(..))
+import Data.Logic.Classes (Term(..), Pretty(..), Skolem(..), Variable)
 import Data.Logic.Harrison.Unif
 --import Data.Logic.Instances.Native(PTerm(..))
 --import Test.Types

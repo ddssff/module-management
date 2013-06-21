@@ -15,6 +15,7 @@ import Data.Function (on)
 import Data.List (find, groupBy, intercalate, nub, nubBy, sortBy)
 import Data.Maybe (catMaybes, mapMaybe, fromMaybe)
 import Data.Monoid ((<>))
+import Data.Set (toList)
 import Language.Haskell.Exts.Annotated (ParseResult(..))
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, sModuleName, sName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleHead(ModuleHead), ModuleName(ModuleName), QName(..), Type(..))
@@ -247,7 +248,7 @@ unModuleName (A.ModuleName _ x) = x
 -- Compare function used to sort the symbols within an import.
 compareSpecs :: A.ImportSpec SrcSpanInfo -> A.ImportSpec SrcSpanInfo -> Ordering
 compareSpecs a b =
-    case compare (map (map toLower . nameString) $ symbols a) (map (map toLower . nameString) $ symbols b) of
+    case compare (map (map toLower . nameString) $ catMaybes $ toList $ symbols a) (map (map toLower . nameString) $ catMaybes $ toList $ symbols b) of
       EQ -> compare (sImportSpec a) (sImportSpec b)
       x -> x
 
