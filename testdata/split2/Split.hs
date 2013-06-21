@@ -1,3 +1,4 @@
+{-# LANGUAGE NoImplicitPrelude #-}
 -- Split a module with a re-export
 module Split
     ( -- Symbols that are exported but not declared go into ReExported

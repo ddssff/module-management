@@ -1,3 +1,4 @@
+{-# LANGUAGE NoImplicitPrelude #-}
 -- Split a module with a re-export
 module Split.Internal.Unexp
     ( unexp

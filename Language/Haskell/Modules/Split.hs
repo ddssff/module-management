@@ -298,4 +298,4 @@ test2 =
          do modifyParams (\ p -> p {testMode = True, sourceDirs = ["testdata/copy"], moduVerse = Just (singleton (S.ModuleName "Split"))})
             splitModule (S.ModuleName "Split")
        (code, out, err) <- diff "testdata/split2-result" "testdata/copy"
-       assertEqual "split2" (ExitFailure 1, "diff -ru '--exclude=*~' '--exclude=*.imports' testdata/split2-result/Split/ReExported.hs testdata/copy/Split/ReExported.hs\n--- testdata/split2-result/Split/ReExported.hs\n+++ testdata/copy/Split/ReExported.hs\n@@ -4,6 +4,5 @@\n       dropWhile\n     ) where\n \n--- Due to http://hackage.haskell.org/trac/ghc/ticket/8000 this import gets deleted.\n import Data.List (dropWhile)\n \n", "") (code, out, err)
+       assertEqual "split2" (ExitSuccess, "", "") (code, out, err)
