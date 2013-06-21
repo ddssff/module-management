@@ -2,13 +2,13 @@
 module Data.Logic.Types.Propositional where
 
 import Data.Generics (Data, Typeable)
-import Data.Logic.Classes.Combine (Combinable(..), Combination(..), BinOp(..))
-import Data.Logic.Classes.Constants (Constants(..), asBool)
-import qualified Data.Logic.Classes.Formula as C
+import Data.Logic.Classes.Combine (BinOp(..), Combinable(..), Combination(..))
+import Data.Logic.Classes.Constants (asBool, Constants(..))
+import qualified Data.Logic.Classes.Formula as C (Formula(..))
 import Data.Logic.Classes.Literal (Literal(..))
 import Data.Logic.Classes.Negate (Negatable(..))
-import Data.Logic.Classes.Pretty (Pretty(pretty), HasFixity(..), topFixity)
-import Data.Logic.Classes.Propositional (PropositionalFormula(..), prettyPropositional, fixityPropositional, foldAtomsPropositional, mapAtomsPropositional)
+import Data.Logic.Classes.Pretty (HasFixity(..), Pretty(pretty), topFixity)
+import Data.Logic.Classes.Propositional (fixityPropositional, foldAtomsPropositional, mapAtomsPropositional, prettyPropositional, PropositionalFormula(..))
 
 -- | The range of a formula is {True, False} when it has no free variables.
 data Formula atom

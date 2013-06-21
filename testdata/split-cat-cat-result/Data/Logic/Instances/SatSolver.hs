@@ -4,20 +4,20 @@ module Data.Logic.Instances.SatSolver where
 
 import Control.Monad.State (get, put)
 import Control.Monad.Trans (lift)
-import Data.Boolean.SatSolver (Literal(Pos, Neg), CNF, newSatSolver, assertTrue', solve)
+import Data.Boolean.SatSolver (assertTrue', CNF, Literal(Pos, Neg), newSatSolver, solve)
 import Data.Generics (Data, Typeable)
-import qualified Data.Set.Extra as S
 import Data.Logic.Classes.Atom (Atom)
 import Data.Logic.Classes.ClauseNormalForm (ClauseNormalFormula(..))
 import Data.Logic.Classes.Equals (AtomEq)
 import Data.Logic.Classes.FirstOrder (FirstOrderFormula(..))
-import qualified Data.Logic.Classes.Literal as N
-import Data.Logic.Classes.Negate (Negatable(..), negated, (.~.))
+import qualified Data.Logic.Classes.Literal as N (Literal)
+import Data.Logic.Classes.Negate ((.~.), Negatable(..), negated)
 import Data.Logic.Classes.Propositional (PropositionalFormula)
 import Data.Logic.Classes.Term (Term)
 import Data.Logic.Normal.Clause (clauseNormalForm)
 import Data.Logic.Normal.Implicative (LiteralMapT, NormalT)
-import qualified Data.Map as M
+import qualified Data.Map as M (insert, lookup)
+import qualified Data.Set.Extra as S (fromList, ssMapM, toList)
 
 instance Ord Literal where
     compare (Neg _) (Pos _) = LT

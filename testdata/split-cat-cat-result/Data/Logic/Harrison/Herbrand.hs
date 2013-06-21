@@ -8,17 +8,32 @@ import Data.Logic.Classes.Formula (Formula(..))
 import Data.Logic.Classes.Literal (Literal)
 import Data.Logic.Classes.Negate ((.~.))
 import Data.Logic.Classes.Propositional (PropositionalFormula)
-import Data.Logic.Classes.Term (Term, fApp)
+import Data.Logic.Classes.Term (fApp, Term)
 import Data.Logic.Harrison.DP (dpll)
 import Data.Logic.Harrison.FOL (generalize)
-import Data.Logic.Harrison.Lib (distrib', allpairs)
+import Data.Logic.Harrison.Lib (allpairs, distrib')
 import Data.Logic.Harrison.Normal (trivial)
 import Data.Logic.Harrison.Prop (eval, simpcnf, simpdnf)
-import Data.Logic.Harrison.Skolem (runSkolem, skolemize, functions)
-import qualified Data.Map as Map
-import qualified Data.Set as Set
+import Data.Logic.Harrison.Skolem (functions, runSkolem, skolemize)
+import qualified Data.Map as Map (fromList, Map)
+import qualified Data.Set as Set (empty, filter, fold, fromList, insert, map, minView, null, partition, Set, singleton, size, toList, union)
 import Data.String (IsString(..))
 
+{-
+START_INTERACTIVE;;
+let p36 = davisputnam'
+ <<(forall x. exists y. P(x,y)) /\
+   (forall x. exists y. G(x,y)) /\
+   (forall x y. P(x,y) \/ G(x,y)
+                ==> (forall z. P(y,z) \/ G(y,z) ==> H(x,z)))
+   ==> (forall x. exists y. H(x,y))>>;;
+
+let p29 = davisputnam'
+ <<(exists x. P(x)) /\ (exists x. G(x)) ==>
+   ((forall x. P(x) ==> H(x)) /\ (forall x. G(x) ==> J(x)) <=>
+    (forall x y. P(x) /\ G(y) ==> H(x) /\ J(y)))>>;;
+END_INTERACTIVE;;
+-}
 -- ========================================================================= 
 -- Relation between FOL and propositonal logic; Herbrand theorem.            
 --                                                                           
@@ -292,18 +307,3 @@ davisputnam' fa fm =
     let cntms = Set.map (\ (c,_) -> fApp c []) consts in
     dp_refine_loop (simpcnf sfm :: Set.Set (Set.Set lit)) cntms funcs fvs 0 Set.empty Set.empty Set.empty >>= return . Set.size
 
-{-
-START_INTERACTIVE;;
-let p36 = davisputnam'
- <<(forall x. exists y. P(x,y)) /\
-   (forall x. exists y. G(x,y)) /\
-   (forall x y. P(x,y) \/ G(x,y)
-                ==> (forall z. P(y,z) \/ G(y,z) ==> H(x,z)))
-   ==> (forall x. exists y. H(x,y))>>;;
-
-let p29 = davisputnam'
- <<(exists x. P(x)) /\ (exists x. G(x)) ==>
-   ((forall x. P(x) ==> H(x)) /\ (forall x. G(x) ==> J(x)) <=>
-    (forall x y. P(x) /\ G(y) ==> H(x) /\ J(y)))>>;;
-END_INTERACTIVE;;
--}

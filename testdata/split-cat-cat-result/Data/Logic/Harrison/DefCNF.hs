@@ -8,14 +8,14 @@ module Data.Logic.Harrison.DefCNF
     , defcnf3
     ) -} where
 
-import Data.Logic.Classes.Combine (Combination(..), BinOp(..), (.&.), (.|.), (.<=>.))
+import Data.Logic.Classes.Combine ((.&.), (.<=>.), (.|.), BinOp(..), Combination(..))
 import Data.Logic.Classes.Formula (Formula(atomic))
 import Data.Logic.Classes.Literal (Literal)
-import Data.Logic.Classes.Propositional (PropositionalFormula(foldPropositional), overatoms)
-import Data.Logic.Harrison.Prop (nenf, simpcnf, cnf)
+import Data.Logic.Classes.Propositional (overatoms, PropositionalFormula(foldPropositional))
+import Data.Logic.Harrison.Prop (cnf, nenf, simpcnf)
 import Data.Logic.Harrison.PropExamples (N)
-import qualified Data.Map as Map
-import qualified Data.Set.Extra as Set
+import qualified Data.Map as Map (elems, empty, insert, lookup, Map)
+import qualified Data.Set.Extra as Set (Set, unions)
 
 -- ========================================================================= 
 -- Definitional CNF.                                                         

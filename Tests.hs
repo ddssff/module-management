@@ -3,7 +3,7 @@
 
 import Control.Exception (SomeException, try)
 import Data.List (filter, isPrefixOf)
-import Data.Set (Set, fromList, difference, union)
+import Data.Set as Set (Set, fromList, difference, union, delete, insert)
 import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
@@ -13,7 +13,7 @@ import qualified Language.Haskell.Modules.Cat as Cat (tests)
 import qualified Language.Haskell.Modules.Fold as Fold (tests)
 import qualified Language.Haskell.Modules.Imports as Imports (tests)
 import qualified Language.Haskell.Modules.Split as Split (tests)
-import Language.Haskell.Modules.Util.Test (logicModules)
+import Language.Haskell.Modules.Util.Test (logicModules, diff, find)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.Process (readProcess, readProcessWithExitCode)
@@ -65,7 +65,7 @@ logictest s f =
     TestLabel s $ TestCase $
     do _ <- readProcess "rsync" ["-aHxS", "--delete", {-"-v",-} "testdata/logic/", "testdata/copy"] ""
        _ <- withCurrentDirectory "testdata/copy" $ runCleanT $ f logicModules
-       (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", "testdata/" ++ s ++ "-result", "testdata/copy"] ""
+       (code, out, err) <- diff ("testdata/" ++ s ++ "-result") "testdata/copy"
        let out' = unlines (filter (not . isPrefixOf "Binary files") . map (takeWhile (/= '\t')) $ (lines out))
        assertEqual s (ExitSuccess, "", "") (code, out', err)
 
@@ -84,7 +84,7 @@ test2b u =
             noisily (qPutStrLn "split")
             splitModule (ModuleName "Data.Logic.Classes.Literal")
             noisily (qPutStrLn "cat1")
-            modifyParams (\ p -> p {testMode = True})
+            -- modifyParams (\ p -> p {testMode = True})
             catModules
               u'
               [ModuleName "Data.Logic.Classes.FirstOrder",
@@ -94,14 +94,15 @@ test2b u =
             noisily (qPutStrLn "cat2")
             return ()
     where
-      u' = union (fromList [ModuleName "Data.Logic.Classes.Literal.FixityLiteral",
+      u' = union (fromList [ModuleName "Data.Logic.Classes.Literal.Internal.FixityLiteral",
                             ModuleName "Data.Logic.Classes.Literal.FoldAtomsLiteral",
                             ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
                             ModuleName "Data.Logic.Classes.Literal.FromLiteral",
                             ModuleName "Data.Logic.Classes.Literal.Literal",
                             ModuleName "Data.Logic.Classes.Literal.PrettyLit",
                             ModuleName "Data.Logic.Classes.Literal.ToPropositional",
-                            ModuleName "Data.Logic.Classes.Literal.ZipLiterals"]) u
+                            ModuleName "Data.Logic.Classes.Literal.ZipLiterals"])
+                 (delete (ModuleName "Data.Logic.Classes.Literal") u)
 
 test2c :: MonadClean m => Set ModuleName -> m ()
 test2c u =
@@ -111,23 +112,32 @@ test2c u =
             splitModule (ModuleName "Data.Logic.Classes.Literal")
             noisily (qPutStrLn "cat1")
             catModules
-              u
+              u'
               [ModuleName "Data.Logic.Classes.FirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
               (ModuleName "Data.Logic.Classes.FirstOrder")
             noisily (qPutStrLn "cat2")
-            modifyParams (\ p -> p {testMode = True})
+            -- modifyParams (\ p -> p {testMode = True})
             catModules
-              u'
-              [ModuleName "Data.Logic.Classes.Literal.FixityLiteral",
-               ModuleName "Data.Logic.Classes.Literal.FoldAtomsLiteral",
-               ModuleName "Data.Logic.Classes.Literal.Literal",
-               ModuleName "Data.Logic.Classes.Literal.PrettyLit",
+              u''
+              [ModuleName "Data.Logic.Classes.Literal.Literal",
+               ModuleName "Data.Logic.Classes.Literal.ZipLiterals",
                ModuleName "Data.Logic.Classes.Literal.ToPropositional",
-               ModuleName "Data.Logic.Classes.Literal.ZipLiterals"]
+               ModuleName "Data.Logic.Classes.Literal.PrettyLit",
+               ModuleName "Data.Logic.Classes.Literal.Internal.FixityLiteral",
+               ModuleName "Data.Logic.Classes.Literal.FoldAtomsLiteral"]
               (ModuleName "Data.Logic.Classes.Literal")
             return ()
     where
-      u' = difference u (fromList [ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
-                                   ModuleName "Data.Logic.Classes.Literal.FromLiteral"])
+      u' = union (fromList [ModuleName "Data.Logic.Classes.Literal.Internal.FixityLiteral",
+                            ModuleName "Data.Logic.Classes.Literal.FoldAtomsLiteral",
+                            ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
+                            ModuleName "Data.Logic.Classes.Literal.FromLiteral",
+                            ModuleName "Data.Logic.Classes.Literal.Literal",
+                            ModuleName "Data.Logic.Classes.Literal.PrettyLit",
+                            ModuleName "Data.Logic.Classes.Literal.ToPropositional",
+                            ModuleName "Data.Logic.Classes.Literal.ZipLiterals"])
+                 (delete (ModuleName "Data.Logic.Classes.Literal") u)
+      u'' = difference u' (fromList [ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
+                                     ModuleName "Data.Logic.Classes.Literal.FromLiteral"])

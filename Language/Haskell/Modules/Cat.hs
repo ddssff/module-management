@@ -176,7 +176,7 @@ fixReferences oldmap new x =
       moveModuleName :: S.ModuleName -> S.ModuleName
       moveModuleName name@(S.ModuleName _) = if Map.member name oldmap then new else name
 
--- Just for testing
+-- Just for testing - compare the moduVerse to a list of expected modules
 testModuVerse :: MonadClean m => Set S.ModuleName -> m ()
 testModuVerse s =
     getParams >>= maybe (error "ModuVerse not set") message . moduVerse

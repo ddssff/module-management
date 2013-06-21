@@ -36,16 +36,16 @@ module Data.Logic.Harrison.Prop
     , cnf'
     ) where
 
-import Data.Logic.Classes.Combine (Combinable(..), Combination(..), BinOp(..), binop)
-import Data.Logic.Classes.Constants (Constants(fromBool, asBool), true, false, ifElse)
+import Data.Logic.Classes.Combine (binop, BinOp(..), Combinable(..), Combination(..))
+import Data.Logic.Classes.Constants (Constants(fromBool, asBool), false, ifElse, true)
 import Data.Logic.Classes.Formula (Formula(atomic))
 import Data.Logic.Classes.Literal (Literal(foldLiteral), toPropositional)
 import Data.Logic.Classes.Negate ((.~.))
-import Data.Logic.Classes.Propositional
+import Data.Logic.Classes.Propositional (PropositionalFormula(..))
 import Data.Logic.Harrison.Formulas.Propositional (atom_union, on_atoms)
-import Data.Logic.Harrison.Lib (fpf, setAny, distrib')
-import qualified Data.Map as Map
-import qualified Data.Set as Set
+import Data.Logic.Harrison.Lib (distrib', fpf, setAny)
+import qualified Data.Map as Map (empty, findWithDefault, insert, Map)
+import qualified Data.Set as Set (empty, filter, fold, fromList, intersection, isProperSubsetOf, map, minView, null, partition, Set, singleton, toAscList, union)
 import Prelude hiding (negate)
 
 -- type Map a = Map.Map a Bool

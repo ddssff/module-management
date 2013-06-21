@@ -2,12 +2,18 @@ module Language.Haskell.Modules.Util.Test
     ( repoModules
     , logicModules
     , diff
+    , find
     ) where
 
-import Data.List as List (filter, intercalate, isPrefixOf, map)
+import Debug.Trace
+
+import Control.Monad (foldM, filterM)
+import Data.List as List (filter, intercalate, isPrefixOf, map, isSuffixOf)
 import Data.Set as Set (Set, fromList)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..))
+import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents)
 import System.Exit (ExitCode)
+import System.FilePath ((</>))
 import System.Process (readProcessWithExitCode)
 
 repoModules :: Set S.ModuleName
@@ -117,3 +123,18 @@ diff a b =
     do (code, out, err) <- readProcessWithExitCode "diff" ["-ru", {-"--unidirectional-new-file",-} "--exclude=*~", "--exclude=*.imports", a, b] ""
        let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
        return (code, out', err)
+
+find :: (FilePath -> Bool) -> FilePath -> IO [FilePath]
+find pred path =
+    doPath [] path
+    where
+      doPath r path =
+          do dir <- doesDirectoryExist path
+             reg <- doesFileExist path
+             if dir
+             then doDirectory r path
+             else if reg && pred path
+                  then return (path : r)
+                  else return r
+      doDirectory r path =
+          getDirectoryContents path >>= foldM doPath r . map (path </>) . filter (\ x -> x /= "." && x /= "..")

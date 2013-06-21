@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Params
-    ( Params(Params, dryRun, hsFlags, extensions, sourceDirs, moduVerse, junk, removeEmptyImports, testMode, scratchDir)
+    ( Params(Params, dryRun, hsFlags, extensions, sourceDirs, moduVerse,
+             junk, removeEmptyImports, testMode, scratchDir)
     , MonadClean
     , runCleanT
     , getParams

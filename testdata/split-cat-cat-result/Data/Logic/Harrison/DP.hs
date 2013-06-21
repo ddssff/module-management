@@ -6,18 +6,16 @@ module Data.Logic.Harrison.DP
 
 import Control.Applicative.Error (Failing(..))
 import Data.Logic.Classes.Literal (Literal)
-import Data.Logic.Classes.Negate (Negatable, (.~.), negated)
+import Data.Logic.Classes.Negate ((.~.), Negatable, negated)
 import Data.Logic.Classes.Propositional (PropositionalFormula(..))
-import Data.Logic.Harrison.DefCNF (NumAtom(..), defcnfs)
-import Data.Logic.Harrison.Lib (allpairs, maximize', minimize', defined, setmapfilter, (|->))
-import Data.Logic.Harrison.Prop (negative, positive, trivial, tautology, cnf)
+import Data.Logic.Harrison.DefCNF (defcnfs, NumAtom(..))
+import Data.Logic.Harrison.Lib (allpairs, defined, maximize', minimize', setmapfilter, (|->))
+import Data.Logic.Harrison.Prop (negative, positive, trivial)
 import Data.Logic.Harrison.PropExamples (Atom(..), N, prime)
-import Data.Logic.Tests.HUnit
+import Data.Logic.Tests.HUnit (assertEqual, convert, Test(TestCase, TestList))
 import Data.Logic.Types.Propositional (Formula(..))
-import qualified Data.Map as Map
-import qualified Data.Set.Extra as Set
-
-import Debug.Trace
+import qualified Data.Map as Map (empty, Map)
+import qualified Data.Set.Extra as Set (delete, difference, empty, filter, findMin, flatten, fold, insert, intersection, map, member, minView, null, partition, Set, singleton, size, union)
 
 instance NumAtom (Atom N) where
     ma n = P "p" n Nothing

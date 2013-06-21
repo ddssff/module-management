@@ -9,16 +9,16 @@ module Data.Logic.Harrison.Normal
     , simpcnf'
     ) where
 
-import Data.Logic.Classes.Combine (Combination(..), BinOp(..))
+import Data.Logic.Classes.Combine (BinOp(..), Combination(..))
 import Data.Logic.Classes.Constants (Constants(..))
-import Data.Logic.Classes.FirstOrder (FirstOrderFormula(..))
+import Data.Logic.Classes.FirstOrder (FirstOrderFormula(..), fromFirstOrder)
 import Data.Logic.Classes.Formula (Formula(atomic))
-import Data.Logic.Classes.Literal (Literal, fromFirstOrder)
-import Data.Logic.Classes.Negate (Negatable, negated, (.~.))
+import Data.Logic.Classes.Literal (Literal)
+import Data.Logic.Classes.Negate ((.~.), Negatable, negated)
 import Data.Logic.Failing (failing)
-import Data.Logic.Harrison.Lib (setAny, allpairs)
+import Data.Logic.Harrison.Lib (allpairs, setAny)
 import Data.Logic.Harrison.Skolem (nnf)
-import qualified Data.Set.Extra as Set
+import qualified Data.Set.Extra as Set (distrib, empty, filter, intersection, isProperSubsetOf, map, null, or, partition, Set, singleton, union)
 import Prelude hiding (negate)
 
 -- ------------------------------------------------------------------------- 

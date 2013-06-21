@@ -7,19 +7,19 @@ module Data.Logic.Instances.PropLogic
     ) where
 
 import Data.Logic.Classes.Atom (Atom)
-import Data.Logic.Classes.Combine (Combinable(..), Combination(..), BinOp(..))
+import Data.Logic.Classes.Combine (BinOp(..), Combinable(..), Combination(..))
 import Data.Logic.Classes.Constants (Constants(fromBool, asBool))
 import Data.Logic.Classes.FirstOrder (FirstOrderFormula)
 import Data.Logic.Classes.Formula (Formula(..))
 import Data.Logic.Classes.Literal (Literal(..))
 import Data.Logic.Classes.Negate (Negatable(..))
 import Data.Logic.Classes.Pretty (HasFixity(fixity), Pretty(pretty), topFixity)
-import Data.Logic.Classes.Propositional (PropositionalFormula(..), clauseNormalForm', prettyPropositional, fixityPropositional, foldAtomsPropositional, mapAtomsPropositional)
+import Data.Logic.Classes.Propositional (clauseNormalForm', fixityPropositional, foldAtomsPropositional, mapAtomsPropositional, prettyPropositional, PropositionalFormula(..))
 import Data.Logic.Classes.Term (Term)
 import Data.Logic.Harrison.Skolem (SkolemT)
 import Data.Logic.Normal.Clause (clauseNormalForm)
-import qualified Data.Set.Extra as S
-import PropLogic
+import qualified Data.Set.Extra as S (Set, toList)
+import PropLogic (PropAlg(satisfiable), PropForm(..))
 
 instance Negatable (PropForm a) where
     negatePrivate = N

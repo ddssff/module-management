@@ -25,7 +25,7 @@ module Data.Logic.KnowledgeBase
     ) where
 
 import "mtl" Control.Monad.Identity (Identity(runIdentity))
-import "mtl" Control.Monad.State (StateT, evalStateT, MonadState(get, put))
+import "mtl" Control.Monad.State (evalStateT, MonadState(get, put), StateT)
 import "mtl" Control.Monad.Trans (lift)
 import Data.Generics (Data, Typeable)
 import Data.Logic.Classes.Atom (Atom)
@@ -35,11 +35,11 @@ import Data.Logic.Classes.Literal (Literal)
 import Data.Logic.Classes.Negate ((.~.))
 import Data.Logic.Classes.Propositional (PropositionalFormula)
 import Data.Logic.Classes.Term (Term)
-import Data.Logic.Harrison.Skolem (SkolemT, runSkolemT)
+import Data.Logic.Harrison.Skolem (runSkolemT, SkolemT)
 import Data.Logic.Normal.Implicative (ImplicativeForm, implicativeNormalForm)
-import Data.Logic.Resolution (prove, SetOfSupport, getSetOfSupport)
-import Data.SafeCopy (deriveSafeCopy, base)
-import qualified Data.Set.Extra as S
+import Data.Logic.Resolution (getSetOfSupport, prove, SetOfSupport)
+import Data.SafeCopy (base, deriveSafeCopy)
+import qualified Data.Set.Extra as S (empty, map, minView, null, partition, Set, union)
 import Prelude hiding (negate)
 
 type SentenceCount = Int

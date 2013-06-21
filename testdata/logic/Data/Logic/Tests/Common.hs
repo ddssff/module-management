@@ -45,7 +45,7 @@ import Data.Logic.Classes.Term (Term(vt, fApp, foldTerm), Function)
 import Data.Logic.Classes.Variable (Variable(..))
 import Data.Logic.Harrison.Normal (trivial)
 import Data.Logic.Harrison.Skolem (Skolem, skolemize, runSkolem, pnf, nnf, simplify)
-import qualified Data.Logic.Instances.Chiou as Ch
+import qualified Data.Logic.Instances.Chiou as Ch (CTerm(..), Sentence(..))
 import Data.Logic.Instances.PropLogic (plSat)
 import qualified Data.Logic.Instances.SatSolver as SS
 import Data.Logic.KnowledgeBase (WithId, runProver', Proof, loadKB, theoremKB, getKB)

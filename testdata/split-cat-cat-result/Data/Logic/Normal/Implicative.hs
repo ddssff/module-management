@@ -13,22 +13,22 @@ module Data.Logic.Normal.Implicative
     ) where
 
 import Control.Monad.Identity (Identity(runIdentity))
-import Control.Monad.State (StateT(runStateT), MonadPlus, msum)
-import Data.Generics (Data, Typeable, listify)
+import Control.Monad.State (MonadPlus, msum, StateT(runStateT))
+import Data.Generics (Data, listify, Typeable)
 import Data.List (intersperse)
 import Data.Logic.Classes.Atom (Atom)
-import Data.Logic.Classes.Constants (true, ifElse)
+import Data.Logic.Classes.Constants (ifElse, true)
 import Data.Logic.Classes.FirstOrder (FirstOrderFormula(..))
-import Data.Logic.Classes.Propositional (PropositionalFormula)
-import Data.Logic.Classes.Skolem (Skolem(isSkolem))
 import Data.Logic.Classes.Literal (Literal(..))
 import Data.Logic.Classes.Negate (Negatable(..))
+import Data.Logic.Classes.Propositional (PropositionalFormula)
+import Data.Logic.Classes.Skolem (Skolem(isSkolem))
 import Data.Logic.Classes.Term (Term)
-import Data.Logic.Harrison.Skolem (SkolemT, runSkolemT)
+import Data.Logic.Harrison.Skolem (runSkolemT, SkolemT)
 import Data.Logic.Normal.Clause (clauseNormalForm)
-import qualified Data.Set.Extra as Set
-import qualified Data.Map as Map
-import Text.PrettyPrint (Doc, cat, text, hsep)
+import qualified Data.Map as Map (empty, Map)
+import qualified Data.Set.Extra as Set (empty, flatten, fold, fromList, insert, map, Set, singleton, toList)
+import Text.PrettyPrint (cat, Doc, hsep, text)
 
 -- |Combination of Normal monad and LiteralMap monad
 type NormalT formula v term m a = SkolemT v term (LiteralMapT formula m) a

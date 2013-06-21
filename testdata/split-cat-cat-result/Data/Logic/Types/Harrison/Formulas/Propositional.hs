@@ -4,13 +4,13 @@ module Data.Logic.Types.Harrison.Formulas.Propositional
     ( Formula(..)
     ) where
 
+import Data.Logic.Classes.Combine (BinOp(..), Combinable(..), Combination(..))
 import Data.Logic.Classes.Constants (Constants(..))
-import Data.Logic.Classes.Combine (Combinable(..), Combination(..), BinOp(..))
-import qualified Data.Logic.Classes.Formula as C
+import qualified Data.Logic.Classes.Formula as C (Formula(..))
 import Data.Logic.Classes.Literal (Literal(..))
 import Data.Logic.Classes.Negate (Negatable(..))
-import Data.Logic.Classes.Pretty (Pretty(pretty), HasFixity(..), topFixity)
-import Data.Logic.Classes.Propositional (PropositionalFormula(..), prettyPropositional, fixityPropositional, foldAtomsPropositional, mapAtomsPropositional)
+import Data.Logic.Classes.Pretty (HasFixity(..), Pretty(pretty), topFixity)
+import Data.Logic.Classes.Propositional (fixityPropositional, foldAtomsPropositional, mapAtomsPropositional, prettyPropositional, PropositionalFormula(..))
 
 data Formula a
     = F
