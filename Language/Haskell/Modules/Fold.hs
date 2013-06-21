@@ -115,18 +115,20 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.M
              return $ f tl r
       doSep :: (String -> r -> r) -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
       doSep f r =
-          do (tl, l, sps@(sp : _)) <- get
-             let l' = srcLoc sp
-             case l <= l' of
-               True ->
-                   do put (srcPairTextTail l l' tl, l', sps)
-                      return $ f (srcPairTextHead l l' tl) r
-               False -> return r
+          do p <- get
+             case p of
+               (tl, l, sps@(sp : _)) ->
+                   do let l' = srcLoc sp
+                      case l <= l' of
+                        True ->
+                            do put (srcPairTextTail l l' tl, l', sps)
+                               return $ f (srcPairTextHead l l' tl) r
+                        False -> return r
+               _ -> error $ "foldModule - out of spans: " ++ show p
       doList :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> [a] -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
       doList _ [] r = return r
       doList f (x : xs) r = doItem f x r >>= doList f xs
 
-      -- Very slow due to uses of srcPairText.
       doItem :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> a -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
       doItem f x r =
           do (tl, l, (sp : sps')) <- get

@@ -7,7 +7,7 @@ module Debian.Repo.Package.BinaryPackagesOfCachedIndex
 import "mtl" Control.Monad.Trans (MonadIO(..))
 import Data.List as List (map)
 import Debian.Repo.Monads.Apt (insertBinaryPackages, lookupBinaryPackages, MonadApt(..), readParagraphs)
-import Debian.Repo.Package.IndexCacheFile (indexCacheFile)
+import Debian.Repo.Package.Internal.IndexCacheFile (indexCacheFile)
 import Debian.Repo.Package.ToBinaryPackage (toBinaryPackage)
 import Debian.Repo.Types.AptCache (AptCache(rootDir))
 import Debian.Repo.Types.EnvPath (EnvRoot(rootPath))

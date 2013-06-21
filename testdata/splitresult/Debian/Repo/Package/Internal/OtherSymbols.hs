@@ -1,12 +1,11 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
-module Debian.Repo.Package.OtherSymbols
+module Debian.Repo.Package.Internal.OtherSymbols
     ( (+?+)
-    , TH.FixityDirection(..)
-    , TH.Fixity(..)
     ) where
 
-import qualified Language.Haskell.TH.Syntax as TH (Fixity(..), FixityDirection(..))
+
+
 
 (+?+) :: String -> String -> String
 (+?+) a ('_' : b) = a +?+ b

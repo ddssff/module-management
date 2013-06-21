@@ -3,5 +3,11 @@ module Split.Foo
     ( foo
     ) where
 
+
+import Data.List (dropWhile)
+
+-- Exported symbols.
 foo :: Int
 foo = 1
+
+

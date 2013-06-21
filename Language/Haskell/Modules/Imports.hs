@@ -299,7 +299,7 @@ test1 =
 test2 :: Test
 test2 =
     TestCase
-      (do _ <- system "rsync -aHxS --delete testdata/ testcopy"
+      (do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
           let name = S.ModuleName "Debian.Repo.PackageIndex"
               base = modulePathBase name
           _ <- withCurrentDirectory "testdata/copy" (runCleanT (cleanImports base))

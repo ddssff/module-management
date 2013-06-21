@@ -4,7 +4,7 @@ module Debian.Repo.Package.BinaryPackageSourceVersion
     ( binaryPackageSourceVersion
     ) where
 
-import Debian.Repo.Package.BinarySourceVersion (binarySourceVersion')
+import Debian.Repo.Package.Internal.BinarySourceVersion (binarySourceVersion')
 import Debian.Repo.Types.PackageIndex (BinaryPackage(packageID, packageInfo), binaryPackageName, PackageID(packageVersion))
 import Debian.Version (DebianVersion)
 

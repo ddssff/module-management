@@ -1,6 +1,6 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
-module Debian.Repo.Package.Constants
+module Debian.Repo.Package.Internal.Constants
     ( Constants(asBool, fromBool)
     ) where
 

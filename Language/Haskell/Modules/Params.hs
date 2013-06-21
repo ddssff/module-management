@@ -28,7 +28,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 import Language.Haskell.Modules.Common (modulePathBase)
 import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..), createDirectoryIfMissing, replaceFile, tildeBackup, removeFileIfPresent, writeFile)
-import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), quietly, qPutStrLn)
+import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), quietly, qPutStrLn, qPutStr)
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import Prelude hiding (writeFile)
 import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
@@ -163,13 +163,17 @@ doResult x@(Removed name) =
 
 doResult x@(Modified name text) =
     do path <- modulePath name
-       qPutStrLn ("catModules: modifying " ++ show path)
+       qPutStr ("catModules: modifying " ++ show path)
+       quietly (qPutStr (" new text: " ++ show text))
+       qPutStr "\n"
        replaceFile tildeBackup path text
        return x
 
 doResult x@(Created name text) =
     do path <- modulePath name
-       qPutStrLn ("catModules: creating " ++ show path)
+       qPutStr ("catModules: creating " ++ show path)
+       quietly (qPutStr (" containing " ++ show text))
+       qPutStr "\n"
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
-       writeFile path text
+       replaceFile tildeBackup path text
        return x

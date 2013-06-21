@@ -6,7 +6,7 @@ module Debian.Repo.Package.ToBinaryPackage
 
 import qualified Data.Text as T (unpack)
 import qualified Debian.Control.Text as B (ControlFunctions(lookupP), fieldValue, Paragraph)
-import Debian.Repo.Package.TryParseRel (tryParseRel)
+import Debian.Repo.Package.Internal.TryParseRel (tryParseRel)
 import Debian.Repo.PackageIndex (packageIndexPath)
 import Debian.Repo.Types.PackageIndex (BinaryPackage(..), makeBinaryPackageID, PackageIndex)
 import Debian.Repo.Types.Release (Release)

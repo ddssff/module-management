@@ -1,6 +1,6 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
-module Debian.Repo.Package.ParseSourceParagraph
+module Debian.Repo.Package.Internal.ParseSourceParagraph
     ( parseSourceParagraph
     ) where
 

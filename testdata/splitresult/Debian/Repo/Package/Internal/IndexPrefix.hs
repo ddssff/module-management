@@ -1,13 +1,13 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
-module Debian.Repo.Package.IndexPrefix
+module Debian.Repo.Package.Internal.IndexPrefix
     ( indexPrefix
     ) where
 
 import Data.List as List (intercalate)
 import Debian.Release (releaseName', sectionName')
-import Debian.Repo.Package ((+?+))
-import Debian.Repo.Package.UriToString (uriToString')
+import Debian.Repo.Package.Internal.OtherSymbols ((+?+))
+import Debian.Repo.Package.Internal.UriToString (uriToString')
 import Debian.Repo.Types.PackageIndex (PackageIndex(packageIndexComponent))
 import Debian.Repo.Types.Release (Release(releaseName))
 import Debian.Repo.Types.Repo (RepoKey, repoKeyURI)

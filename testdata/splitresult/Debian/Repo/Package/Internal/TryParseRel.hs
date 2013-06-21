@@ -1,6 +1,6 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
-module Debian.Repo.Package.TryParseRel
+module Debian.Repo.Package.Internal.TryParseRel
     ( tryParseRel
     ) where
 

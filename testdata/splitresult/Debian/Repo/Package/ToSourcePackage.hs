@@ -9,7 +9,7 @@ import Data.Maybe (catMaybes)
 import qualified Data.Text as T (Text, unpack)
 import Debian.Control (formatParagraph)
 import qualified Debian.Control.Text as B (fieldValue, Paragraph)
-import Debian.Repo.Package.ParseSourceParagraph (parseSourceParagraph)
+import Debian.Repo.Package.Internal.ParseSourceParagraph (parseSourceParagraph)
 import Debian.Repo.Types.PackageIndex (makeSourcePackageID, PackageIndex, SourceFileSpec(SourceFileSpec), SourcePackage(..))
 import Debian.Version (parseDebianVersion)
 

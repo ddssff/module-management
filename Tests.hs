@@ -9,10 +9,11 @@ import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Modules (withCurrentDirectory, MonadClean, Extension(..), Params(extensions, moduVerse, testMode), runCleanT, modifyParams, ModuleName(ModuleName), splitModule, catModules, noisily, qPutStrLn)
-import qualified Language.Haskell.Modules.Cat as Cat (tests, logicModules)
+import qualified Language.Haskell.Modules.Cat as Cat (tests)
 import qualified Language.Haskell.Modules.Fold as Fold (tests)
 import qualified Language.Haskell.Modules.Imports as Imports (tests)
 import qualified Language.Haskell.Modules.Split as Split (tests)
+import Language.Haskell.Modules.Util.Test (logicModules)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.Process (readProcess, readProcessWithExitCode)
@@ -63,7 +64,7 @@ test1 =
 logictest s f =
     TestLabel s $ TestCase $
     do _ <- readProcess "rsync" ["-aHxS", "--delete", {-"-v",-} "testdata/logic/", "testdata/copy"] ""
-       _ <- withCurrentDirectory "testdata/copy" $ runCleanT $ f Cat.logicModules
+       _ <- withCurrentDirectory "testdata/copy" $ runCleanT $ f logicModules
        (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", "testdata/" ++ s ++ "-result", "testdata/copy"] ""
        let out' = unlines (filter (not . isPrefixOf "Binary files") . map (takeWhile (/= '\t')) $ (lines out))
        assertEqual s (ExitSuccess, "", "") (code, out', err)

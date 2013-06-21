@@ -1,11 +1,11 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
-module Debian.Repo.Package.IndexCacheFile
+module Debian.Repo.Package.Internal.IndexCacheFile
     ( indexCacheFile
     ) where
 
 import Debian.Arch (Arch(..), prettyArch)
-import Debian.Repo.Package.IndexPrefix (indexPrefix)
+import Debian.Repo.Package.Internal.IndexPrefix (indexPrefix)
 import Debian.Repo.Types.AptCache (AptCache(aptArch))
 import Debian.Repo.Types.PackageIndex (PackageIndex(packageIndexArch))
 import Debian.Repo.Types.Release (Release)
