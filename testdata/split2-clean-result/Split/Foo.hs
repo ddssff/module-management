@@ -5,9 +5,7 @@ module Split.Foo
     ) where
 
 
-import Data.Char (isAlphaNum)
-import Data.List (dropWhile)
-import URL
+
 
 -- Exported symbols.
 foo :: Int

@@ -1,16 +1,14 @@
 {-# LANGUAGE FlexibleContexts #-}
 -- Split a module with a re-export
-module Split.Instances
-    ( 
+module Split.Clean
+    ( clean
     ) where
 
-import Split.Internal.Bar (Bar(Bar))
 
 import Data.Char (isAlphaNum)
 import Data.List (dropWhile)
 import URL
 
-instance Show Bar where
-    show (Bar n) = "Bar " ++ show n
-
+clean :: (ToURL url, Show (URLT url)) => url -> String
+clean = filter isAlphaNum . show . toURL
 

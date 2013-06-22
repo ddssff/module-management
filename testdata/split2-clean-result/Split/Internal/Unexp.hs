@@ -5,9 +5,7 @@ module Split.Internal.Unexp
     ) where
 
 
-import Data.Char (isAlphaNum)
-import Data.List (dropWhile)
-import URL
+
 
 -- Unexported symbols go into the Internal module
 unexp :: Int

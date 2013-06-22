@@ -18,13 +18,14 @@ import Data.Set as Set (intersection, map, null, Set, union, toList, delete, fol
 import Data.Set.Extra as Set (gFind, mapM)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed), fromParseResult)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(Module), ModuleHead(ModuleHead), Name, ImportDecl(..), ImportSpecList(..))
+import Language.Haskell.Exts.Extension (Extension(NoImplicitPrelude))
 import Language.Haskell.Exts.Annotated.Simplify (sModuleName, sName, sImportDecl, sImportSpec)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode, prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..), ImportDecl(..))
 import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldImports, foldDecls, echo, echo2, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, getParams, Params(sourceDirs, moduVerse, testMode), parseFile, runCleanT, ModuleResult(..), doResult)
+import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, getParams, Params(sourceDirs, moduVerse, testMode, extensions), parseFile, runCleanT, ModuleResult(..), doResult)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Symbols (symbols, imports, exports)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
@@ -278,7 +279,7 @@ toImportDecl (S.ModuleName modName) decls =
                   S.importSpecs = Just (False, nub (concatMap (imports . fst) decls))}
 
 tests :: Test
-tests = TestList [test1, test2]
+tests = TestList [test1, test2, test3]
 
 test1 :: Test
 test1 =
@@ -295,7 +296,23 @@ test2 =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ testdata/copy"
        runCleanT $ noisily $ noisily $
-         do modifyParams (\ p -> p {testMode = True, sourceDirs = ["testdata/copy"], moduVerse = Just (singleton (S.ModuleName "Split"))})
+         do modifyParams (\ p -> p {testMode = True,
+                                    sourceDirs = ["testdata/copy"],
+                                    -- extensions = NoImplicitPrelude : extensions p,
+                                    moduVerse = Just (singleton (S.ModuleName "Split"))})
             splitModule (S.ModuleName "Split")
        (code, out, err) <- diff "testdata/split2-result" "testdata/copy"
+       assertEqual "split2" (ExitSuccess, "", "") (code, out, err)
+
+test3 :: Test
+test3 =
+    TestCase $
+    do _ <- system "rsync -aHxS --delete testdata/split2/ testdata/copy"
+       runCleanT $ noisily $ noisily $
+         do modifyParams (\ p -> p {testMode = False,
+                                    sourceDirs = ["testdata/copy"],
+                                    -- extensions = NoImplicitPrelude : extensions p,
+                                    moduVerse = Just (singleton (S.ModuleName "Split"))})
+            splitModule (S.ModuleName "Split")
+       (code, out, err) <- diff "testdata/split2-clean-result" "testdata/copy"
        assertEqual "split2" (ExitSuccess, "", "") (code, out, err)
