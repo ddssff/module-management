@@ -149,14 +149,14 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.M
       -- Move to just past the first newline in the leading whitespace
       -- adjust "\n  \n  hello\n" (SrcLoc "<unknown>.hs" 5 5) ->
       --   (SrcLoc "<unknown>.hs" 6 1)
-      adjust2 :: String -> SrcLoc -> SrcLoc
-      adjust2 a l =
+      _adjust2 :: String -> SrcLoc -> SrcLoc
+      _adjust2 a l =
           l'
           where
             w = takeWhile isSpace a
             w' = case span (/= '\n') w of
-                   (w', '\n' : _) -> w' ++ ['\n']
-                   (w', "") -> w'
+                   (w'', '\n' : _) -> w'' ++ ['\n']
+                   (w'', "") -> w''
             l' = increaseSrcLoc w' l
 
       -- Move to just past the last newline in the leading whitespace

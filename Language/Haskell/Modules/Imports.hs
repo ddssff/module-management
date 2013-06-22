@@ -13,9 +13,9 @@ import Data.Char (toLower)
 import Data.Default (def, Default)
 import Data.Function (on)
 import Data.List (find, groupBy, intercalate, nub, nubBy, sortBy)
-import Data.Maybe (catMaybes, mapMaybe, fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid ((<>))
-import Data.Set as Set (Set, toList, member)
+import Data.Set as Set (Set, toList, member, union, unions, singleton, empty)
 import Language.Haskell.Exts.Annotated (ParseResult(..))
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, sModuleName, sName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleHead(ModuleHead), ModuleName(ModuleName), QName(..), Type(..))
@@ -68,65 +68,13 @@ cleanImports path =
                              Just (A.ModuleHead _ x _ _) -> sModuleName x
                              _ -> S.ModuleName "Main"
                     hiddenImports = filter isHiddenImport imports
-                dumpImports path >> checkImports path name m (hiddenImports ++ standaloneDerivingImports m)
+                dumpImports path >> checkImports path name m hiddenImports
          ParseOk (A.XmlPage {}) -> error "cleanImports: XmlPage"
          ParseOk (A.XmlHybrid {}) -> error "cleanImports: XmlHybrid"
          ParseFailed _loc msg -> error ("cleanImports: - parse of " ++ path ++ " failed: " ++ msg)
     where
       isHiddenImport (A.ImportDecl {A.importSpecs = Just (A.ImportSpecList _ True _)}) = True
       isHiddenImport _ = False
-
-standaloneDerivingImports :: A.Module SrcSpanInfo -> [A.ImportDecl SrcSpanInfo]
-standaloneDerivingImports (A.XmlPage _ _ _ _ _ _ _) = error "standaloneDerivingImports A.XmlPage"
-standaloneDerivingImports (A.XmlHybrid _ _ _ _ _ _ _ _ _) = error "standaloneDerivingImports A.XmlHybrid"
-standaloneDerivingImports (A.Module _ _ _ imports decls) =
-    mapMaybe filterTypes imports
-    where
-      -- filterTypes :: ImportDecl -> Maybe ImportDecl
-      filterTypes imp =
-          case A.importSpecs imp of
-            Just (A.ImportSpecList sp False xs) ->
-                case filter testSpec xs of
-                  [] -> Nothing
-                  ys -> Just (imp {A.importSpecs = Just (A.ImportSpecList sp False ys)})
-            -- If there is an import with no spec list it may be
-            -- importing symbols used by the standalone instance
-            -- deriviation.  This is listed in bugs.
-            _ -> Nothing
-          where
-            -- Is this spec of this import referring to one of the standalone deriving types?
-            -- testSpec :: ImportSpec -> Bool
-            testSpec spec = testImpMod spec || testImpUnqual spec || testImpAs spec
-            testImpMod spec = elem (Just (sModuleName (A.importModule imp)), sName (specName spec)) types
-            testImpUnqual spec = not (A.importQualified imp) && elem (Nothing, sName (specName spec)) types
-            testImpAs spec = maybe False (\ x -> elem (Just (sModuleName x), sName (specName spec)) types) (A.importAs imp)
-            specName (A.IVar _ x) = x
-            specName (A.IAbs _ x) = x
-            specName (A.IThingAll _ x) = x
-            specName (A.IThingWith _ x _) = x
-      -- The types that appear in this module in standalone deriving
-      -- declarations.  If unqualified they refer to this module (m).
-      types = concatMap derivDeclTypes decls
-
-      -- derivDeclTypes :: Decl -> [(Maybe S.ModuleName, S.Name)]
-      derivDeclTypes (A.DerivDecl _ _ (A.IHead _ _ xs)) = concatMap derivDeclTypes' xs -- Just (moduleName, sName x)
-      derivDeclTypes (A.DerivDecl a b (A.IHParen _ x)) = derivDeclTypes (A.DerivDecl a b x)
-      derivDeclTypes (A.DerivDecl _ _ (A.IHInfix _ x _op y)) = derivDeclTypes' x ++ derivDeclTypes' y
-      derivDeclTypes _ = []
-      -- derivDeclTypes' :: Type -> [(Maybe S.ModuleName, S.Name)]
-      derivDeclTypes' (A.TyForall _ _ _ x) = derivDeclTypes' x -- qualified type
-      derivDeclTypes' (A.TyFun _ x y) = derivDeclTypes' x ++ derivDeclTypes' y -- function type
-      derivDeclTypes' (A.TyTuple _ _ xs) = concatMap derivDeclTypes' xs -- tuple type, possibly boxed
-      derivDeclTypes' (A.TyList _ x) =  derivDeclTypes' x -- list syntax, e.g. [a], as opposed to [] a
-      derivDeclTypes' (A.TyApp _ x y) = derivDeclTypes' x ++ derivDeclTypes' y -- application of a type constructor
-      derivDeclTypes' (A.TyVar _ _) = [] -- type variable
-      derivDeclTypes' (A.TyCon _ (A.Qual _ m n)) = [(Just (sModuleName m), sName n)] -- named type or type constructor
-      -- Unqualified names refer to imports without "qualified" or "as" values.
-      derivDeclTypes' (A.TyCon _ (A.UnQual _ n)) = [(Nothing, sName n)]
-      derivDeclTypes' (A.TyCon _ _) = []
-      derivDeclTypes' (A.TyParen _ x) = derivDeclTypes' x -- type surrounded by parentheses
-      derivDeclTypes' (A.TyInfix _ x _op y) = derivDeclTypes' x ++ derivDeclTypes' y -- infix type constructor
-      derivDeclTypes' (A.TyKind _ x _) = derivDeclTypes' x -- type with explicit kind signature
 
 dumpImports :: MonadClean m => FilePath -> m ()
 dumpImports path =
@@ -144,7 +92,9 @@ dumpImports path =
 
 -- | Parse the import list generated by GHC, parse the original source
 -- file, and if all goes well insert the new imports into the old
--- source file.
+-- source file.  We also need to modify the imports of any names
+-- that are types that appear in standalone instance derivations so
+-- their members are imported too.
 checkImports :: MonadClean m => FilePath -> S.ModuleName -> A.Module SrcSpanInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
 checkImports path name@(S.ModuleName name') m extraImports =
     do let importsPath = name' <.> ".imports"
@@ -169,7 +119,7 @@ updateSource path (m@(A.Module _ _ _ oldImports _)) (A.Module _ _ _ newImports _
                   qPutStrLn ("cleanImports: modifying " ++ path) >>
                   replaceFile tildeBackup path text' >>
                   return (Modified name text'))
-             (replaceImports (fixNewImports remove oldImports (newImports ++ extraImports)) m text)
+             (replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m text)
 updateSource _ _ _ _ _ = error "updateSource"
 
 -- | Compare the old and new import sets and if they differ clip out
@@ -190,11 +140,12 @@ replaceImports newImports m sourceText =
 
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: Bool         -- ^ If true, imports that turn into empty lists will be removed
+              -> A.Module SrcSpanInfo
               -> [A.ImportDecl SrcSpanInfo]
               -> [A.ImportDecl SrcSpanInfo]
               -> [A.ImportDecl SrcSpanInfo]
-fixNewImports remove oldImports imports =
-    filter importPred $ map mergeDecls $ groupBy (\ a b -> importMergable a b == EQ) $ sortBy importMergable imports
+fixNewImports remove m oldImports imports =
+    filter importPred $ map expandSDTypes $ map mergeDecls $ groupBy (\ a b -> importMergable a b == EQ) $ sortBy importMergable imports
     where
       -- mergeDecls :: [ImportDecl] -> ImportDecl
       mergeDecls [] = error "mergeDecls"
@@ -207,14 +158,65 @@ fixNewImports remove oldImports imports =
             mergeSpecLists [] = error "mergeSpecLists"
             -- unimplemented, should merge Foo and Foo(..) into Foo(..), and the like
             mergeSpecs ys = nubBy equalSpecs ys
+      expandSDTypes :: A.ImportDecl SrcSpanInfo -> A.ImportDecl SrcSpanInfo
+      expandSDTypes i@(A.ImportDecl {A.importSpecs = Just (A.ImportSpecList l f specs)}) =
+          i {A.importSpecs = Just (A.ImportSpecList l f (map (expandSpec i) specs))}
+      expandSDTypes i = i
+      expandSpec i s =
+          if not (A.importQualified i) && member (Nothing, sName n) sdTypes ||
+             maybe False (\ mn -> (member (Just (sModuleName mn), sName n) sdTypes)) (A.importAs i) ||
+             member (Just (sModuleName (A.importModule i)), sName n) sdTypes
+          then s'
+          else s
+          where
+            n = case s of
+                  (A.IVar _ x) -> x
+                  (A.IAbs _ x) -> x
+                  (A.IThingAll _ x) -> x
+                  (A.IThingWith _ x _) -> x
+            s' = case s of
+                  (A.IVar l x) -> A.IThingAll l x
+                  (A.IAbs l x) -> A.IThingAll l x
+                  (A.IThingWith l x _) -> A.IThingAll l x
+                  (A.IThingAll _ _) -> s
+
       -- Eliminate imports that became empty
       -- importPred :: ImportDecl -> Bool
-      importPred (A.ImportDecl _ m _ _ _ _ (Just (A.ImportSpecList _ _ []))) =
-          not remove || maybe False (isEmptyImport . A.importSpecs) (find ((== (unModuleName m)) . unModuleName . A.importModule) oldImports)
+      importPred (A.ImportDecl _ mn _ _ _ _ (Just (A.ImportSpecList _ _ []))) =
+          not remove || maybe False (isEmptyImport . A.importSpecs) (find ((== (unModuleName mn)) . unModuleName . A.importModule) oldImports)
           where
             isEmptyImport (Just (A.ImportSpecList _ _ [])) = True
             isEmptyImport _ = False
       importPred _ = True
+
+      sdTypes :: Set (Maybe S.ModuleName, S.Name)
+      sdTypes = standaloneDerivingTypes m
+
+standaloneDerivingTypes :: A.Module SrcSpanInfo -> Set (Maybe S.ModuleName, S.Name)
+standaloneDerivingTypes (A.XmlPage _ _ _ _ _ _ _) = error "standaloneDerivingTypes A.XmlPage"
+standaloneDerivingTypes (A.XmlHybrid _ _ _ _ _ _ _ _ _) = error "standaloneDerivingTypes A.XmlHybrid"
+standaloneDerivingTypes (A.Module _ _ _ _ decls) =
+    unions (map derivDeclTypes decls)
+    where
+      -- derivDeclTypes :: Decl -> Set (Maybe S.ModuleName, S.Name)
+      derivDeclTypes (A.DerivDecl _ _ (A.IHead _ _ xs)) = unions (map derivDeclTypes' xs) -- Just (moduleName, sName x)
+      derivDeclTypes (A.DerivDecl a b (A.IHParen _ x)) = derivDeclTypes (A.DerivDecl a b x)
+      derivDeclTypes (A.DerivDecl _ _ (A.IHInfix _ x _op y)) = union (derivDeclTypes' x) (derivDeclTypes' y)
+      derivDeclTypes _ = empty
+      -- derivDeclTypes' :: Type -> Set (Maybe S.ModuleName, S.Name)
+      derivDeclTypes' (A.TyForall _ _ _ x) = derivDeclTypes' x -- qualified type
+      derivDeclTypes' (A.TyFun _ x y) = union (derivDeclTypes' x) (derivDeclTypes' y) -- function type
+      derivDeclTypes' (A.TyTuple _ _ xs) = unions (map derivDeclTypes' xs) -- tuple type, possibly boxed
+      derivDeclTypes' (A.TyList _ x) =  derivDeclTypes' x -- list syntax, e.g. [a], as opposed to [] a
+      derivDeclTypes' (A.TyApp _ x y) = union (derivDeclTypes' x) (derivDeclTypes' y) -- application of a type constructor
+      derivDeclTypes' (A.TyVar _ _) = empty -- type variable
+      derivDeclTypes' (A.TyCon _ (A.Qual _ m n)) = singleton (Just (sModuleName m), sName n) -- named type or type constructor
+      -- Unqualified names refer to imports without "qualified" or "as" values.
+      derivDeclTypes' (A.TyCon _ (A.UnQual _ n)) = singleton (Nothing, sName n)
+      derivDeclTypes' (A.TyCon _ _) = empty
+      derivDeclTypes' (A.TyParen _ x) = derivDeclTypes' x -- type surrounded by parentheses
+      derivDeclTypes' (A.TyInfix _ x _op y) = union (derivDeclTypes' x) (derivDeclTypes' y) -- infix type constructor
+      derivDeclTypes' (A.TyKind _ x _) = derivDeclTypes' x -- type with explicit kind signature
 
 -- | Compare the two import declarations ignoring the things that are
 -- actually being imported.  Equality here indicates that the two

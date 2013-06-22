@@ -28,7 +28,7 @@ import Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensi
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 import Language.Haskell.Modules.Common (modulePathBase)
-import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..), createDirectoryIfMissing, replaceFile, tildeBackup, removeFileIfPresent, writeFile)
+import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..), createDirectoryIfMissing, replaceFile, tildeBackup, removeFileIfPresent)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), quietly, qPutStrLn, qPutStr)
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import Prelude hiding (writeFile)
