@@ -1,3 +1,4 @@
+-- | 'foldModule' is a utility function used to implement the clean, split, and merge operations.
 {-# LANGUAGE BangPatterns, CPP, FlexibleInstances, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Fold
@@ -25,7 +26,7 @@ import Language.Haskell.Exts.Annotated (ParseResult(..))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpecList(ExportSpecList), ImportDecl, ExportSpec(..), Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Params (runMonadClean, parseFile)
+import Language.Haskell.Modules.Internal (runMonadClean, parseFile)
 import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), srcLoc, endLoc, makeTree, increaseSrcLoc, srcPairTextHead, srcPairTextTail)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 

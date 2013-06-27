@@ -7,13 +7,15 @@ import Data.Set as Set (Set, fromList, difference, union, delete, insert)
 import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
+import Language.Haskell.Exts.Extension (Extension(..))
+import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import Language.Haskell.Modules (Extension(..), ModuleName(ModuleName), splitModule, catModules)
-import qualified Language.Haskell.Modules.Cat as Cat (tests)
+import Language.Haskell.Modules (splitModule, mergeModules)
+import qualified Language.Haskell.Modules.Merge as Merge (tests)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import qualified Language.Haskell.Modules.Fold as Fold (tests)
 import qualified Language.Haskell.Modules.Imports as Imports (tests)
-import Language.Haskell.Modules.Params (MonadClean, Params(extensions, moduVerse, testMode), runMonadClean, modifyParams)
+import Language.Haskell.Modules.Internal (MonadClean, Params(extensions, moduVerse, testMode), runMonadClean, modifyParams)
 import qualified Language.Haskell.Modules.Split as Split (tests)
 import Language.Haskell.Modules.Util.QIO (noisily, qPutStrLn)
 import Language.Haskell.Modules.Util.Test (logicModules, diff', find)
@@ -43,14 +45,14 @@ withTestData f path = withCurrentDirectory "testdata/original" $
 
 tests :: Test
 tests = TestList [ Main.test1
-                 , TestLabel "Cat" Cat.tests
+                 , TestLabel "Merge" Merge.tests
                  , TestLabel "Fold" Fold.tests
                  , TestLabel "Imports" Imports.tests
                  , TestLabel "Split" Split.tests
-                 -- If split-cat-cat fails try split and split-cat.
+                 -- If split-merge-merge fails try split and split-merge.
                  -- , Main.logictest "split" test2a
-                 -- , Main.logictest "split-cat" test2b
-                 , Main.logictest "split-cat-cat" test2c
+                 -- , Main.logictest "split-merge" test2b
+                 , Main.logictest "split-merge-merge" test2c
                  ]
 
 test1 :: Test
@@ -89,12 +91,12 @@ test2b u = noisily $
             splitModule (ModuleName "Data.Logic.Classes.Literal")
             qPutStrLn "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
             -- modifyParams (\ p -> p {testMode = True})
-            catModules
+            mergeModules
               [ModuleName "Data.Logic.Classes.FirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
               (ModuleName "Data.Logic.Classes.FirstOrder")
-            noisily (qPutStrLn "cat2")
+            noisily (qPutStrLn "merge2")
             return ()
     where
       u' = union (fromList [ModuleName "Data.Logic.Classes.Literal.Internal.FixityLiteral",
@@ -114,14 +116,14 @@ test2c u = noisily $
             qPutStrLn "\nSplitting module Literal"
             splitModule (ModuleName "Data.Logic.Classes.Literal")
             qPutStrLn "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
-            catModules
+            mergeModules
               [ModuleName "Data.Logic.Classes.FirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
               (ModuleName "Data.Logic.Classes.FirstOrder")
             noisily (qPutStrLn "Merging remaining split modules into Literal")
             -- modifyParams (\ p -> p {testMode = True})
-            catModules
+            mergeModules
               [ModuleName "Data.Logic.Classes.Literal.Literal",
                ModuleName "Data.Logic.Classes.Literal.ZipLiterals",
                ModuleName "Data.Logic.Classes.Literal.ToPropositional",

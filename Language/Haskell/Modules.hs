@@ -32,40 +32,20 @@
 --
 -- * 'splitModule'
 --
--- * 'catModules'
+-- * 'mergeModules'
 --
--- * 'runCleanT', 'Params', 'modifyParams'
+-- * 'runMonadClean'
 module Language.Haskell.Modules
     ( cleanImports
     , splitModule
-    , catModules
-    , runMonadClean
+    , mergeModules
+    , module Language.Haskell.Modules.Params
     , module Language.Haskell.Modules.Fold
-    , Extension(..)
-    , ModuleName(..)
-{-
-    -- * Clean, Split, and Cat
-      cleanImports
-    , splitModule
-    , catModules
-    -- * State and State Monad
-    , Params(extensions, hsFlags, sourceDirs, moduVerse, removeEmptyImports, testMode, dryRun)
-    , MonadClean
-    , runCleanT
-    , modifyParams
-    -- Re-Exports from Language.Haskell.Exts.Syntax
-    , Extension(..)
-    , ModuleName(..)
-    -- * Utility functions
-    , foldModule
-    , withCurrentDirectory
--}
     ) where
 
-import Language.Haskell.Exts.Extension (Extension(..))
-import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
-import Language.Haskell.Modules.Cat (catModules)
-import Language.Haskell.Modules.Fold (foldModule)
+import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldImports, foldDecls,
+                                      echo, echo2, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
+import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.Split (splitModule)
-import Language.Haskell.Modules.Params (Params(dryRun, hsFlags, extensions, sourceDirs, removeEmptyImports, testMode), MonadClean, runMonadClean, modifyParams)
+import Language.Haskell.Modules.Params (runMonadClean, modifyDryRun, modifyHsFlags, modifyExtensions, modifySourceDirs, modifyRemoveEmptyImports, modifyTestMode)

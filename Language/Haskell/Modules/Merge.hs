@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
-module Language.Haskell.Modules.Cat
-    ( catModules
+module Language.Haskell.Modules.Merge
+    ( mergeModules
     , tests
     , test1
     , test2
@@ -26,7 +26,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents),
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldHeader, foldExports, foldImports, foldDecls, echo, echo2, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runMonadClean, getParams, ModuleResult(..), doResult)
+import Language.Haskell.Modules.Internal (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runMonadClean, getParams, ModuleResult(..), doResult)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess))
@@ -34,11 +34,11 @@ import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 -- | Merge the declarations from several modules into a single new
 -- one, updating the imports of the modules in the moduVerse to
--- reflect the change.  Note that circular imports can be created by
--- this operation, in which case you will have to add more modules to
--- the merge.
-catModules :: MonadClean m => [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
-catModules inputs output =
+-- reflect the change.  It *is* permissable to use one of the input
+-- modules as the output module.  Note that circular imports can be
+-- created by this operation.
+mergeModules :: MonadClean m => [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
+mergeModules inputs output =
     do Just univ <- getParams >>= return . moduVerse
        let univ' = union univ (Set.fromList (output : inputs))
        inputInfo <- loadModules inputs
@@ -71,7 +71,7 @@ doModule inputInfo inputs@(first : _) output name =
               if text /= text' then Modified name text' else Unchanged name
 doModule _ [] _ _ = error "doModule: no inputs"
 
--- | Create the output module, the destination of the cat.
+-- | Create the output module, the destination of the merge.
 doOutput :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
 doOutput inputInfo inNames outName (m, text) =
     header ++ exports ++ imports ++ decls
@@ -85,8 +85,8 @@ doOutput inputInfo inNames outName (m, text) =
                 (foldImports (\ _i pref s suff r -> r <> pref <> s <> suff) m text "")
       decls = fromMaybe "" (foldDecls (\ _d _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls inputInfo outName) inNames)) r)) (\ s r -> Just (maybe s (<> s) r)) m text Nothing)
 
--- | Update a module that does not participate in the cat - this
--- involves changing imports and exports of catted modules.
+-- | Update a module that does not participate in the merge - this
+-- involves changing imports and exports of merged modules.
 -- (Shouldn't this also fix qualified symbols?)
 doOther :: [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
 doOther inputs output (m, text) =
@@ -113,8 +113,8 @@ mergeExports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName 
 mergeExports old new =
     Just (concatMap mergeExports' (Map.toAscList old))
     where
-      mergeExports' (_, (A.Module _ Nothing _ _ _, _)) = error "catModules: no explicit export list"
-      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _)) = error "catModules: no explicit export list"
+      mergeExports' (_, (A.Module _ Nothing _ _ _, _)) = error "mergeModules: no explicit export list"
+      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _)) = error "mergeModules: no explicit export list"
       mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ (Just (A.ExportSpecList _ e)))) _ _ _, _)) = updateModuleContentsExports old new (List.map sExportSpec e)
       mergeExports' (_, _) = error "mergeExports'"
 
@@ -186,12 +186,12 @@ test1 =
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _result <- runMonadClean $
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
-              catModules
+              mergeModules
                      [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
                      (S.ModuleName "Debian.Repo.Cache")
               -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
-         (code, out, err) <- diff "testdata/catresult1" "testdata/copy"
-         assertEqual "catModules1" (ExitSuccess, "", "") (code, out, err)
+         (code, out, err) <- diff "testdata/mergeresult1" "testdata/copy"
+         assertEqual "mergeModules1" (ExitSuccess, "", "") (code, out, err)
 
 test2 :: Test
 test2 =
@@ -199,12 +199,12 @@ test2 =
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _result <- runMonadClean $
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
-              catModules
+              mergeModules
                      [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Common")
               -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
-         (code, out, err) <- diff "testdata/catresult2" "testdata/copy"
-         assertEqual "catModules2" (ExitSuccess, "", "") (code, out, err)
+         (code, out, err) <- diff "testdata/mergeresult2" "testdata/copy"
+         assertEqual "mergeModules2" (ExitSuccess, "", "") (code, out, err)
 
 test3 :: Test
 test3 =
@@ -213,14 +213,14 @@ test3 =
          _result <- withCurrentDirectory "testdata/copy" $
                    runMonadClean $
            do modifyParams (\ p -> p {moduVerse = Just repoModules})
-              catModules
+              mergeModules
                      [S.ModuleName "Debian.Repo.Types.Slice",
                       S.ModuleName "Debian.Repo.Types.Repo",
                       S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Slice")
               -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
-         (code, out, err) <- diff "testdata/catresult3" "testdata/copy"
-         assertEqual "catModules3" (ExitSuccess, "", "") (code, out, err)
+         (code, out, err) <- diff "testdata/mergeresult3" "testdata/copy"
+         assertEqual "mergeModules3" (ExitSuccess, "", "") (code, out, err)
 
 -- junk :: String -> Bool
 -- junk s = isSuffixOf ".imports" s || isSuffixOf "~" s

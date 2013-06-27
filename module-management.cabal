@@ -16,8 +16,8 @@ Library
     Language.Haskell.Modules,
     Language.Haskell.Modules.Fold,
     Language.Haskell.Modules.Common,
-    Language.Haskell.Modules.Cat,
     Language.Haskell.Modules.Imports,
+    Language.Haskell.Modules.Merge,
     Language.Haskell.Modules.Params,
     Language.Haskell.Modules.Split,
     Language.Haskell.Modules.Util.QIO,
@@ -26,6 +26,8 @@ Library
     Language.Haskell.Modules.Util.Temp,
     Language.Haskell.Modules.Util.SrcLoc,
     Language.Haskell.Modules.Util.DryIO
+  Other-Modules:
+    Language.Haskell.Modules.Internal
   Build-Depends:
     applicative-extras,
     base,
