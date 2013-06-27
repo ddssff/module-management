@@ -8,7 +8,7 @@ import Control.Monad.Trans (liftIO, MonadIO)
 import System.Directory (removeDirectoryRecursive)
 import qualified System.IO.Temp as Temp (createTempDirectory)
 
--- | Adapted from 'System.IO.Temp.withTempDirectory'.
+-- | Adapted from 'System.IO.Temp.withTempDirectory' to work in MonadCatchIO instances.
 withTempDirectory :: MonadCatchIO m =>
                      FilePath -- ^ Temp directory to create the directory in
                   -> String   -- ^ Directory name template. See 'openTempFile'.

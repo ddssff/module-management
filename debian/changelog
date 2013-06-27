@@ -1,3 +1,9 @@
+haskell-module-management (0.9.3) unstable; urgency=low
+
+  * Clean up documentation for release.
+
+ -- David Fox <dsf@seereason.com>  Thu, 27 Jun 2013 14:00:17 -0700
+
 haskell-module-management (0.9.2) unstable; urgency=low
 
   * Add a simple CLI (from Cliff Beshers)

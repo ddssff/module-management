@@ -7,8 +7,8 @@ module Language.Haskell.Modules.Util.Test
     ) where
 
 import Control.Monad (foldM)
-import Data.List as List (filter, isPrefixOf, map)
-import Data.Set as Set (Set, fromList)
+import Data.List as List (filter, isPrefixOf, map, isSuffixOf)
+import Data.Set as Set (Set, fromList, empty, insert)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents)
 import System.Exit (ExitCode)
@@ -130,16 +130,20 @@ diff' a b =
        let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
        return (code, out', err)
 
-find :: (FilePath -> Bool) -> FilePath -> IO [FilePath]
-find f top =
-    doPath [] top
+-- | Convenience function for building the moduVerse, searches for
+-- files in a directory hierarchy, with a filter predicate.
+find :: FilePath -> IO (Set S.ModuleName)
+find top =
+    doPath empty top
     where
       doPath r path =
           do dir <- doesDirectoryExist path
              reg <- doesFileExist path
              case () of
                _ | dir -> doDirectory r path
-               _ | reg && f path -> return (path : r)
+               _ | reg && isSuffixOf ".hs" path -> return (insert (asModuleName path) r)
                _ -> return r
       doDirectory r path =
           getDirectoryContents path >>= foldM doPath r . map (path </>) . filter (\ x -> x /= "." && x /= "..")
+      asModuleName path =
+          S.ModuleName (map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))

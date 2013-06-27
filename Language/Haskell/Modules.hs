@@ -35,12 +35,22 @@
 -- * 'mergeModules'
 --
 -- * 'runMonadClean'
+--
+-- Examples:
+--
+-- * runMonadClean (cleanImports "Language/Haskell/Modules/Imports.hs")
+--
+-- * find (isSuffixOf ".hs") "Language" >>= \ modules -> runMonadClean (modifyModuVerse (const modules) >> splitModule (ModuleName "Language.Haskell.Modules.Common"))
+--
+-- * 
 module Language.Haskell.Modules
     ( cleanImports
     , splitModule
     , mergeModules
     , module Language.Haskell.Modules.Params
     , module Language.Haskell.Modules.Fold
+    , module Language.Haskell.Modules.Util.QIO
+    , find
     ) where
 
 import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldImports, foldDecls,
@@ -48,4 +58,6 @@ import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldI
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.Split (splitModule)
-import Language.Haskell.Modules.Params (runMonadClean, modifyDryRun, modifyHsFlags, modifyExtensions, modifySourceDirs, modifyRemoveEmptyImports, modifyTestMode)
+import Language.Haskell.Modules.Params (runMonadClean, modifyDryRun, modifyHsFlags, modifyExtensions, modifySourceDirs, modifyRemoveEmptyImports, modifyTestMode, modifyModuVerse)
+import Language.Haskell.Modules.Util.QIO (noisily, quietly)
+import Language.Haskell.Modules.Util.Test (find)

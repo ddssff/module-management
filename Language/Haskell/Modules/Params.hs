@@ -35,8 +35,9 @@ import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
 import System.FilePath ((</>), dropExtension, takeDirectory)
 import System.IO.Error (isDoesNotExistError)
 
--- | Controls whether file updates will actually be performed.  Default
--- is False.
+-- | Controls whether file updates will actually be performed.
+-- Default is False.  (I recommend running in a directory controlled
+-- by a version control system so you don't have to worry about this.)
 modifyDryRun :: MonadClean m => (Bool -> Bool) -> m ()
 modifyDryRun f = modifyParams (\ p -> p {dryRun = f (dryRun p)})
 
