@@ -33,12 +33,13 @@ import System.Exit (ExitCode(ExitSuccess))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 -- | Merge the declarations from several modules into a single new
--- one.  Note that a circular imports can be created by this
--- operation, in which case you will have to add more modules to the
--- merge.
-catModules :: MonadClean m => Set S.ModuleName -> [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
-catModules univ inputs output =
-    do testModuVerse univ
+-- one, updating the imports of the modules in the moduVerse to
+-- reflect the change.  Note that circular imports can be created by
+-- this operation, in which case you will have to add more modules to
+-- the merge.
+catModules :: MonadClean m => [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
+catModules inputs output =
+    do Just univ <- getParams >>= return . moduVerse
        let univ' = union univ (Set.fromList (output : inputs))
        inputInfo <- loadModules inputs
        result <- Set.mapM (doModule inputInfo inputs output) univ' >>= Set.mapM doResult
@@ -176,16 +177,6 @@ fixReferences oldmap new x =
       moveModuleName :: S.ModuleName -> S.ModuleName
       moveModuleName name@(S.ModuleName _) = if Map.member name oldmap then new else name
 
--- Just for testing - compare the moduVerse to a list of expected modules
-testModuVerse :: MonadClean m => Set S.ModuleName -> m ()
-testModuVerse s =
-    getParams >>= maybe (error "ModuVerse not set") message . moduVerse
-    where
-      message p =
-          case (difference s p, difference p s) of
-            (extra, missing) | not (Set.null extra && Set.null missing) -> error $ "moduVerse mismatch, missing: " ++ show (toList extra) ++ ", extra: " ++ show (toList missing)
-            _ -> return ()
-
 tests :: Test
 tests = TestList [test1, test2, test3]
 
@@ -196,7 +187,6 @@ test1 =
          _result <- runCleanT $
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
               catModules
-                     repoModules
                      [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
                      (S.ModuleName "Debian.Repo.Cache")
               -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
@@ -210,7 +200,6 @@ test2 =
          _result <- runCleanT $
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
               catModules
-                     repoModules
                      [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Common")
               -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
@@ -225,7 +214,6 @@ test3 =
                    runCleanT $
            do modifyParams (\ p -> p {moduVerse = Just repoModules})
               catModules
-                     repoModules
                      [S.ModuleName "Debian.Repo.Types.Slice",
                       S.ModuleName "Debian.Repo.Types.Repo",
                       S.ModuleName "Debian.Repo.Types.EnvPath"]
