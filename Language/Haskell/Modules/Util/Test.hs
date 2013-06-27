@@ -3,7 +3,8 @@ module Language.Haskell.Modules.Util.Test
     , logicModules
     , diff
     , diff'
-    , find
+    , findModules
+    , findPaths
     ) where
 
 import Control.Monad (foldM)
@@ -132,8 +133,15 @@ diff' a b =
 
 -- | Convenience function for building the moduVerse, searches for
 -- files in a directory hierarchy, with a filter predicate.
-find :: FilePath -> IO (Set S.ModuleName)
-find top =
+findModules :: FilePath -> IO (Set S.ModuleName)
+findModules top =
+    findPaths top >>= return . Set.map asModuleName
+    where
+      asModuleName path =
+          S.ModuleName (List.map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))
+
+findPaths :: FilePath -> IO (Set FilePath)
+findPaths top =
     doPath empty top
     where
       doPath r path =
@@ -141,9 +149,7 @@ find top =
              reg <- doesFileExist path
              case () of
                _ | dir -> doDirectory r path
-               _ | reg && isSuffixOf ".hs" path -> return (insert (asModuleName path) r)
+               _ | reg && isSuffixOf ".hs" path -> return (insert path r)
                _ -> return r
       doDirectory r path =
-          getDirectoryContents path >>= foldM doPath r . map (path </>) . filter (\ x -> x /= "." && x /= "..")
-      asModuleName path =
-          S.ModuleName (map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))
+          getDirectoryContents path >>= foldM doPath r . List.map (path </>) . filter (\ x -> x /= "." && x /= "..")

@@ -38,11 +38,19 @@
 --
 -- Examples:
 --
--- * runMonadClean (cleanImports "Language/Haskell/Modules/Imports.hs")
+-- * Clean up the import lists of all the modules under @./Language@:
 --
--- * find (isSuffixOf ".hs") "Language" >>= \ modules -> runMonadClean (modifyModuVerse (const modules) >> splitModule (ModuleName "Language.Haskell.Modules.Common"))
+--    @findPaths \"Language\" >>= runMonadClean . mapM cleanImports . toList@
 --
--- * 
+-- * Split up the module Common and then merge two of the pieces back in:
+--
+--   @findModules \"Language\" >>= \\ modules -> runMonadClean $
+--      let mn = Language.Haskell.Exts.Syntax.ModuleName in
+--      modifyModuVerse (const modules) >>
+--      splitModule (mn \"Language.Haskell.Modules.Common\") >>
+--      mergeModules (map mn [\"Language.Haskell.Modules.Common.WithCurrentDirectory\",
+--                            \"Language.Haskell.Modules.Common.ModulePathBase\"])
+--                   (mn \"Language.Haskell.Modules.Common\"))@
 module Language.Haskell.Modules
     ( cleanImports
     , splitModule
@@ -50,7 +58,8 @@ module Language.Haskell.Modules
     , module Language.Haskell.Modules.Params
     , module Language.Haskell.Modules.Fold
     , module Language.Haskell.Modules.Util.QIO
-    , find
+    , findModules
+    , findPaths
     ) where
 
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
