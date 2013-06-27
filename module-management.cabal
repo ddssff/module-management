@@ -6,7 +6,8 @@ Homepage:           https://src.seereason.com/module-management
 License:            BSD3
 Author:             David Fox
 Maintainer:         David Fox <dsf@seereason.com>
-Category:           haskell
+Category:           Editor, Haskell, IDE
+Stability:          experimental
 Build-type:         Simple
 Cabal-version:      >=1.8
 
