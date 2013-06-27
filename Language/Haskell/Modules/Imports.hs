@@ -274,7 +274,7 @@ tests = TestLabel "Clean" (TestList [test1, test2, test3, test4, test5])
 
 test1 :: Test
 test1 =
-    TestCase
+    TestLabel "Imports.test1" $ TestCase
       (do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
           let name = S.ModuleName "Debian.Repo.Types.PackageIndex"
           let base = modulePathBase name
@@ -303,7 +303,7 @@ test1 =
 
 test2 :: Test
 test2 =
-    TestCase
+    TestLabel "Imports.test2" $ TestCase
       (do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
           let name = S.ModuleName "Debian.Repo.PackageIndex"
               base = modulePathBase name
@@ -314,14 +314,14 @@ test2 =
 -- | Can we handle a Main module in a file named something other than Main.hs?
 test3 :: Test
 test3 =
-    TestCase
+    TestLabel "Imports.test3" $ TestCase
       (runMonadClean (modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/NotMain.hs") >>
        assertEqual "module name" () ())
 
 -- | Preserve imports with a "hiding" clause
 test4 :: Test
 test4 =
-    TestCase
+    TestLabel "Imports.test4" $ TestCase
       (system "cp testdata/HidingOrig.hs testdata/Hiding.hs" >>
        runMonadClean (modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/Hiding.hs") >>
        -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
@@ -330,7 +330,7 @@ test4 =
 -- | Preserve imports used by a standalone deriving declaration
 test5 :: Test
 test5 =
-    TestCase
+    TestLabel "Imports.test5" $ TestCase
       (do _ <- system "cp testdata/DerivingOrig.hs testdata/Deriving.hs"
           _ <- runMonadClean (modifyParams (\ p -> p {extensions = extensions p ++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances],
                                                   sourceDirs = ["testdata"]}) >>
@@ -344,7 +344,7 @@ test5 =
                          " ",
                          "-import Data.Text (Text)",
                          "-import Debian.Control (Paragraph(..), Paragraph'(..), Field'(..))",
-                         "+import Debian.Control (Field', Field'(..), Paragraph, Paragraph(..))",
+                         "+import Debian.Control (Field'(..), Paragraph(..))",
                          " ",
                          " deriving instance Show (Field' String)",
                          " deriving instance Show Paragraph"]),

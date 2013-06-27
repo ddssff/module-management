@@ -2,6 +2,7 @@ module Language.Haskell.Modules.Util.Test
     ( repoModules
     , logicModules
     , diff
+    , diff'
     , find
     ) where
 
@@ -118,7 +119,14 @@ logicModules =
 
 diff :: FilePath -> FilePath -> IO (ExitCode, String, String)
 diff a b =
-    do (code, out, err) <- readProcessWithExitCode "diff" ["-ru", {-"--unidirectional-new-file",-} "--exclude=*~", "--exclude=*.imports", a, b] ""
+    do (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--exclude=*~", "--exclude=*.imports", a, b] ""
+       let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
+       return (code, out', err)
+
+-- | Like diff, but ignores extra files in b.
+diff' :: FilePath -> FilePath -> IO (ExitCode, String, String)
+diff' a b =
+    do (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", a, b] ""
        let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
        return (code, out', err)
 
