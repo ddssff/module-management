@@ -14,20 +14,20 @@ module Language.Haskell.Modules.Fold
     , tests
     ) where
 
-import Control.Monad.State (State, runState, get, put)
+import Control.Monad.State (get, put, runState, State)
 import Control.Monad.Trans (liftIO)
 import Data.Char (isSpace)
 import Data.Default (Default(def))
 import Data.List (tails)
-import Data.Monoid (Monoid, (<>))
+import Data.Monoid ((<>), Monoid)
 import Data.Set.Extra as Set (fromList)
-import Data.Tree (Tree(..) {-, drawTree-})
+import Data.Tree (Tree(..))
 import Language.Haskell.Exts.Annotated (ParseResult(..))
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpecList(ExportSpecList), ImportDecl, ExportSpec(..), Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Internal (runMonadClean, parseFile)
-import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), srcLoc, endLoc, makeTree, increaseSrcLoc, srcPairTextHead, srcPairTextTail)
+import Language.Haskell.Modules.Internal (parseFile, runMonadClean)
+import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, makeTree, srcLoc, srcPairTextHead, srcPairTextTail)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
 type Module = A.Module SrcSpanInfo

@@ -21,7 +21,7 @@ import Data.Tree (Tree(Node), unfoldTree)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ModuleHead(..), ModuleName(..), ModulePragma(..), WarningText(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Prelude hiding (rem)
-import Test.HUnit (Test(TestCase, TestList), assertEqual)
+import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 -- | A version of lines that preserves the presence or absence of a
 -- terminating newline

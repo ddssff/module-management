@@ -53,11 +53,10 @@ module Language.Haskell.Modules
     , find
     ) where
 
-import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldImports, foldDecls,
-                                      echo, echo2, ignore, ignore2)
+import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
+import Language.Haskell.Modules.Params (modifyDryRun, modifyExtensions, modifyHsFlags, modifyModuVerse, modifyRemoveEmptyImports, modifySourceDirs, modifyTestMode, runMonadClean)
 import Language.Haskell.Modules.Split (splitModule)
-import Language.Haskell.Modules.Params (runMonadClean, modifyDryRun, modifyHsFlags, modifyExtensions, modifySourceDirs, modifyRemoveEmptyImports, modifyTestMode, modifyModuVerse)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
-import Language.Haskell.Modules.Util.Test (find)
+import Language.Haskell.Modules.Util.Test (findModules, findPaths)

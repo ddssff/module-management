@@ -12,14 +12,14 @@ module Language.Haskell.Modules.Util.Symbols
 import Data.Default (def)
 import Data.List (sort)
 import Data.Maybe (mapMaybe)
-import Data.Set as Set (Set, insert, empty, toList)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), Exp(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), ExportSpec(..), InstHead(..), Match(..), Name(..), Pat(..), PatField(..), QName(..), QualConDecl(..), Rhs(..), RPat(..), Type(..))
+import Data.Set as Set (empty, insert, Set, toList)
 import Language.Haskell.Exts.Annotated.Simplify (sName)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), Exp(..), ExportSpec(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name(..), Pat(..), PatField(..), QName(..), QualConDecl(..), Rhs(..), RPat(..), Type(..))
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import qualified Language.Haskell.Exts.Syntax as S (ImportSpec(..), Name(..), ExportSpec(..), CName(..), QName(..))
+import qualified Language.Haskell.Exts.Syntax as S (CName(..), ExportSpec(..), ImportSpec(..), Name(..), QName(..))
 import Language.Haskell.Modules.Util.SrcLoc ()
-import Test.HUnit (Test(TestCase, TestList), assertEqual)
+import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 -- | Do a fold over the names that are declared in a declaration (not
 -- every name that appears, just the ones that the declaration is

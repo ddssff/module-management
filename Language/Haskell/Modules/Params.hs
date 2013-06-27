@@ -12,28 +12,12 @@ module Language.Haskell.Modules.Params
     , modifyTestMode
     ) where
 
-import Control.Applicative ((<$>))
-import Control.Exception (SomeException, try)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
-import Control.Monad.State (MonadState(get, put), StateT(runStateT))
-import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Maybe (fromMaybe)
-import Data.Set (empty, insert, Set, toList)
-import qualified Language.Haskell.Exts.Annotated as A (Module, parseFileWithComments, parseFileWithMode)
-import Language.Haskell.Exts.Comments (Comment)
+import Data.Set (empty, Set)
 import Language.Haskell.Exts.Extension (Extension)
-import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions), ParseResult)
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
-import Language.Haskell.Modules.Common (modulePathBase)
-import Language.Haskell.Modules.Internal
-import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..), createDirectoryIfMissing, replaceFile, tildeBackup, removeFileIfPresent)
-import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), quietly, qPutStrLn, qPutStr)
-import Language.Haskell.Modules.Util.Temp (withTempDirectory)
+import Language.Haskell.Modules.Internal (modifyParams, MonadClean, Params(dryRun, extensions, hsFlags, moduVerse, removeEmptyImports, sourceDirs, testMode), runMonadClean)
 import Prelude hiding (writeFile)
-import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
-import System.FilePath ((</>), dropExtension, takeDirectory)
-import System.IO.Error (isDoesNotExistError)
 
 -- | Controls whether file updates will actually be performed.
 -- Default is False.  (I recommend running in a directory controlled
