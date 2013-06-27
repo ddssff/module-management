@@ -1,11 +1,9 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Params
-    ( Params(Params, dryRun, hsFlags, extensions, sourceDirs, moduVerse,
-             junk, removeEmptyImports, testMode, scratchDir)
-    , MonadClean
-    , runCleanT
-    , getParams
+    ( Params(..)
+    , MonadClean(getParams, putParams)
+    , runMonadClean
     , modifyParams
     , parseFileWithComments
     , parseFile
@@ -36,13 +34,20 @@ import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
 import System.FilePath ((</>), dropExtension, takeDirectory)
 import System.IO.Error (isDoesNotExistError)
 
+-- | This contains the information required to run the state monad for
+-- import cleaning and module spliting/mergeing.
 data Params
     = Params
       { scratchDir :: FilePath
       -- ^ Location of the temporary directory for ghc output.
-      , dryRun :: Bool -- unimplemented
+      , dryRun :: Bool
+      -- ^ None of the operations that modify the modules will actually
+      -- be performed if this is ture.
       , verbosity :: Int
+      -- ^ Increase or decrease the amount of progress reporting.
       , extensions :: [Extension]
+      -- ^ Supply compiler extensions.  These are provided to the module
+      -- parser and to GHC when it does the minimal import dumping.
       , hsFlags :: [String]
       -- ^ Extra flags to pass to GHC.
       , sourceDirs :: [FilePath]
@@ -51,10 +56,11 @@ data Params
       -- hs-source-dirs parameter of a cabal file, and passed to ghc
       -- via the -i option.
       , moduVerse :: Maybe (Set S.ModuleName)
-      -- ^ The set of modules that catModules will check for imports
-      -- of symbols that moved.
+      -- ^ The set of modules that splitModules and catModules will
+      -- check for imports of symbols that moved.
       , junk :: Set FilePath
-      -- ^ Paths added to this list are removed as the monad finishes.
+      -- ^ Paths added to this list are removed as the state monad
+      -- finishes.
       , removeEmptyImports :: Bool
       -- ^ If true, remove any import that became empty due to the
       -- clean.  THe import might still be required because of the
@@ -85,8 +91,8 @@ instance MonadClean m => MonadDryRun m where
     dry = getParams >>= return . dryRun
     putDry x = modifyParams (\ p -> p {dryRun = x})
 
-runCleanT :: MonadCatchIO m => StateT Params m a -> m a
-runCleanT action =
+runMonadClean :: MonadCatchIO m => StateT Params m a -> m a
+runMonadClean action =
     withTempDirectory "." "scratch" $ \ scratch ->
     do (result, params) <- runStateT action (Params {scratchDir = scratch,
                                                      dryRun = False,
@@ -101,11 +107,13 @@ runCleanT action =
        mapM_ (\ x -> liftIO (try (removeFile x)) >>= \ (_ :: Either SomeException ()) -> return ()) (toList (junk params))
        return result
 
+-- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: MonadClean m => FilePath -> m (ParseResult (A.Module SrcSpanInfo, [Comment]))
 parseFileWithComments path =
     do exts <- getParams >>= return . Language.Haskell.Modules.Params.extensions
        liftIO (A.parseFileWithComments (defaultParseMode {Exts.extensions = exts}) path)
 
+-- | Run 'A.parseFileWithMode' with the extensions stored in the state.
 parseFile :: MonadClean m => FilePath -> m (ParseResult (A.Module SrcSpanInfo))
 parseFile path =
     do exts <- getParams >>= return . Language.Haskell.Modules.Params.extensions

@@ -25,7 +25,7 @@ import Language.Haskell.Exts.Annotated (ParseResult(..))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpecList(ExportSpecList), ImportDecl, ExportSpec(..), Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Params (runCleanT, parseFile)
+import Language.Haskell.Modules.Params (runMonadClean, parseFile)
 import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), srcLoc, endLoc, makeTree, increaseSrcLoc, srcPairTextHead, srcPairTextTail)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
@@ -75,17 +75,21 @@ fixSpan sp =
 -- comments and space - for example, the "module" keyword will be
 -- passed in the pre argument to the ModuleName function.
 foldModule :: forall r. (Show r) =>
-              (String -> r -> r)
-           -> (ModulePragma -> String -> String -> String -> r -> r)
-           -> (ModuleName -> String -> String -> String -> r -> r)
-           -> (WarningText -> String -> String -> String -> r -> r)
-           -> (String -> r -> r)
-           -> (ExportSpec -> String -> String -> String -> r -> r)
-           -> (String -> r -> r)
-           -> (ImportDecl -> String -> String -> String -> r -> r)
-           -> (Decl -> String -> String -> String -> r -> r)
-           -> (String -> r -> r)
-           -> Module -> String -> r -> r
+              (String -> r -> r) -- ^ Receives the space before the first pragma.
+           -> (ModulePragma -> String -> String -> String -> r -> r) -- ^ Called once for each pragma.  In this and the similar arguments below, the three string arguments contain
+                                                                     -- the comments and space preceding the construct, the text of the construct and the space following it.
+           -> (ModuleName -> String -> String -> String -> r -> r) -- ^ Called with the module name.
+           -> (WarningText -> String -> String -> String -> r -> r) -- ^ Called with the warning text between module name and export list
+           -> (String -> r -> r) -- ^ Called with the export list open paren
+           -> (ExportSpec -> String -> String -> String -> r -> r) -- ^ Called with each export specifier
+           -> (String -> r -> r) -- ^ Called with the export list close paren and "where" keyword
+           -> (ImportDecl -> String -> String -> String -> r -> r) -- ^ Called with each import declarator
+           -> (Decl -> String -> String -> String -> r -> r) -- ^ Called with each top level declaration
+           -> (String -> r -> r) -- ^ Called with comments following the last declaration
+           -> Module -- ^ Parsed module
+           -> String -- ^ Original text file
+           -> r -- ^ Fold initialization value
+           -> r -- ^ Result
 foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlPage _ _ _ _ _ _ _) _ _ = error "XmlPage: unsupported"
 foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ = error "XmlHybrid: unsupported"
 foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.Module _ mh ps is ds) text r0 =
@@ -170,6 +174,7 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf m@(A.M
             w' = take (length (takeWhile (elem '\n') (tails w))) w
             l' = increaseSrcLoc w' l
 
+-- | Do just the header portion of 'foldModule'.
 foldHeader :: forall r. (Show r) =>
               (String -> r -> r)
            -> (ModulePragma -> String -> String -> String -> r -> r)
@@ -179,6 +184,7 @@ foldHeader :: forall r. (Show r) =>
 foldHeader topf pragmaf namef warnf m text r0 =
     foldModule topf pragmaf namef warnf ignore2 ignore ignore2 ignore ignore ignore2 m text r0
 
+-- | Do just the exports portion of 'foldModule'.
 foldExports :: forall r. (Show r) =>
                (String -> r -> r)
             -> (ExportSpec -> String -> String -> String -> r -> r)
@@ -187,12 +193,14 @@ foldExports :: forall r. (Show r) =>
 foldExports pref exportf postf m text r0 =
     foldModule ignore2 ignore ignore ignore pref exportf postf ignore ignore ignore2 m text r0
 
+-- | Do just the imports portion of 'foldModule'.
 foldImports :: forall r. (Show r) =>
                (ImportDecl -> String -> String -> String -> r -> r)
             -> Module -> String -> r -> r
 foldImports importf m text r0 =
     foldModule ignore2 ignore ignore ignore ignore2 ignore ignore2 importf ignore ignore2 m text r0
 
+-- | Do just the declarations portion of 'foldModule'.
 foldDecls :: forall r. (Show r) =>
              (Decl -> String -> String -> String -> r -> r)
           -> (String -> r -> r)
@@ -200,15 +208,19 @@ foldDecls :: forall r. (Show r) =>
 foldDecls declf sepf m text r0 =
     foldModule ignore2 ignore ignore ignore ignore2 ignore ignore2 ignore declf sepf m text r0
 
+-- | This can be passed to foldModule to include the original text in the result
 echo :: Monoid m => t -> m -> m -> m -> m -> m
 echo _ pref s suff r = r <> pref <> s <> suff
 
+-- | Similar to 'echo', but used for the two argument separator functions
 echo2 :: Monoid m => m -> m -> m
 echo2 s r = r <> s
 
+-- | This can be passed to foldModule to omit the original text from the result.
 ignore :: t -> m -> m -> m -> r -> r
 ignore _ _ _ _ r = r
 
+-- | Similar to 'ignore', but used for the two argument separator functions
 ignore2 :: m -> r -> r
 ignore2 _ r = r
 
@@ -220,7 +232,7 @@ test1 =
     TestLabel "test1" $ TestCase $ withCurrentDirectory "testdata/original" $
     do let path = "Debian/Repo/Orphans.hs"
        text <- liftIO $ readFile path
-       ParseOk m <- runCleanT $ parseFile path
+       ParseOk m <- runMonadClean $ parseFile path
        let (output, original) = test m text
        assertEqual "echo" original output
     where
@@ -232,7 +244,7 @@ test1b =
     TestLabel "test1b" $ TestCase $ withCurrentDirectory "testdata/original" $
     do let path = "Debian/Repo/Sync.hs"
        text <- liftIO $ readFile path
-       ParseOk m <- runCleanT $ parseFile path
+       ParseOk m <- runMonadClean $ parseFile path
        let output = test m text
        assertEqual "echo"
                    [("-- Comment above module head\nmodule ","","",""),
@@ -282,7 +294,7 @@ test3 =
     TestLabel "test3" $ TestCase $ withCurrentDirectory "testdata" $
     do let path = "Equal.hs"
        text <- liftIO $ readFile path
-       ParseOk m <- runCleanT $ parseFile path
+       ParseOk m <- runMonadClean $ parseFile path
        let (output, original) = test m text
        assertEqual "echo" original output
     where

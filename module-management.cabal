@@ -1,6 +1,7 @@
 Name:               module-management
 Version:            0.9.2
-Synopsis:           Several functions for modifying source files and managing their imports
+Synopsis:           Clean up module imports, split and merge modules
+Description:        Clean up module imports, split and merge modules.
 Homepage:           https://src.seereason.com/module-management
 License:            BSD3
 Author:             David Fox

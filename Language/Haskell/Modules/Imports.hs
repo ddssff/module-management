@@ -25,7 +25,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (modulePathBase, withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldHeader, foldExports, foldImports, foldDecls)
-import Language.Haskell.Modules.Params (getParams, markForDelete, modifyParams, MonadClean, Params(..), parseFile, parseFile, runCleanT, scratchDir, ModuleResult(..))
+import Language.Haskell.Modules.Params (getParams, markForDelete, modifyParams, MonadClean, Params(..), parseFile, parseFile, runMonadClean, scratchDir, ModuleResult(..))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qPutStrLn, quietly)
 import Language.Haskell.Modules.Util.Symbols (symbols)
@@ -36,14 +36,15 @@ import System.FilePath ((<.>), (</>))
 import System.Process (readProcessWithExitCode, showCommandForUser)
 import Test.HUnit (assertEqual, Test(..))
 
+{-
 -- | This is designed to be called from the postConf script of your
 -- Setup file, it cleans up the imports of all the source files in the
 -- package.
-{-
+
 cleanBuildImports :: LocalBuildInfo -> IO ()
 cleanBuildImports lbi =
     mapM (toFilePath srcDirs) (maybe [] exposedModules (library (localPkgDescr lbi))) >>= \ libPaths ->
-    runCleanT (Distribution.Simple.LocalBuildInfo.scratchDir lbi) $ mapM_ clean (libPaths ++ exePaths)
+    runMonadClean (Distribution.Simple.LocalBuildInfo.scratchDir lbi) $ mapM_ clean (libPaths ++ exePaths)
     where
       clean path = cleanImports path >>= liftIO . putStrLn . either show (\ text -> path ++ ": " ++ maybe "no changes" (\ _ -> " updated") text)
       exePaths = map modulePath (executables (localPkgDescr lbi))
@@ -76,6 +77,7 @@ cleanImports path =
       isHiddenImport (A.ImportDecl {A.importSpecs = Just (A.ImportSpecList _ True _)}) = True
       isHiddenImport _ = False
 
+-- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
 dumpImports :: MonadClean m => FilePath -> m ()
 dumpImports path =
     do scratch <- scratchDir <$> getParams
@@ -276,7 +278,7 @@ test1 =
       (do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
           let name = S.ModuleName "Debian.Repo.Types.PackageIndex"
           let base = modulePathBase name
-          _ <- withCurrentDirectory "testdata/copy" (runCleanT (cleanImports base))
+          _ <- withCurrentDirectory "testdata/copy" (runMonadClean (cleanImports base))
           (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> base, "testdata/copy" </> base] ""
           assertEqual "cleanImports"
                          (ExitFailure 1,
@@ -305,7 +307,7 @@ test2 =
       (do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
           let name = S.ModuleName "Debian.Repo.PackageIndex"
               base = modulePathBase name
-          _ <- withCurrentDirectory "testdata/copy" (runCleanT (cleanImports base))
+          _ <- withCurrentDirectory "testdata/copy" (runMonadClean (cleanImports base))
           (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> base, "testdata/copy" </> base] ""
           assertEqual "cleanImports" (ExitSuccess, "", "") (code, diff, err))
 
@@ -313,7 +315,7 @@ test2 =
 test3 :: Test
 test3 =
     TestCase
-      (runCleanT (modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/NotMain.hs") >>
+      (runMonadClean (modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/NotMain.hs") >>
        assertEqual "module name" () ())
 
 -- | Preserve imports with a "hiding" clause
@@ -321,7 +323,7 @@ test4 :: Test
 test4 =
     TestCase
       (system "cp testdata/HidingOrig.hs testdata/Hiding.hs" >>
-       runCleanT (modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/Hiding.hs") >>
+       runMonadClean (modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/Hiding.hs") >>
        -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
        assertEqual "module name" () ())
 
@@ -330,7 +332,7 @@ test5 :: Test
 test5 =
     TestCase
       (do _ <- system "cp testdata/DerivingOrig.hs testdata/Deriving.hs"
-          _ <- runCleanT (modifyParams (\ p -> p {extensions = extensions p ++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances],
+          _ <- runMonadClean (modifyParams (\ p -> p {extensions = extensions p ++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances],
                                                   sourceDirs = ["testdata"]}) >>
                           cleanImports "testdata/Deriving.hs")
           (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/DerivingOrig.hs", "testdata/Deriving.hs"] ""

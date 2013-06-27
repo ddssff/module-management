@@ -18,14 +18,14 @@ import Data.Set as Set (intersection, map, null, Set, union, toList, delete, fol
 import Data.Set.Extra as Set (gFind, mapM)
 import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed), fromParseResult)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(Module), ModuleHead(ModuleHead), Name, ImportDecl(..), ImportSpecList(..))
-import Language.Haskell.Exts.Extension (Extension(NoImplicitPrelude))
+--import Language.Haskell.Exts.Extension (Extension(NoImplicitPrelude))
 import Language.Haskell.Exts.Annotated.Simplify (sModuleName, sName, sImportDecl, sImportSpec)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrintWithMode, prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..), ImportDecl(..))
 import Language.Haskell.Modules.Fold (foldModule, foldHeader, foldExports, foldImports, foldDecls, echo, echo2, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, getParams, Params(sourceDirs, moduVerse, testMode, extensions), parseFile, runCleanT, ModuleResult(..), doResult)
+import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, getParams, Params(sourceDirs, moduVerse, testMode, extensions), parseFile, runMonadClean, ModuleResult(..), doResult)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Symbols (symbols, imports, exports)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
@@ -46,14 +46,8 @@ setMapM_ :: (Monad m, Ord b) => (a -> m b) -> Set a -> m ()
 setMapM_ f s = do _ <- Set.mapM f s
                   return ()
 
--- | Split each of a module's declarations into a new module.  The
--- resulting modules may need to import some of the other split
--- modules, but we don't know which or how to avoid circular imports,
--- so a commented out list of imports is added.
--- | If the original module was M, the the split operation creates a
--- subdirectory M containing a module for each declaration of the
--- original module, and replaces M.hs with a module that imports each
--- of the split declarations that were originally exported.
+-- | Split each of a module's declarations into a new module.  Update
+-- the imports of all the modules in the moduVerse to reflect the split.
 splitModule :: MonadClean m => S.ModuleName -> m ()
 splitModule old =
     do univ <- getParams >>= return . fromMaybe (error "moduVerse not set") . moduVerse
@@ -285,7 +279,7 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         runCleanT $
+         runMonadClean $
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
               splitModule (S.ModuleName "Debian.Repo.Package")
          (code, out, err) <- diff "testdata/splitresult" "testdata/copy"
@@ -295,7 +289,7 @@ test2 :: Test
 test2 =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ testdata/copy"
-       runCleanT $ noisily $ noisily $
+       runMonadClean $ noisily $ noisily $
          do modifyParams (\ p -> p {testMode = True,
                                     sourceDirs = ["testdata/copy"],
                                     -- extensions = NoImplicitPrelude : extensions p,
@@ -308,7 +302,7 @@ test3 :: Test
 test3 =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ testdata/copy"
-       runCleanT $ noisily $ noisily $
+       runMonadClean $ noisily $ noisily $
          do modifyParams (\ p -> p {testMode = False,
                                     sourceDirs = ["testdata/copy"],
                                     -- extensions = NoImplicitPrelude : extensions p,

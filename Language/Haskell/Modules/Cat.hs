@@ -15,7 +15,7 @@ import Data.List as List (intercalate, map)
 import Data.Map as Map (fromList, lookup, Map, member, toAscList, insert)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
-import Data.Set as Set (fromList, insert, Set, union, difference, toList, null)
+import Data.Set as Set (fromList, insert, Set, union, difference)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sModuleName, sImportDecl)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), Module(Module), ModuleHead(ModuleHead), ImportDecl(..))
@@ -26,7 +26,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents),
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (foldHeader, foldExports, foldImports, foldDecls, echo, echo2, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runCleanT, getParams, ModuleResult(..), doResult)
+import Language.Haskell.Modules.Params (modifyParams, modulePath, MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runMonadClean, getParams, ModuleResult(..), doResult)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess))
@@ -184,7 +184,7 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         _result <- runCleanT $
+         _result <- runMonadClean $
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
               catModules
                      [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
@@ -197,7 +197,7 @@ test2 :: Test
 test2 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         _result <- runCleanT $
+         _result <- runMonadClean $
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
               catModules
                      [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
@@ -211,7 +211,7 @@ test3 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
          _result <- withCurrentDirectory "testdata/copy" $
-                   runCleanT $
+                   runMonadClean $
            do modifyParams (\ p -> p {moduVerse = Just repoModules})
               catModules
                      [S.ModuleName "Debian.Repo.Types.Slice",
