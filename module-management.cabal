@@ -11,6 +11,10 @@ Stability:          experimental
 Build-type:         Simple
 Cabal-version:      >=1.8
 
+Flag build-tests
+  Description: build the test executable
+  Default: False
+
 Library
   ghc-Options:      -Wall -O2
   Exposed-Modules:
@@ -50,28 +54,32 @@ Library
     system-fileio,
     temporary
 
--- Executable tests
---   Build-Depends:
---     ansi-wl-pprint,
---     base,
---     bytestring,
---     Cabal,
---     containers,
---     data-default,
---     debian,
---     directory,
---     Extra,
---     filepath,
---     HUnit,
---     haskell-src-exts,
---     module-management,
---     MonadCatchIO-mtl,
---     mtl,
---     process,
---     process-progress,
---     pureMD5,
---     regex-compat,
---     set-extra,
---     syb,
---     system-fileio
---   Main-is: Tests.hs
+Executable tests
+  Main-is: Tests.hs
+  if flag (build-tests)
+    Buildable: True
+    Build-Depends:
+      ansi-wl-pprint,
+      base,
+      bytestring,
+      Cabal,
+      containers,
+      data-default,
+      debian,
+      directory,
+      Extra,
+      filepath,
+      HUnit,
+      haskell-src-exts,
+      module-management,
+      MonadCatchIO-mtl,
+      mtl,
+      process,
+      process-progress,
+      pureMD5,
+      regex-compat,
+      set-extra,
+      syb,
+      system-fileio
+  else
+    Buildable: False
