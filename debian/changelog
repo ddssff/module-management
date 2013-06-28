@@ -1,3 +1,9 @@
+haskell-module-management (0.9.3.1) unstable; urgency=low
+
+  * Fix the package home page URL.
+
+ -- David Fox <dsf@seereason.com>  Thu, 27 Jun 2013 17:05:35 -0700
+
 haskell-module-management (0.9.3) unstable; urgency=low
 
   * Clean up documentation for release.
