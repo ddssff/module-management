@@ -34,15 +34,19 @@
 --
 -- * 'mergeModules'
 --
--- * 'runMonadClean'
+-- * 'runMonadClean' - Sets up the environment for splitting and merging
+--
+-- * 'Language.Haskell.Modules.Params' - Functions to control modes of operation
 --
 -- Examples:
 --
--- * Clean up the import lists of all the modules under @./Language@:
+-- * Use @cleanImports@ to clean up the import lists of all the modules under @./Language@:
 --
 --    @findPaths \"Language\" >>= runMonadClean . mapM cleanImports . toList@
 --
--- * Split up the module Common and then merge two of the pieces back in:
+-- * Use @splitModule@ to split up module
+--   @Language.Haskell.Modules.Common@, and then merge two of the pieces
+--   back in.
 --
 --   @findModules \"Language\" >>= \\ modules -> runMonadClean $
 --      let mn = Language.Haskell.Exts.Syntax.ModuleName in

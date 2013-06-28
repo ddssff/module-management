@@ -140,6 +140,7 @@ findModules top =
       asModuleName path =
           S.ModuleName (List.map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))
 
+-- | Like 'findModules', but doesn't convert the paths into module names.
 findPaths :: FilePath -> IO (Set FilePath)
 findPaths top =
     doPath empty top

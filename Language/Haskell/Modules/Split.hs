@@ -47,6 +47,29 @@ setMapM_ f s = do _ <- Set.mapM f s
 
 -- | Split each of a module's declarations into a new module.  Update
 -- the imports of all the modules in the moduVerse to reflect the split.
+-- For example, if you have a module like
+--
+-- @
+-- module Start (a, b, (.+.)) where
+-- import
+-- a = 1 + a
+-- b = 2
+-- c = 3
+-- c' = 4
+-- (.+.) = b + c
+-- @
+--
+-- After running @splitModule@ the @Start@ module will be gone.  The
+-- @a@ and @b@ symbols will be in new modules named @Start.A@ and
+-- @Start.B@.  Because they were not exported by @Start@, the @c@ and
+-- @c'@ symbols will both be in a new module named @Start.Internal.C@.
+-- And the @.+.@ symbol will be in a module named
+-- @Start.OtherSymbols@.  Note that this module needs to import new
+-- @Start.A@ and @Start.Internal.C@ modules.
+--
+-- If we had imported and then re-exported a symbol in Start it would
+-- go into a module named @Start.ReExported@.  Any instance declarations
+-- would go into @Start.Instances@.
 splitModule :: MonadClean m => S.ModuleName -> m ()
 splitModule old =
     do univ <- getParams >>= return . fromMaybe (error "moduVerse not set") . moduVerse
