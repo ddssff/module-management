@@ -54,6 +54,24 @@ Library
     system-fileio,
     temporary
 
+Executable mmcli
+  Main-is: scripts/CLI.hs
+  Build-Depends:
+    base,
+    containers,
+    data-default,
+    directory,
+    filepath,
+    haskell-src-exts,
+    HUnit,
+    module-management,
+    MonadCatchIO-mtl,
+    mtl,
+    process,
+    set-extra,
+    syb,
+    temporary
+
 Executable tests
   Main-is: Tests.hs
   if flag (build-tests)
