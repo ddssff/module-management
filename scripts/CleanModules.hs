@@ -2,6 +2,7 @@
 
 module Main where
 
+import Options.Applicative
 import Control.Monad.Trans (MonadIO(liftIO))
 import Language.Haskell.Modules (cleanImports, runCleanT)
 import System.Directory (getDirectoryContents)

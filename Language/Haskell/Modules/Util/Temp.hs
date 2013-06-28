@@ -1,9 +1,10 @@
+{-# LANGUAGE PackageImports #-}
 module Language.Haskell.Modules.Util.Temp
     ( withTempDirectory
     ) where
 
 import qualified Control.Exception as IO (catch)
-import Control.Monad.CatchIO as IOT (bracket, MonadCatchIO)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IOT (bracket, MonadCatchIO)
 import Control.Monad.Trans (liftIO, MonadIO)
 import System.Directory (removeDirectoryRecursive)
 import qualified System.IO.Temp as Temp (createTempDirectory)
