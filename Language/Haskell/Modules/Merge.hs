@@ -19,14 +19,15 @@ import Data.Set as Set (difference, fromList, insert, Set, union)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sImportDecl, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(..), Module(Module), ModuleHead(ModuleHead))
+import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Parser (fromParseResult)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(..), ModuleName(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
+import Language.Haskell.Modules.Fold (ModuleInfo, echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (doResult, getParams, modifyParams, modulePath, ModuleResult(..), MonadClean, Params(sourceDirs, moduVerse, testMode), parseFile, runMonadClean)
+import Language.Haskell.Modules.Internal (doResult, getParams, modifyParams, modulePath, ModuleResult(..), MonadClean, Params(sourceDirs, moduVerse, testMode), parseFileWithComments, runMonadClean)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess))
@@ -58,42 +59,42 @@ mergeModules inputs output =
 -- The output module may not (yet) be an element of the moduVerse, in
 -- that case choose the first input modules to convert into the output
 -- module.
-doModule :: MonadClean m => Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
+doModule :: MonadClean m => Map S.ModuleName (A.Module SrcSpanInfo, String, [Comment]) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
 doModule inputInfo inputs@(first : _) output name =
     do -- The new module will be based on the existing module, unless
        -- name equals output and output does not exist
        let oldName = if name == output && not (Map.member name inputInfo) then first else name
-       (m, text) <- maybe (loadModule oldName) return (Map.lookup name inputInfo)
+       (m, text, comments) <- maybe (loadModule oldName) return (Map.lookup name inputInfo)
        return $ case () of
-         _ | name == output -> Modified name (doOutput inputInfo inputs output (m, text))
+         _ | name == output -> Modified name (doOutput inputInfo inputs output (m, text, comments))
            | elem name inputs -> Removed name
-         _ -> let text' = doOther inputs output (m, text) in
+         _ -> let text' = doOther inputs output (m, text, comments) in
               if text /= text' then Modified name text' else Unchanged name
 doModule _ [] _ _ = error "doModule: no inputs"
 
 -- | Create the output module, the destination of the merge.
-doOutput :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
-doOutput inputInfo inNames outName (m, text) =
+doOutput :: Map S.ModuleName ModuleInfo -> [S.ModuleName] -> S.ModuleName -> ModuleInfo -> String
+doOutput inputInfo inNames outName m =
     header ++ exports ++ imports ++ decls
     where
-      header = foldHeader echo2 echo (\ _ pref _ suff r -> r <> pref <> prettyPrint outName <> suff) echo m text "" <>
-               foldExports (\ s r -> r <> s <> maybe "" (intercalate ", " . List.map (prettyPrint)) (mergeExports inputInfo outName) <> "\n") ignore ignore2 m text ""
-      exports = fromMaybe "" (foldExports ignore2 (\ _e pref _ _ r -> maybe (Just pref) Just r) ignore2 m text Nothing)
-      imports = foldExports ignore2 ignore (\ s r -> r <> s {-where-}) m text "" <>
+      header = foldHeader echo2 echo (\ _ pref _ suff r -> r <> pref <> prettyPrint outName <> suff) echo m "" <>
+               foldExports (\ s r -> r <> s <> maybe "" (intercalate ", " . List.map (prettyPrint)) (mergeExports inputInfo outName) <> "\n") ignore ignore2 m ""
+      exports = fromMaybe "" (foldExports ignore2 (\ _e pref _ _ r -> maybe (Just pref) Just r) ignore2 m Nothing)
+      imports = foldExports ignore2 ignore (\ s r -> r <> s {-where-}) m "" <>
                 -- Insert the new imports just after the first "pre" string of the imports
-                (fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just (pref <> unlines (List.map (moduleImports inputInfo) inNames))) Just r) m text Nothing)) <>
-                (foldImports (\ _i pref s suff r -> r <> pref <> s <> suff) m text "")
-      decls = fromMaybe "" (foldDecls (\ _d _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls inputInfo outName) inNames)) r)) (\ s r -> Just (maybe s (<> s) r)) m text Nothing)
+                (fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just (pref <> unlines (List.map (moduleImports inputInfo) inNames))) Just r) m Nothing)) <>
+                (foldImports (\ _i pref s suff r -> r <> pref <> s <> suff) m "")
+      decls = fromMaybe "" (foldDecls (\ _d _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls inputInfo outName) inNames)) r)) (\ s r -> Just (maybe s (<> s) r)) m Nothing)
 
 -- | Update a module that does not participate in the merge - this
 -- involves changing imports and exports of merged modules.
 -- (Shouldn't this also fix qualified symbols?)
-doOther :: [S.ModuleName] -> S.ModuleName -> (A.Module SrcSpanInfo, String) -> String
-doOther inputs output (m, text) =
-    foldHeader echo2 echo echo echo m text "" <>
-    foldExports echo2 (\ x pref s suff r -> r <> pref <> fromMaybe s (fixModuleExport inputs output (sExportSpec x)) <> suff) echo2 m text "" <>
-    foldImports (\ x pref s suff r -> r <> pref <> fromMaybe s (fixModuleImport inputs output (sImportDecl x)) <> suff) m text "" <>
-    foldDecls echo echo2 m text ""
+doOther :: [S.ModuleName] -> S.ModuleName -> ModuleInfo -> String
+doOther inputs output m =
+    foldHeader echo2 echo echo echo m "" <>
+    foldExports echo2 (\ x pref s suff r -> r <> pref <> fromMaybe s (fixModuleExport inputs output (sExportSpec x)) <> suff) echo2 m "" <>
+    foldImports (\ x pref s suff r -> r <> pref <> fromMaybe s (fixModuleImport inputs output (sImportDecl x)) <> suff) m "" <>
+    foldDecls echo echo2 m ""
 
 fixModuleExport :: [S.ModuleName] -> S.ModuleName -> S.ExportSpec -> Maybe String
 fixModuleExport inputs output x =
@@ -109,16 +110,16 @@ fixModuleImport inputs output x =
                 | elem y inputs -> Just (prettyPrint (x {S.importModule = output}))
             _ -> Nothing
 
-mergeExports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> Maybe [S.ExportSpec]
+mergeExports :: Map S.ModuleName (A.Module SrcSpanInfo, String, [Comment]) -> S.ModuleName -> Maybe [S.ExportSpec]
 mergeExports old new =
     Just (concatMap mergeExports' (Map.toAscList old))
     where
-      mergeExports' (_, (A.Module _ Nothing _ _ _, _)) = error "mergeModules: no explicit export list"
-      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _)) = error "mergeModules: no explicit export list"
-      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ (Just (A.ExportSpecList _ e)))) _ _ _, _)) = updateModuleContentsExports old new (List.map sExportSpec e)
+      mergeExports' (_, (A.Module _ Nothing _ _ _, _, _)) = error "mergeModules: no explicit export list"
+      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _, _)) = error "mergeModules: no explicit export list"
+      mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ (Just (A.ExportSpecList _ e)))) _ _ _, _, _)) = updateModuleContentsExports old new (List.map sExportSpec e)
       mergeExports' (_, _) = error "mergeExports'"
 
-updateModuleContentsExports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
+updateModuleContentsExports :: Map S.ModuleName (A.Module SrcSpanInfo, String, [Comment]) -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
 updateModuleContentsExports old new es =
     foldl f [] es
     where
@@ -128,15 +129,15 @@ updateModuleContentsExports old new es =
           ys ++ if elem e' ys then [] else [e']
       f ys e = ys ++ [e]
 
-moduleImports :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> String
+moduleImports :: Map S.ModuleName ModuleInfo -> S.ModuleName -> String
 moduleImports old name =
-    let (Just (m, text)) = Map.lookup name old in
+    let (Just m) = Map.lookup name old in
     foldImports (\ x pref s suff r ->
                     r
                     -- If this is the first import, omit the prefix, it includes the ") where" text.
                     <> (if r == "" then "" else pref)
                     <> if Map.member (sModuleName (A.importModule x)) old then "" else (s <> suff))
-                m text "" <> "\n"
+                m "" <> "\n"
 
 -- | Grab the declarations out of the old modules, fix any
 -- qualified symbol references, prettyprint and return.
@@ -148,9 +149,9 @@ moduleImports old name =
 -- In terms of what is going on right here, if m imports any of the
 -- modules in oldmap with an "as" qualifier, identifiers using the
 -- module name in the "as" qualifier must use new instead.
-moduleDecls :: Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> S.ModuleName -> String
+moduleDecls :: Map S.ModuleName ModuleInfo -> S.ModuleName -> S.ModuleName -> String
 moduleDecls oldmap new name =
-    let (Just (m@(A.Module _ _ _ imports _), text)) = Map.lookup name oldmap in
+    let (Just m@(A.Module _ _ _ imports _, _, _)) = Map.lookup name oldmap in
     let oldmap' = foldr f oldmap imports in
     foldDecls (\ d pref s suff r ->
                     let d' = sDecl d
@@ -158,7 +159,7 @@ moduleDecls oldmap new name =
                     r <> pref <>
                     (if d'' /= d' then "-- Declaration reformatted because module qualifiers changed\n" <> prettyPrint d'' <> "\n\n" else (s <> suff)))
               echo2
-              m text "" <> "\n"
+              m "" <> "\n"
     where
       f (A.ImportDecl _ m _ _ _ (Just a) _specs) mp =
           case Map.lookup (sModuleName m) oldmap of
@@ -170,7 +171,7 @@ moduleDecls oldmap new name =
 -- probably mess up the location information, so the result (if
 -- different from the original) should be prettyprinted, not
 -- exactPrinted.
-fixReferences :: (Data a, Typeable a) => Map S.ModuleName (A.Module SrcSpanInfo, String) -> S.ModuleName -> a -> a
+fixReferences :: (Data a, Typeable a) => Map S.ModuleName ModuleInfo -> S.ModuleName -> a -> a
 fixReferences oldmap new x =
     everywhere (mkT moveModuleName) x
     where
@@ -225,12 +226,12 @@ test3 =
 -- junk :: String -> Bool
 -- junk s = isSuffixOf ".imports" s || isSuffixOf "~" s
 
-loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName (A.Module SrcSpanInfo, String))
+loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName ModuleInfo)
 loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names
 
-loadModule :: MonadClean m => S.ModuleName -> m (A.Module SrcSpanInfo, String)
+loadModule :: MonadClean m => S.ModuleName -> m ModuleInfo
 loadModule name =
     do path <- modulePath name
        text <- liftIO $ readFile path
-       m <- parseFile path >>= return . fromParseResult
-       return (m, text)
+       (m, comments) <- parseFileWithComments path >>= return . fromParseResult
+       return (m, text, comments)

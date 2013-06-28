@@ -24,8 +24,8 @@ import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPI
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (modulePathBase, withCurrentDirectory)
-import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
-import Language.Haskell.Modules.Internal (getParams, markForDelete, modifyParams, ModuleResult(..), MonadClean, Params(..), parseFile, runMonadClean, scratchDir)
+import Language.Haskell.Modules.Fold (ModuleInfo, foldDecls, foldExports, foldHeader, foldImports)
+import Language.Haskell.Modules.Internal (getParams, markForDelete, modifyParams, ModuleResult(..), MonadClean, Params(..), parseFile, parseFileWithComments, runMonadClean, scratchDir)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qPutStrLn, quietly)
 import Language.Haskell.Modules.Util.Symbols (symbols)
@@ -62,16 +62,17 @@ cleanBuildImports lbi =
 -- | Clean up the imports of a source file.
 cleanImports :: MonadClean m => FilePath -> m ModuleResult
 cleanImports path =
-    do source <- parseFile path
+    do text <- liftIO $ readFile path
+       source <- parseFileWithComments path
        case source of
-         ParseOk (m@(A.Module _ h _ imports _decls)) ->
+         ParseOk (m@(A.Module _ h _ imports _decls), comments) ->
              do let name = case h of
                              Just (A.ModuleHead _ x _ _) -> sModuleName x
                              _ -> S.ModuleName "Main"
                     hiddenImports = filter isHiddenImport imports
-                dumpImports path >> checkImports path name m hiddenImports
-         ParseOk (A.XmlPage {}) -> error "cleanImports: XmlPage"
-         ParseOk (A.XmlHybrid {}) -> error "cleanImports: XmlHybrid"
+                dumpImports path >> checkImports path name (m, text, comments) hiddenImports
+         ParseOk (A.XmlPage {}, _) -> error "cleanImports: XmlPage"
+         ParseOk (A.XmlHybrid {}, _) -> error "cleanImports: XmlHybrid"
          ParseFailed _loc msg -> error ("cleanImports: - parse of " ++ path ++ " failed: " ++ msg)
     where
       isHiddenImport (A.ImportDecl {A.importSpecs = Just (A.ImportSpecList _ True _)}) = True
@@ -97,7 +98,7 @@ dumpImports path =
 -- source file.  We also need to modify the imports of any names
 -- that are types that appear in standalone instance derivations so
 -- their members are imported too.
-checkImports :: MonadClean m => FilePath -> S.ModuleName -> A.Module SrcSpanInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
+checkImports :: MonadClean m => FilePath -> S.ModuleName -> ModuleInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
 checkImports path name@(S.ModuleName name') m extraImports =
     do let importsPath = name' <.> ".imports"
        markForDelete importsPath
@@ -112,37 +113,36 @@ checkImports path name@(S.ModuleName name') m extraImports =
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: MonadClean m => FilePath -> A.Module SrcSpanInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
-updateSource path (m@(A.Module _ _ _ oldImports _)) (A.Module _ _ _ newImports _) name extraImports =
+updateSource :: MonadClean m => FilePath -> ModuleInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
+updateSource path m@(A.Module _ _ _ oldImports _, _, _) (A.Module _ _ _ newImports _) name extraImports =
     do remove <- removeEmptyImports <$> getParams
-       text <- liftIO $ readFile path
        maybe (qPutStrLn ("cleanImports: no changes to " ++ path) >> return (Unchanged name))
              (\ text' ->
                   qPutStrLn ("cleanImports: modifying " ++ path) >>
                   replaceFile tildeBackup path text' >>
                   return (Modified name text'))
-             (replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m text)
+             (replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m)
 updateSource _ _ _ _ _ = error "updateSource"
 
 -- | Compare the old and new import sets and if they differ clip out
 -- the imports from the sourceText and insert the new ones.
-replaceImports :: [A.ImportDecl SrcSpanInfo] -> A.Module SrcSpanInfo -> String -> Maybe String
-replaceImports newImports m sourceText =
-    let oldPretty = foldImports (\ _ pref s suff r -> r <> pref <> s <> suff) m sourceText ""
+replaceImports :: [A.ImportDecl SrcSpanInfo] -> ModuleInfo -> Maybe String
+replaceImports newImports m =
+    let oldPretty = foldImports (\ _ pref s suff r -> r <> pref <> s <> suff) m ""
         -- Surround newPretty with the same prefix and suffix as oldPretty
-        newPretty = fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just pref) Just r) m sourceText Nothing) <>
+        newPretty = fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just pref) Just r) m Nothing) <>
                     intercalate "\n" (map (prettyPrintWithMode (defaultMode {layout = PPInLine})) newImports) <>
-                    foldImports (\ _ _ _ suff _ -> suff) m sourceText "" in
+                    foldImports (\ _ _ _ suff _ -> suff) m "" in
     if oldPretty == newPretty
     then Nothing
-    else Just (foldHeader (\ s r -> r <> s) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ _ pref s suff r -> r <> pref <> s <> suff) m sourceText "" ++
-               foldExports (\ s r -> r <> s) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ s r -> r <> s) m sourceText "" ++
+    else Just (foldHeader (\ s r -> r <> s) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ _ pref s suff r -> r <> pref <> s <> suff) m "" ++
+               foldExports (\ s r -> r <> s) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ s r -> r <> s) m "" ++
                newPretty <>
-               foldDecls  (\ _ pref s suff r -> r <> pref <> s <> suff) (\ r s -> r <> s) m sourceText "")
+               foldDecls  (\ _ pref s suff r -> r <> pref <> s <> suff) (\ r s -> r <> s) m "")
 
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: Bool         -- ^ If true, imports that turn into empty lists will be removed
-              -> A.Module SrcSpanInfo
+              -> ModuleInfo
               -> [A.ImportDecl SrcSpanInfo]
               -> [A.ImportDecl SrcSpanInfo]
               -> [A.ImportDecl SrcSpanInfo]
@@ -194,10 +194,10 @@ fixNewImports remove m oldImports imports =
       sdTypes :: Set (Maybe S.ModuleName, S.Name)
       sdTypes = standaloneDerivingTypes m
 
-standaloneDerivingTypes :: A.Module SrcSpanInfo -> Set (Maybe S.ModuleName, S.Name)
-standaloneDerivingTypes (A.XmlPage _ _ _ _ _ _ _) = error "standaloneDerivingTypes A.XmlPage"
-standaloneDerivingTypes (A.XmlHybrid _ _ _ _ _ _ _ _ _) = error "standaloneDerivingTypes A.XmlHybrid"
-standaloneDerivingTypes (A.Module _ _ _ _ decls) =
+standaloneDerivingTypes :: ModuleInfo -> Set (Maybe S.ModuleName, S.Name)
+standaloneDerivingTypes (A.XmlPage _ _ _ _ _ _ _, _, _) = error "standaloneDerivingTypes A.XmlPage"
+standaloneDerivingTypes (A.XmlHybrid _ _ _ _ _ _ _ _ _, _, _) = error "standaloneDerivingTypes A.XmlHybrid"
+standaloneDerivingTypes (A.Module _ _ _ _ decls, _, _) =
     unions (map derivDeclTypes decls)
     where
       -- derivDeclTypes :: Decl -> Set (Maybe S.ModuleName, S.Name)
