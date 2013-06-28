@@ -2,7 +2,7 @@ Name:               module-management
 Version:            0.9.3
 Synopsis:           Clean up module imports, split and merge modules
 Description:        Clean up module imports, split and merge modules.
-Homepage:           https://src.seereason.com/module-management
+Homepage:           http://src.seereason.com/module-management
 License:            BSD3
 Author:             David Fox
 Maintainer:         David Fox <dsf@seereason.com>
