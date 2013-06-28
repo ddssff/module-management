@@ -13,7 +13,7 @@ Cabal-version:      >=1.8
 
 Flag build-tests
   Description: build the test executable
-  Default: False
+  Default: True
 
 Library
   ghc-Options:      -Wall -O2
@@ -98,6 +98,7 @@ Executable tests
       regex-compat,
       set-extra,
       syb,
-      system-fileio
+      system-fileio,
+      temporary
   else
     Buildable: False
