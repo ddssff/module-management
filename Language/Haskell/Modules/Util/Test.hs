@@ -131,16 +131,7 @@ diff' a b =
        let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
        return (code, out', err)
 
--- | Convenience function for building the moduVerse, searches for
--- files in a directory hierarchy, with a filter predicate.
-findModules :: FilePath -> IO (Set S.ModuleName)
-findModules top =
-    findPaths top >>= return . Set.map asModuleName
-    where
-      asModuleName path =
-          S.ModuleName (List.map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))
-
--- | Like 'findModules', but doesn't convert the paths into module names.
+-- | Find the paths of all the files below the directory @top@.
 findPaths :: FilePath -> IO (Set FilePath)
 findPaths top =
     doPath empty top
@@ -154,3 +145,15 @@ findPaths top =
                _ -> return r
       doDirectory r path =
           getDirectoryContents path >>= foldM doPath r . List.map (path </>) . filter (\ x -> x /= "." && x /= "..")
+
+-- | Convenience function for building the moduVerse, searches for
+-- modules in a directory hierarchy.  FIXME: This should be in
+-- MonadClean and use the value of sourceDirs to remove prefixes from
+-- the module paths.  And then it should look at the module text to
+-- see what the module name really is.
+findModules :: FilePath -> IO (Set S.ModuleName)
+findModules top =
+    findPaths top >>= return . Set.map asModuleName
+    where
+      asModuleName path =
+          S.ModuleName (List.map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))

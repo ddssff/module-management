@@ -3,11 +3,15 @@ module Main where
 
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (intercalate, isPrefixOf)
-import Data.Set (fromList, union)
+import Data.Maybe (fromMaybe)
+import Data.Set (Set, union, toList, empty, size, unions, singleton)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
-import Language.Haskell.Modules (runMonadClean, cleanImports, splitModule, mergeModules, modifyModuVerse)
+import Language.Haskell.Modules (runMonadClean, cleanImports, splitModule, mergeModules,
+                                 modifyModuVerse, modifySourceDirs)
+import Language.Haskell.Modules.Internal (getParams, Params(..))
 import Language.Haskell.Modules.Params (MonadClean)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
+import Language.Haskell.Modules.Util.Test (findModules)
 import System.IO (stdin, stderr, hGetLine, hPutStr, hPutStrLn)
 
 main :: IO ()
@@ -37,14 +41,41 @@ cmd (s : args) =
            (["help"],				liftIO (hPutStrLn stderr "help text") >> cli),
            (["verse"],				verse args >> cli),
            (["clean"],				clean args >> cli),
+           (["dir"],				dir args >> cli),
            (["split"],				split args >> cli),
            (["merge"],				merge args >> cli)]
 
+unModuleName :: ModuleName -> String
+unModuleName (ModuleName x) = x
+
 verse :: MonadClean m => [String] -> m ()
-verse [] = liftIO $ hPutStrLn stderr "Usage: verse <modulename1> <modulename2> ..."
+verse [] =
+    do modules <- getParams >>= return . moduVerse
+       liftIO $ hPutStrLn stderr ("Usage: verse <pathormodule1> <pathormodule2> ...\n" ++
+                                  "Add the module or all the modules below a directory to the moduVerse\n" ++
+                                  "Currently:\n  " ++ showVerse (fromMaybe empty modules))
 verse args =
-    do modifyModuVerse (union (fromList (map ModuleName args)))
-       liftIO (hPutStrLn stderr "moduVerse updated")
+    do new <- mapM (liftIO . find) args
+       modifyModuVerse (union (unions new))
+       modules <- getParams >>= return . moduVerse
+       liftIO (hPutStrLn stderr $ "moduVerse updated:\n  " ++ showVerse (fromMaybe empty modules))
+    where
+      find :: String -> IO (Set ModuleName)
+      find s =
+          do ms <- liftIO (findModules s)
+             case size ms of
+               0 -> return (singleton (ModuleName s))
+               _ -> return ms
+
+showVerse :: Set ModuleName -> String
+showVerse modules = "[ " ++ intercalate "\n  , " (map unModuleName (toList modules)) ++ " ]"
+
+dir :: MonadClean m => [FilePath] -> m ()
+dir [] = modifySourceDirs (const [])
+dir xs =
+    do modifySourceDirs (++ xs)
+       xs' <- getParams >>= return . sourceDirs
+       liftIO (hPutStrLn stderr $ "sourceDirs updated:\n  [ " ++ intercalate "\n  , " xs' ++ " ]")
 
 clean :: MonadClean m => [FilePath] -> m ()
 clean [] = liftIO $ hPutStrLn stderr "Usage: clean <modulepath1> <modulepath2> ..."
