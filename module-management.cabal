@@ -54,7 +54,7 @@ Library
     system-fileio,
     temporary
 
-Executable mmcli
+Executable hmm
   Main-is: scripts/CLI.hs
   Build-Depends:
     base,
