@@ -12,4 +12,3 @@ import URL
 -- Exported symbols.
 foo :: Int
 foo = 1
-

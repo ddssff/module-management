@@ -17,4 +17,3 @@ indexCacheFile apt repo release index =
       (Binary _ _, Source) -> indexPrefix repo release index ++ "_source_Sources"
       (Binary _ _, arch@(Binary _ _)) -> indexPrefix repo release index ++ "_binary-" ++ show (prettyArch arch) ++ "_Packages"
       (x, _) -> error "Invalid build architecture: " ++ show x
-

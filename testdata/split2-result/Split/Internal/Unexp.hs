@@ -12,4 +12,3 @@ import URL
 -- Unexported symbols go into the Internal module
 unexp :: Int
 unexp = 3
-

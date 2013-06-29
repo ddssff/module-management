@@ -84,7 +84,6 @@ prettyLit pa pv pprec lit =
 
 
 
-
 fixityLiteral :: (Literal formula atom) => formula -> Fixity
 fixityLiteral formula =
     foldLiteral neg tf at formula
@@ -92,7 +91,6 @@ fixityLiteral formula =
       neg _ = Fixity 5 InfixN
       tf _ = Fixity 10 InfixN
       at = fixity
-
 
 
 

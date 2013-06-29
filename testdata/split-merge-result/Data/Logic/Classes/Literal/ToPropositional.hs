@@ -13,4 +13,3 @@ import qualified Data.Logic.Classes.Propositional as P (PropositionalFormula)
 toPropositional :: forall lit atom pf atom2. (Literal lit atom, P.PropositionalFormula pf atom2) =>
                    (atom -> atom2) -> lit -> pf
 toPropositional ca lit = foldLiteral (\ p -> (.~.) (toPropositional ca p)) fromBool (atomic . ca) lit
-

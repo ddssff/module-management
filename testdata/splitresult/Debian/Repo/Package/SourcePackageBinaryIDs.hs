@@ -27,4 +27,3 @@ sourcePackageBinaryIDs arch sourceIndex package =
       binaryID version name = makeBinaryPackageID name version
       -- binaryIndex = sourceIndex { packageIndexArch = arch }
       info = sourceParagraph package
-

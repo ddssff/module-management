@@ -11,4 +11,3 @@ import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 tryParseRel :: Maybe B.Field -> B.Relations
 tryParseRel (Just (B.Field (_, relStr))) = either (error . show) id (B.parseRelations relStr)
 tryParseRel _ = []
-

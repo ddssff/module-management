@@ -186,7 +186,7 @@ doSplit univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ _ _, 
                 -- Grab the old imports
                 fromMaybe "" (foldImports (\ _i pref s suff r -> Just (maybe (s <> suff) (\ l -> l <> pref <> s <> suff) r)) m Nothing) <>
                 -- fromMaybe "" (foldDecls (\ _d pref _ _ r -> maybe (Just pref) Just r) ignore2 m text Nothing) <>
-                concatMap snd (reverse modDecls) <> "\n"
+                concatMap snd (reverse modDecls)
               where
                 -- Build export specs of the symbols created by each declaration.
                 newExports modDecls = nub (concatMap (exports . fst) modDecls)

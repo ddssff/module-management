@@ -191,9 +191,9 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (m@(A.
           do doSep topf
              doList pragmaf ps
              maybe (return ()) doHeader mh
-             doList importf is
              (tl, l, sps, r) <- get
              put (tl, l, adjustSpans text comments sps, r)
+             doList importf is
              doList declf ds
              doTail sepf
       doHeader (A.ModuleHead sp n mw me) =

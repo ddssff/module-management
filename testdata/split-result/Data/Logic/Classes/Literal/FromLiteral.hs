@@ -13,4 +13,3 @@ import Data.Logic.Classes.Negate ((.~.))
 fromLiteral :: forall lit atom v fof atom2. (Literal lit atom, FOF.FirstOrderFormula fof atom2 v) =>
                (atom -> atom2) -> lit -> fof
 fromLiteral ca lit = foldLiteral (\ p -> (.~.) (fromLiteral ca p)) fromBool (atomic . ca) lit
-

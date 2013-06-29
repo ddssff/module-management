@@ -29,4 +29,3 @@ parseSourceParagraph p =
                   , standardsVersion = fmap stripWS $ B.fieldValue "Standards-Version" p
                   , homepage = fmap stripWS $ B.fieldValue "Homepage" p })
       _x -> Left ["parseSourceParagraph - One or more required fields (Package, Maintainer, Standards-Version) missing: " ++ show p]
-

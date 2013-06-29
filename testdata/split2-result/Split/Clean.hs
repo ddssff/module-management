@@ -11,4 +11,3 @@ import URL
 
 clean :: (ToURL url, Show (URLT url)) => url -> String
 clean = filter isAlphaNum . show . toURL
-

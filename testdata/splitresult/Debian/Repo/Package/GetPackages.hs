@@ -32,4 +32,3 @@ getPackages repo release index =
           return . either (\ (e :: SomeException) -> Left . SomeException . ErrorCall . ((show uri' ++ ":") ++) . show $ e) id
       uri' = uri {uriPath = uriPath uri </> packageIndexPath release index}
       uri = repoKeyURI repo
-

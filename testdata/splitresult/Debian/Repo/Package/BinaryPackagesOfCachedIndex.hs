@@ -31,4 +31,3 @@ binaryPackagesOfCachedIndex cache repo release index =
                  return packages
     where
       path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
-

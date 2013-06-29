@@ -12,4 +12,3 @@ import URL
 -- Symbols that can't be turned into module names go into OtherSymbols
 (+-+) :: Int
 (+-+) = 2
-

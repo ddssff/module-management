@@ -44,4 +44,3 @@ toSourcePackage index package =
       merge x = case partition (either (const True) (const False)) x of
                   (a, []) -> Left . catMaybes . List.map (either Just (const Nothing )) $ a
                   (_, a) -> Right . catMaybes . List.map (either (const Nothing) Just) $ a
-

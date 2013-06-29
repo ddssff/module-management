@@ -34,4 +34,3 @@ fromFirstOrder ca formula =
       co :: Combination formula -> Failing lit
       co ((:~:) f) =  fromFirstOrder ca f >>= return . (.~.)
       co _ = Failure ["fromFirstOrder"]
-

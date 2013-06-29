@@ -8,4 +8,3 @@ import Debian.Repo.Package.Internal.Constants (Constants(asBool))
 
 useConstants :: Constants p => p -> Maybe Bool
 useConstants x = asBool x
-

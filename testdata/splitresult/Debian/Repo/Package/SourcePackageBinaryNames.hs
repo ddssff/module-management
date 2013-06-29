@@ -11,4 +11,3 @@ import Debian.Repo.Types.PackageIndex (SourcePackage(sourceParagraph))
 sourcePackageBinaryNames :: SourcePackage -> [BinPkgName]
 sourcePackageBinaryNames package =
     sourceBinaryNames (sourceParagraph package)
-

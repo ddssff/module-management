@@ -23,4 +23,3 @@ binarySourceVersion paragraph =
         (Just binaryName, Just binaryVersion) ->
             fmap ((,) (binaryName, binaryVersion)) $ binarySourceVersion' binaryName binaryVersion paragraph
         _ -> Nothing
-

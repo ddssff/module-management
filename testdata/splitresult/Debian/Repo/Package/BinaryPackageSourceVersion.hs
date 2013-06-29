@@ -15,4 +15,3 @@ binaryPackageSourceVersion package =
     let binaryName = binaryPackageName package
         binaryVersion = packageVersion . packageID $ package in
     binarySourceVersion' binaryName binaryVersion (packageInfo package)
-

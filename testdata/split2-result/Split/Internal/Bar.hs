@@ -10,4 +10,3 @@ import Data.List (dropWhile)
 import URL
 
 newtype Bar = Bar Int
-

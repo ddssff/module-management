@@ -10,4 +10,3 @@ module Debian.Repo.Package.Internal.Constants
 class Constants p where
     asBool :: p -> Maybe Bool
     fromBool :: Bool -> p
-

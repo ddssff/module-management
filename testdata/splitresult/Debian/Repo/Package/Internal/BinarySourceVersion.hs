@@ -28,4 +28,3 @@ binarySourceVersion' binaryName binaryVersion paragraph =
       -- the epoch number stripped off.  I don't know why - I should search
       -- the Debian policy manual for this.  This puts it back on.
       copyEpoch src dst = V.buildDebianVersion (V.epoch src) (V.version dst) (V.revision dst)
-

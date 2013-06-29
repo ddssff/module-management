@@ -14,4 +14,3 @@ import Data.Logic.Classes.Pretty (HasFixity)
 -- |forms.  They support negation and must include True and False elements.
 class (Negatable lit, Constants lit, HasFixity atom, Formula lit atom, Ord lit) => Literal lit atom | lit -> atom where
     foldLiteral :: (lit -> r) -> (Bool -> r) -> (atom -> r) -> lit -> r
-

@@ -54,4 +54,3 @@ indexPrefix repo release index =
           case (break p s) of
             (s, []) -> [s]
             (h, t) -> h : wordsBy p (drop 1 t)
-

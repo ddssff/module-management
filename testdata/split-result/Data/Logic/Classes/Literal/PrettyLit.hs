@@ -49,4 +49,3 @@ prettyLit pa pv pprec lit =
       parensIf False = id
       parensIf _ = parens . nest 1
       Fixity prec _ = fixityLiteral lit
-

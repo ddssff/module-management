@@ -24,4 +24,3 @@ releaseSourcePackages repo release =
       test xs = case partitionEithers xs of
                   ([], ok) -> Set.unions (List.map Set.fromList ok)
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
-

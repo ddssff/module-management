@@ -14,4 +14,3 @@ module Debian.Repo.Package.Internal.OtherSymbols
     case last a of
       '_' -> (init a) +?+ b
       _ -> a ++ "_" ++ b
-

@@ -27,4 +27,3 @@ toBinaryPackage release index p =
           , pProvides =  tryParseRel $ B.lookupP "Provides" p
           }
       _ -> error ("Invalid data in source index:\n " ++ packageIndexPath release index)
-

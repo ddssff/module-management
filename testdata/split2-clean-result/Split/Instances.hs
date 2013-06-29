@@ -8,4 +8,3 @@ import Split.Internal.Bar (Bar(Bar))
 
 instance Show Bar where
     show (Bar n) = "Bar " ++ show n
-

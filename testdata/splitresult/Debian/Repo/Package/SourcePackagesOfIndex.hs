@@ -22,4 +22,3 @@ sourcePackagesOfIndex repo release index =
     case packageIndexArch index of
       Source -> liftIO (getPackages repo release index) >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
-

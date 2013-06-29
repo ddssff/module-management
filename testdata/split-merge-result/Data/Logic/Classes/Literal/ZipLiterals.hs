@@ -17,4 +17,3 @@ zipLiterals neg tf at fm1 fm2 =
       neg' p1 = foldLiteral (neg p1) (\ _ -> Nothing) (\ _ -> Nothing) fm2
       tf' x1 = foldLiteral (\ _ -> Nothing) (tf x1) (\ _ -> Nothing) fm2
       at' a1 = foldLiteral (\ _ -> Nothing) (\ _ -> Nothing) (at a1) fm2
-

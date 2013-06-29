@@ -14,4 +14,3 @@ fixityLiteral formula =
       neg _ = Fixity 5 InfixN
       tf _ = Fixity 10 InfixN
       at = fixity
-
