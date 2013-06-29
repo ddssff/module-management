@@ -1,3 +1,13 @@
+haskell-module-management (0.10) unstable; urgency=low
+
+  * Extend documentation
+  * Fix bug which moved comments after last deco to before the first decl
+  * Add a rather nasty cli - Maybe shell commands are a better idea
+  * Fix fold so space and comments are not associated with the previous
+    decl, the now belong to the following decl.
+
+ -- David Fox <dsf@seereason.com>  Sat, 29 Jun 2013 11:27:36 -0700
+
 haskell-module-management (0.9.3.1) unstable; urgency=low
 
   * Fix the package home page URL.
