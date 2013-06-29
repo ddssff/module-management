@@ -107,7 +107,7 @@ checkImports path name@(S.ModuleName name') m extraImports =
            bracket (getParams >>= return . extensions)
                    (\ saved -> modifyParams (\ p -> p {extensions = saved}))
                    (\ saved -> modifyParams (\ p -> p {extensions = PackageImports : saved}) >>
-                               parseFile importsPath `catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here -> throw . userError $ here ++ ": " ++ show e)))
+                               parseFile importsPath `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here -> throw . userError $ here ++ ": " ++ show e)))
        case result of
          ParseOk newImports -> updateSource path m newImports name extraImports
          _ -> error ("checkImports: parse of " ++ importsPath ++ " failed - " ++ show result)

@@ -141,7 +141,7 @@ findSourcePath path =
 -- if there is none construct one using the first element of the directory list.
 modulePath :: MonadClean m => S.ModuleName -> m FilePath
 modulePath name =
-    findSourcePath (modulePathBase name) `catch` (\ (_ :: IOError) -> makePath)
+    findSourcePath (modulePathBase name) `IO.catch` (\ (_ :: IOError) -> makePath)
     where
       makePath =
           do dirs <- sourceDirs <$> getParams
@@ -170,7 +170,7 @@ doResult x@(Unchanged _name) =
 doResult x@(Removed name) =
     do path <- modulePath name
        -- I think this event handler is redundant.
-       removeFileIfPresent path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+       removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
        return x
 
 doResult x@(Modified name text) =

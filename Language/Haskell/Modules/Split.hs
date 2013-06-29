@@ -33,7 +33,7 @@ import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((<.>))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
-setAny :: (a -> Bool) -> Set a -> Bool
+setAny :: Ord a => (a -> Bool) -> Set a -> Bool
 setAny f s = not (Set.null (Set.filter f s))
 
 setMapMaybe :: Ord b => (a -> Maybe b) -> Set a -> Set b

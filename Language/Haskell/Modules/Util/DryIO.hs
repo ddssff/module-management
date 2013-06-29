@@ -15,7 +15,7 @@ module Language.Haskell.Modules.Util.DryIO
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Exception (catch, throw)
+import Control.Exception as E (catch, throw)
 import Control.Monad.Trans (liftIO, MonadIO)
 import Prelude hiding (writeFile)
 import System.Directory (removeFile, renameFile)
@@ -30,10 +30,10 @@ noBackup :: FilePath -> Maybe FilePath
 noBackup = const Nothing
 
 readFileMaybe :: FilePath -> IO (Maybe String)
-readFileMaybe path = (Just <$> readFile path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return Nothing else throw e)
+readFileMaybe path = (Just <$> readFile path) `E.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return Nothing else throw e)
 
 removeFileIfPresent :: MonadDryRun m => FilePath -> m ()
-removeFileIfPresent path = dryIO' (putStrLn $ "dry run: removeFileIfPresent " ++ path) (removeFile path `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e))
+removeFileIfPresent path = dryIO' (putStrLn $ "dry run: removeFileIfPresent " ++ path) (removeFile path `E.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e))
 
 replaceFileIfDifferent :: MonadDryRun m => FilePath -> String -> m Bool
 replaceFileIfDifferent path newText =
@@ -47,8 +47,8 @@ replaceFile :: MonadDryRun m => (FilePath -> Maybe FilePath) -> FilePath -> Stri
 replaceFile backup path text =
     dryIO' (putStrLn $ "dry run: replaceFile " ++ path) (remove >> rename >> write)
     where
-      remove = maybe (return ()) removeFile (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-      rename = maybe (return ()) (renameFile path) (backup path) `catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+      remove = maybe (return ()) removeFile (backup path) `E.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+      rename = maybe (return ()) (renameFile path) (backup path) `E.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
       write = IO.writeFile path text
 
 createDirectoryIfMissing :: MonadDryRun m => Bool -> String -> m ()
