@@ -1,4 +1,4 @@
-{-# LANGUAGE NoMonomorphismRestriction, OverloadedStrings, RankNTypes, ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses, NoMonomorphismRestriction, OverloadedStrings, RankNTypes, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 module Data.Logic.Harrison.Tableaux
     ( unify_literals

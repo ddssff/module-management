@@ -27,9 +27,6 @@ import qualified Data.Map as Map (insert, insertWith, intersection, lookup, Map,
 import Data.Maybe (isJust)
 import qualified Data.Set.Extra as S (any, catMaybes, deleteFindMin, empty, insert, map, minView, null, Set, singleton, size, toList, union, unions)
 
--- This is what was in the original code, which behaves slightly differently
---updateSubst theta1 _ | Map.null theta1 = Map.empty
---updateSubst theta1 theta2 = Map.unionWith (\ _ term2 -> term2) theta1 theta2
 type SetOfSupport lit v term = S.Set (Unification lit v term)
 
 type Unification lit v term = (ImplicativeForm lit, Map.Map v term)
@@ -372,3 +369,6 @@ substTerms ts theta = map (\t -> substTerm t theta) ts
 
 updateSubst :: Term term v f => Map.Map v term -> Map.Map v term -> Map.Map v term
 updateSubst theta1 theta2 = Map.union theta1 (Map.intersection theta1 theta2)
+-- This is what was in the original code, which behaves slightly differently
+--updateSubst theta1 _ | Map.null theta1 = Map.empty
+--updateSubst theta1 theta2 = Map.unionWith (\ _ term2 -> term2) theta1 theta2

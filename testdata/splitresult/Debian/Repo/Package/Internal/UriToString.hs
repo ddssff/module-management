@@ -10,4 +10,3 @@ import Network.URI (URI, uriToString)
 uriToString' :: URI -> String
 uriToString' uri = uriToString id uri ""
 
-

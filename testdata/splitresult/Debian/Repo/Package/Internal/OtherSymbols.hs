@@ -15,5 +15,3 @@ module Debian.Repo.Package.Internal.OtherSymbols
       '_' -> (init a) +?+ b
       _ -> a ++ "_" ++ b
 
--- FIXME: assuming the index is part of the cache
-

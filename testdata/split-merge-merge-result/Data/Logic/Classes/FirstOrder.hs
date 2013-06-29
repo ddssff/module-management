@@ -276,7 +276,20 @@ atom_union f fm = overatoms (\ h t -> Set.union (f h) t) fm Set.empty
 $(deriveSafeCopy 1 'base ''Quant)
 
 
--- Declaration reformatted because module qualifiers changed
+
+{- This makes bad things happen.
+-- | We can use an fof type as a lit, but it must not use some constructs.
+instance FirstOrderFormula fof atom v => Literal fof atom v where
+    foldLiteral neg tf at fm = foldFirstOrder qu co tf at fm
+        where qu = error "instance Literal FirstOrderFormula"
+              co ((:~:) x) = neg x
+              co _ = error "instance Literal FirstOrderFormula"
+    atomic = Data.Logic.Classes.FirstOrder.atomic
+-}
+
+-- |Just like Logic.FirstOrder.convertFOF except it rejects anything
+-- with a construct unsupported in a normal logic formula,
+-- i.e. quantifiers and formula combinators other than negation.
  
 fromFirstOrder ::
                forall formula atom v lit atom2 .
@@ -284,8 +297,6 @@ fromFirstOrder ::
                     Data.Logic.Classes.FirstOrder.FirstOrderFormula formula atom v,
                     Literal lit atom2) =>
                    (atom -> atom2) -> formula -> Failing lit
-
--- Declaration reformatted because module qualifiers changed
 fromFirstOrder ca formula
   = Data.Logic.Classes.FirstOrder.foldFirstOrder
       (\ _ _ _ -> Failure ["fromFirstOrder"])
@@ -300,16 +311,14 @@ fromFirstOrder ca formula
 
 
 
--- Declaration reformatted because module qualifiers changed
+
  
 fromLiteral ::
             forall lit atom v fof atom2 .
                 (Literal lit atom,
                  Data.Logic.Classes.FirstOrder.FirstOrderFormula fof atom2 v) =>
                 (atom -> atom2) -> lit -> fof
-
 fromLiteral ca lit = foldLiteral (\ p -> (.~.) (fromLiteral ca p)) fromBool (atomic . ca) lit
-
 
 
 

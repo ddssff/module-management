@@ -15,4 +15,3 @@ fixityLiteral formula =
       tf _ = Fixity 10 InfixN
       at = fixity
 
-

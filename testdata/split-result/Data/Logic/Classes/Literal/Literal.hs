@@ -15,4 +15,3 @@ import Data.Logic.Classes.Pretty (HasFixity)
 class (Negatable lit, Constants lit, HasFixity atom, Formula lit atom, Ord lit) => Literal lit atom | lit -> atom where
     foldLiteral :: (lit -> r) -> (Bool -> r) -> (atom -> r) -> lit -> r
 
-

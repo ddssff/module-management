@@ -322,7 +322,7 @@ ignore2 :: m -> r -> r
 ignore2 _ r = r
 
 tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test1b, test3, test4, test5, test6])
+tests = TestLabel "Clean" (TestList [test1, test1b, test3, test4, test5, test5b, test6])
 
 test1 :: Test
 test1 =
@@ -343,10 +343,11 @@ test1b =
        text <- liftIO $ readFile path
        ParseOk (m, comments) <- runMonadClean $ parseFileWithComments path
        let output = test (m, text, comments)
-       assertEqual "echo"
-                   [("-- Comment above module head\nmodule ","","",""),
-                    ("","Debian.Repo.Sync","","[2.8:2.24]"),
-                    (" ","{-# WARNING \"this is a warning\" #-}","\n","[2.25:2.60]"),
+       assertEqual "echo" [] (mapMaybe (\ (a, b) -> if a == b then Nothing else Just (a, b)) (zip expected output))
+    where
+      expected =   [("-- Comment above module head\nmodule ","","",""),
+                    ("","Debian.Repo.Sync"," ","[2.8:2.24]"),
+                    ("","{-# WARNING \"this is a warning\" #-}","\n","[2.25:2.60]"),
                     ("    ( ","","",""),
                     ("","rsync","\n","[3.7:3.12]"),
                     ("    , ","foo","\n","[4.7:4.10]"),
@@ -356,14 +357,12 @@ test1b =
                     ("","import System.Exit (ExitCode)","\n","[12.1:12.30]"),
                     ("","import System.FilePath (dropTrailingPathSeparator)","\n","[13.1:13.51]"),
                     ("-- Comment between two imporrts\n","import System.Process (proc)","\n","[15.1:15.29]"),
-                    ("","import System.Process.Progress (keepResult, runProcessF)","\n\n","[16.1:16.57]"),
-                    ("-- Comment before first decl\n","rsync :: (Functor m, MonadIO m) => [String] -> FilePath -> FilePath -> m ExitCode","\n","[19.1:19.82]"),
-                    ("","rsync extra source dest =\n    do result <- runProcessF (proc \"rsync\" ([\"-aHxSpDt\", \"--delete\"] ++ extra ++\n                                            [dropTrailingPathSeparator source ++ \"/\",\n                                             dropTrailingPathSeparator dest])) B.empty >>= return . keepResult\n       case result of\n         [x] -> return x\n         _ -> error \"Missing or multiple exit codes\"\n\n-- Comment between two decls\n","","[20.1:29.0]"),
-                    ("","foo :: Int","\n","[29.1:29.11]"),
-                    ("","foo = 1","\n\n","[30.1:30.8]"),
-                    ("{-\nhandleExit 1 = \"Syntax or usage error\"\nhandleExit 2 = \"Protocol incompatibility\"\nhandleExit 3 = \"Errors selecting input/output files, dirs\"\nhandleExit 4 = \"Requested action not supported: an attempt was made to manipulate 64-bit files on a platform that cannot support them; or an option was specified that is supported by the client and not by the server.\"\nhandleExit 5 = \"Error starting client-server protocol\"\nhandleExit 6 = \"Daemon unable to append to log-file\"\nhandleExit 10 = \"Error in socket I/O\"\nhandleExit 11 = \"Error in file I/O\"\nhandleExit 12 = \"Error in rsync protocol data stream\"\nhandleExit 13 = \"Errors with program diagnostics\"\nhandleExit 14 = \"Error in IPC code\"\nhandleExit 20 = \"Received SIGUSR1 or SIGINT\"\nhandleExit 21 = \"Some error returned by waitpid()\"\nhandleExit 22 = \"Error allocating core memory buffers\"\nhandleExit 23 = \"Partial transfer due to error\"\nhandleExit 24 = \"Partial transfer due to vanished source files\"\nhandleExit 25 = \"The --max-delete limit stopped deletions\"\nhandleExit 30 = \"Timeout in data send/receive\"\nhandleExit 35 = \"Timeout waiting for daemon connection\"\n-}\n","","","")]
-                   output
-    where
+                    ("","import System.Process.Progress (keepResult, runProcessF)","\n","[16.1:16.57]"),
+                    ("\n-- Comment before first decl\n","rsync :: (Functor m, MonadIO m) => [String] -> FilePath -> FilePath -> m ExitCode","\n","[19.1:19.82]"),
+                    ("","rsync extra source dest =\n    do result <- runProcessF (proc \"rsync\" ([\"-aHxSpDt\", \"--delete\"] ++ extra ++\n                                            [dropTrailingPathSeparator source ++ \"/\",\n                                             dropTrailingPathSeparator dest])) B.empty >>= return . keepResult\n       case result of\n         [x] -> return x\n         _ -> error \"Missing or multiple exit codes\"","\n","[20.1:29.0]"),
+                    ("\n-- Comment between two decls\n","foo :: Int","\n","[29.1:29.11]"),
+                    ("","foo = 1","\n","[30.1:30.8]"),
+                    ("\n{-\nhandleExit 1 = \"Syntax or usage error\"\nhandleExit 2 = \"Protocol incompatibility\"\nhandleExit 3 = \"Errors selecting input/output files, dirs\"\nhandleExit 4 = \"Requested action not supported: an attempt was made to manipulate 64-bit files on a platform that cannot support them; or an option was specified that is supported by the client and not by the server.\"\nhandleExit 5 = \"Error starting client-server protocol\"\nhandleExit 6 = \"Daemon unable to append to log-file\"\nhandleExit 10 = \"Error in socket I/O\"\nhandleExit 11 = \"Error in file I/O\"\nhandleExit 12 = \"Error in rsync protocol data stream\"\nhandleExit 13 = \"Errors with program diagnostics\"\nhandleExit 14 = \"Error in IPC code\"\nhandleExit 20 = \"Received SIGUSR1 or SIGINT\"\nhandleExit 21 = \"Some error returned by waitpid()\"\nhandleExit 22 = \"Error allocating core memory buffers\"\nhandleExit 23 = \"Partial transfer due to error\"\nhandleExit 24 = \"Partial transfer due to vanished source files\"\nhandleExit 25 = \"The --max-delete limit stopped deletions\"\nhandleExit 30 = \"Timeout in data send/receive\"\nhandleExit 35 = \"Timeout waiting for daemon connection\"\n-}\n","","","")]
       test :: ModuleInfo -> [(String, String, String, String)]
       test m =
           foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m []
@@ -400,49 +399,52 @@ test3 =
 
 test5 :: Test
 test5 =
-    TestLabel "test4" $ TestCase $ withCurrentDirectory "testdata/logic" $
-    do let path = "Data/Logic/Classes/Literal.hs"
+    TestLabel "test5" $ TestCase $
+    do let path = "testdata/test5.hs" -- "testdata/logic/Data/Logic/Classes/Literal.hs"
        text <- liftIO $ readFile path
        ParseOk (m, comments) <- runMonadClean $ parseFileWithComments path
-       assertEqual "triples" expected (reverse $ foldDecls (\ _ a b c r -> (a, b, c) : r) (\ s r -> ("", s, "") : r) (m, text, comments) [])
+       -- let actual = map f (adjustSpans text comments (spans m))
+       -- assertEqual "spans" original actual
+       let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) (m, text, comments) []
+       assertEqual "spans" expected actual
     where
-      expected =
-          [("-- |Literals are the building blocks of the clause and implicative normal\n-- |forms.  They support negation and must include True and False elements.\n",
-            "class (Negatable lit, Constants lit, HasFixity atom, Formula lit atom, Ord lit) => Literal lit atom | lit -> atom where\n    foldLiteral :: (lit -> r) -> (Bool -> r) -> (atom -> r) -> lit -> r\n\n",
-            ""),
-           ("","zipLiterals :: Literal lit atom =>\n               (lit -> lit -> Maybe r)\n            -> (Bool -> Bool -> Maybe r)\n            -> (atom -> atom -> Maybe r)\n            -> lit -> lit -> Maybe r","\n"),
-           ("",
-            "zipLiterals neg tf at fm1 fm2 =\n    foldLiteral neg' tf' at' fm1\n    where\n      neg' p1 = foldLiteral (neg p1) (\\ _ -> Nothing) (\\ _ -> Nothing) fm2\n      tf' x1 = foldLiteral (\\ _ -> Nothing) (tf x1) (\\ _ -> Nothing) fm2\n      at' a1 = foldLiteral (\\ _ -> Nothing) (\\ _ -> Nothing) (at a1) fm2",
-            "\n"),
-           (unlines ["",
-                     "{- This makes bad things happen.",
-                     "-- | We can use an fof type as a lit, but it must not use some constructs.",
-                     "instance FirstOrderFormula fof atom v => Literal fof atom v where",
-                     "    foldLiteral neg tf at fm = foldFirstOrder qu co tf at fm",
-                     "        where qu = error \"instance Literal FirstOrderFormula\"",
-                     "              co ((:~:) x) = neg x",
-                     "              co _ = error \"instance Literal FirstOrderFormula\"",
-                     "    atomic = Data.Logic.Classes.FirstOrder.atomic",
-                     "-}",
-                     "",
-                     "-- |Just like Logic.FirstOrder.convertFOF except it rejects anything",
-                     "-- with a construct unsupported in a normal logic formula,",
-                     "-- i.e. quantifiers and formula combinators other than negation.",
-                     ""],
-            "fromFirstOrder :: forall formula atom v lit atom2.\n                  (Formula lit atom2, FOF.FirstOrderFormula formula atom v, Literal lit atom2) =>\n                  (atom -> atom2) -> formula -> Failing lit",
-            "\n"),
-           ("","fromFirstOrder ca formula =\n    FOF.foldFirstOrder (\\ _ _ _ -> Failure [\"fromFirstOrder\"]) co (Success . fromBool) (Success . atomic . ca) formula\n    where\n      co :: Combination formula -> Failing lit\n      co ((:~:) f) =  fromFirstOrder ca f >>= return . (.~.)\n      co _ = Failure [\"fromFirstOrder\"]\n\n",""),
-           ("","fromLiteral :: forall lit atom v fof atom2. (Literal lit atom, FOF.FirstOrderFormula fof atom2 v) =>\n               (atom -> atom2) -> lit -> fof","\n"),
-           ("","fromLiteral ca lit = foldLiteral (\\ p -> (.~.) (fromLiteral ca p)) fromBool (atomic . ca) lit","\n\n"),
-           ("","toPropositional :: forall lit atom pf atom2. (Literal lit atom, P.PropositionalFormula pf atom2) =>\n                   (atom -> atom2) -> lit -> pf","\n"),
-           ("","toPropositional ca lit = foldLiteral (\\ p -> (.~.) (toPropositional ca p)) fromBool (atomic . ca) lit","\n\n"),
-           ("{-\nprettyLit :: forall lit atom term v p f. (Literal lit atom v, Apply atom p term, Term term v f) =>\n              (v -> Doc)\n           -> (p -> Doc)\n           -> (f -> Doc)\n           -> Int\n           -> lit\n           -> Doc\nprettyLit pv pp pf _prec lit =\n    foldLiteral neg tf at lit\n    where\n      neg :: lit -> Doc\n      neg x = if negated x then text {-\"\172\"-} \"~\" <> prettyLit pv pp pf 5 x else prettyLit pv pp pf 5 x\n      tf = text . ifElse \"true\" \"false\"\n      at = foldApply (\\ pr ts -> \n                        pp pr <> case ts of\n                                   [] -> empty\n                                   _ -> parens (hcat (intersperse (text \",\") (map (prettyTerm pv pf) ts))))\n                   (\\ x -> text $ if x then \"true\" else \"false\")\n      -- parensIf False = id\n      -- parensIf _ = parens . nest 1\n-}\n\n","prettyLit :: forall lit atom v. (Literal lit atom) =>\n              (Int -> atom -> Doc)\n           -> (v -> Doc)\n           -> Int\n           -> lit\n           -> Doc","\n"),
-           ("","prettyLit pa pv pprec lit =\n    parensIf (pprec > prec) $ foldLiteral co tf at lit\n    where\n      co :: lit -> Doc\n      co x = if negated x then text {-\"\172\"-} \"~\" <> prettyLit pa pv 5 x else prettyLit pa pv 5 x\n      tf x = text (if x then \"true\" else \"false\")\n      at = pa 6\n      parensIf False = id\n      parensIf _ = parens . nest 1\n      Fixity prec _ = fixityLiteral lit\n\n",""),
-           ("","fixityLiteral :: (Literal formula atom) => formula -> Fixity","\n"),
-           ("","fixityLiteral formula =\n    foldLiteral neg tf at formula\n    where\n      neg _ = Fixity 5 InfixN\n      tf _ = Fixity 10 InfixN\n      at = fixity\n\n",""),
-           ("","foldAtomsLiteral :: Literal lit atom => (r -> atom -> r) -> r -> lit -> r","\n"),
-           ("","foldAtomsLiteral f i lit = foldLiteral (foldAtomsLiteral f i) (const i) (f i) lit","\n"),
-           ("","","")]
+      expected = [("","a = 1 where","\n"),
+                  ("\n{- This makes bad things happen. -}\n\n","b = ()","\n"),
+                  ("","","")]
+
+test5b :: Test
+test5b =
+    TestLabel "test5b" $ TestCase $
+    do let path = "testdata/logic/Data/Logic/Classes/Literal.hs"
+       text <- liftIO $ readFile path
+       ParseOk (m, comments) <- runMonadClean $ parseFileWithComments path
+       let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) (m, text, comments) []
+       assertEqual "spans" expected actual
+    where
+      expected = [("\n-- |Literals are the building blocks of the clause and implicative normal\n-- |forms.  They support negation and must include True and False elements.\n",
+                   "class (Negatable lit, Constants lit, HasFixity atom, Formula lit atom, Ord lit) => Literal lit atom | lit -> atom where\n    foldLiteral :: (lit -> r) -> (Bool -> r) -> (atom -> r) -> lit -> r",
+                   "\n"),
+                  ("\n","zipLiterals :: Literal lit atom =>\n               (lit -> lit -> Maybe r)\n            -> (Bool -> Bool -> Maybe r)\n            -> (atom -> atom -> Maybe r)\n            -> lit -> lit -> Maybe r","\n"),
+                  ("",
+                   "zipLiterals neg tf at fm1 fm2 =\n    foldLiteral neg' tf' at' fm1\n    where\n      neg' p1 = foldLiteral (neg p1) (\\ _ -> Nothing) (\\ _ -> Nothing) fm2\n      tf' x1 = foldLiteral (\\ _ -> Nothing) (tf x1) (\\ _ -> Nothing) fm2\n      at' a1 = foldLiteral (\\ _ -> Nothing) (\\ _ -> Nothing) (at a1) fm2",
+                   "\n"),
+                  ("\n{- This makes bad things happen.\n-- | We can use an fof type as a lit, but it must not use some constructs.\ninstance FirstOrderFormula fof atom v => Literal fof atom v where\n    foldLiteral neg tf at fm = foldFirstOrder qu co tf at fm\n        where qu = error \"instance Literal FirstOrderFormula\"\n              co ((:~:) x) = neg x\n              co _ = error \"instance Literal FirstOrderFormula\"\n    atomic = Data.Logic.Classes.FirstOrder.atomic\n-}\n\n-- |Just like Logic.FirstOrder.convertFOF except it rejects anything\n-- with a construct unsupported in a normal logic formula,\n-- i.e. quantifiers and formula combinators other than negation.\n",
+                   "fromFirstOrder :: forall formula atom v lit atom2.\n                  (Formula lit atom2, FOF.FirstOrderFormula formula atom v, Literal lit atom2) =>\n                  (atom -> atom2) -> formula -> Failing lit",
+                   "\n"),
+                  ("",
+                   "fromFirstOrder ca formula =\n    FOF.foldFirstOrder (\\ _ _ _ -> Failure [\"fromFirstOrder\"]) co (Success . fromBool) (Success . atomic . ca) formula\n    where\n      co :: Combination formula -> Failing lit\n      co ((:~:) f) =  fromFirstOrder ca f >>= return . (.~.)\n      co _ = Failure [\"fromFirstOrder\"]",
+                   "\n"),
+                  ("\n","fromLiteral :: forall lit atom v fof atom2. (Literal lit atom, FOF.FirstOrderFormula fof atom2 v) =>\n               (atom -> atom2) -> lit -> fof","\n"),
+                  ("","fromLiteral ca lit = foldLiteral (\\ p -> (.~.) (fromLiteral ca p)) fromBool (atomic . ca) lit","\n"),
+                  ("\n","toPropositional :: forall lit atom pf atom2. (Literal lit atom, P.PropositionalFormula pf atom2) =>\n                   (atom -> atom2) -> lit -> pf","\n"),
+                  ("","toPropositional ca lit = foldLiteral (\\ p -> (.~.) (toPropositional ca p)) fromBool (atomic . ca) lit","\n"),
+                  ("\n{-\nprettyLit :: forall lit atom term v p f. (Literal lit atom v, Apply atom p term, Term term v f) =>\n              (v -> Doc)\n           -> (p -> Doc)\n           -> (f -> Doc)\n           -> Int\n           -> lit\n           -> Doc\nprettyLit pv pp pf _prec lit =\n    foldLiteral neg tf at lit\n    where\n      neg :: lit -> Doc\n      neg x = if negated x then text {-\"\172\"-} \"~\" <> prettyLit pv pp pf 5 x else prettyLit pv pp pf 5 x\n      tf = text . ifElse \"true\" \"false\"\n      at = foldApply (\\ pr ts -> \n                        pp pr <> case ts of\n                                   [] -> empty\n                                   _ -> parens (hcat (intersperse (text \",\") (map (prettyTerm pv pf) ts))))\n                   (\\ x -> text $ if x then \"true\" else \"false\")\n      -- parensIf False = id\n      -- parensIf _ = parens . nest 1\n-}\n\n","prettyLit :: forall lit atom v. (Literal lit atom) =>\n              (Int -> atom -> Doc)\n           -> (v -> Doc)\n           -> Int\n           -> lit\n           -> Doc","\n"),
+                  ("","prettyLit pa pv pprec lit =\n    parensIf (pprec > prec) $ foldLiteral co tf at lit\n    where\n      co :: lit -> Doc\n      co x = if negated x then text {-\"\172\"-} \"~\" <> prettyLit pa pv 5 x else prettyLit pa pv 5 x\n      tf x = text (if x then \"true\" else \"false\")\n      at = pa 6\n      parensIf False = id\n      parensIf _ = parens . nest 1\n      Fixity prec _ = fixityLiteral lit","\n"),
+                  ("\n","fixityLiteral :: (Literal formula atom) => formula -> Fixity","\n"),
+                  ("","fixityLiteral formula =\n    foldLiteral neg tf at formula\n    where\n      neg _ = Fixity 5 InfixN\n      tf _ = Fixity 10 InfixN\n      at = fixity","\n"),
+                  ("\n","foldAtomsLiteral :: Literal lit atom => (r -> atom -> r) -> r -> lit -> r","\n"),
+                  ("","foldAtomsLiteral f i lit = foldLiteral (foldAtomsLiteral f i) (const i) (f i) lit","\n"),
+                  ("","","")]
 
 test6 :: Test
 test6 = TestCase (assertEqual "tree1"

@@ -9,4 +9,3 @@ module Split.Internal.Bar
 
 newtype Bar = Bar Int
 
-

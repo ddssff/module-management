@@ -15,6 +15,7 @@ import Debian.Repo.Types.Release (Release)
 import Debian.Repo.Types.Repo (RepoKey)
 import Debian.Repo.Types.Repository (MonadRepoCache)
 
+-- | Return a list of all source packages.
 releaseSourcePackages :: MonadRepoCache m => RepoKey -> Release -> m (Set SourcePackage)
 releaseSourcePackages repo release =
     mapM (sourcePackagesOfIndex repo release) (sourceIndexList release) >>= return . test
@@ -23,6 +24,4 @@ releaseSourcePackages repo release =
       test xs = case partitionEithers xs of
                   ([], ok) -> Set.unions (List.map Set.fromList ok)
                   (bad, _) -> error $ intercalate ", " (List.map show bad)
-
--- | Return a list of all the binary packages for all supported architectures.
 

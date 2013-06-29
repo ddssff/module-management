@@ -13,4 +13,3 @@ sourceFilePaths :: SourcePackage -> Set FilePath
 sourceFilePaths package =
     Set.map ((sourceDirectory package) </>) . Set.map sourceFileName . Set.fromList . sourcePackageFiles $ package
 
-

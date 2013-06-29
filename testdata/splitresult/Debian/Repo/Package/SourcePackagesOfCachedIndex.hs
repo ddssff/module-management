@@ -19,6 +19,7 @@ import System.FilePath (takeDirectory)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
 
+-- FIXME: assuming the index is part of the cache
 sourcePackagesOfCachedIndex :: (AptCache a, MonadApt m) => a -> RepoKey -> Release -> PackageIndex -> m [SourcePackage]
 sourcePackagesOfCachedIndex cache repo release index =
     do state <- getApt
@@ -32,5 +33,4 @@ sourcePackagesOfCachedIndex cache repo release index =
                  return packages
     where
       path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
-
 

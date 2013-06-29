@@ -14,12 +14,12 @@ import Debian.Repo.Types.PackageIndex (BinaryPackage(packageInfo), PackageIndex(
 import Debian.Repo.Types.Release (Release)
 import Debian.Repo.Types.Repo (RepoKey)
 import Debian.Repo.Types.Repository (MonadRepoCache)
+-- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 
+-- | Get the contents of a package index
 sourcePackagesOfIndex :: MonadRepoCache m => RepoKey -> Release -> PackageIndex -> m (Either SomeException [SourcePackage])
 sourcePackagesOfIndex repo release index =
     case packageIndexArch index of
       Source -> liftIO (getPackages repo release index) >>= return . either Left (Right . List.map (toSourcePackage index . packageInfo))
       _ -> return (Right [])
-
--- FIXME: assuming the index is part of the cache
 

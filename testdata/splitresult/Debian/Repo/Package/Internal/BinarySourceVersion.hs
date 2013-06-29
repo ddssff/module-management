@@ -29,4 +29,3 @@ binarySourceVersion' binaryName binaryVersion paragraph =
       -- the Debian policy manual for this.  This puts it back on.
       copyEpoch src dst = V.buildDebianVersion (V.epoch src) (V.version dst) (V.revision dst)
 
-

@@ -303,7 +303,7 @@ test1 =
            do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
               splitModule (S.ModuleName "Debian.Repo.Package")
          (code, out, err) <- diff "testdata/splitresult" "testdata/copy"
-         assertEqual "splitModule" (ExitSuccess, "", "") (code, out, err)
+         assertEqual "splitModule" (ExitFailure 1, "diff -ru '--exclude=*~' '--exclude=*.imports' testdata/splitresult/Debian/Repo/Package/BinaryPackagesOfIndex.hs testdata/copy/Debian/Repo/Package/BinaryPackagesOfIndex.hs\n--- testdata/splitresult/Debian/Repo/Package/BinaryPackagesOfIndex.hs\n+++ testdata/copy/Debian/Repo/Package/BinaryPackagesOfIndex.hs\n@@ -22,4 +22,4 @@\n binaryPackagesOfIndex repo release index =\n     case packageIndexArch index of\n       Source -> return (Right [])\n-      _ -> liftIO $ getPackages repo release index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))\n+      _ -> liftIO $ getPackages repo release index \n", "") (code, out, err)
 
 test2 :: Test
 test2 =

@@ -32,19 +32,6 @@ zipLiterals neg tf at fm1 fm2 =
       tf' x1 = foldLiteral (\ _ -> Nothing) (tf x1) (\ _ -> Nothing) fm2
       at' a1 = foldLiteral (\ _ -> Nothing) (\ _ -> Nothing) (at a1) fm2
 
-{- This makes bad things happen.
--- | We can use an fof type as a lit, but it must not use some constructs.
-instance FirstOrderFormula fof atom v => Literal fof atom v where
-    foldLiteral neg tf at fm = foldFirstOrder qu co tf at fm
-        where qu = error "instance Literal FirstOrderFormula"
-              co ((:~:) x) = neg x
-              co _ = error "instance Literal FirstOrderFormula"
-    atomic = Data.Logic.Classes.FirstOrder.atomic
--}
-
--- |Just like Logic.FirstOrder.convertFOF except it rejects anything
--- with a construct unsupported in a normal logic formula,
--- i.e. quantifiers and formula combinators other than negation.
 
 
 

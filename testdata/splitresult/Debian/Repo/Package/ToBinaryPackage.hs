@@ -28,4 +28,3 @@ toBinaryPackage release index p =
           }
       _ -> error ("Invalid data in source index:\n " ++ packageIndexPath release index)
 
-

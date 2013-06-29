@@ -26,6 +26,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, import
 import Language.Haskell.Modules.Common (modulePathBase, withCurrentDirectory)
 import Language.Haskell.Modules.Fold (ModuleInfo, foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (getParams, markForDelete, modifyParams, ModuleResult(..), MonadClean, Params(..), parseFile, parseFileWithComments, runMonadClean, scratchDir)
+import Language.Haskell.Modules.Params (modifyTestMode)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qPutStrLn, quietly)
 import Language.Haskell.Modules.Util.Symbols (symbols)
@@ -270,7 +271,7 @@ nameString (S.Ident s) = s
 nameString (S.Symbol s) = s
 
 tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test2, test3, test4, test5])
+tests = TestLabel "Clean" (TestList [test1, test2, test3, test4, test5, test6])
 
 test1 :: Test
 test1 =
@@ -350,3 +351,14 @@ test5 =
                          " deriving instance Show Paragraph"]),
                        "")
                       (code, unlines (drop 2 (lines diff)), err))
+
+-- | Comment at EOF
+test6 :: Test
+test6 =
+    TestLabel "Imports.test6" $ TestCase
+      (do -- _ <- system "rsync -aHxS --delete testdata/logic/ testdata/copy"
+          _ <- system "cp testdata/EndCommentOrig.hs testdata/EndComment.hs"
+          let path = "EndComment.hs" -- "Data/Logic/Harrison/Tableaux.hs"
+          _ <- withCurrentDirectory "testdata" (runMonadClean (modifyTestMode (const True) >> cleanImports "EndComment.hs"))
+          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/EndCommentClean.hs", "testdata" </> "EndComment.hs"] ""
+          assertEqual "comment at end" "" diff)

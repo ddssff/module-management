@@ -14,4 +14,3 @@ toPropositional :: forall lit atom pf atom2. (Literal lit atom, P.PropositionalF
                    (atom -> atom2) -> lit -> pf
 toPropositional ca lit = foldLiteral (\ p -> (.~.) (toPropositional ca p)) fromBool (atomic . ca) lit
 
-

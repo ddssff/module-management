@@ -11,4 +11,3 @@ import URL
 
 newtype Bar = Bar Int
 
-

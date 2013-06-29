@@ -45,4 +45,3 @@ toSourcePackage index package =
                   (a, []) -> Left . catMaybes . List.map (either Just (const Nothing )) $ a
                   (_, a) -> Right . catMaybes . List.map (either (const Nothing) Just) $ a
 
-

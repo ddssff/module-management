@@ -12,4 +12,3 @@ sourcePackageBinaryNames :: SourcePackage -> [BinPkgName]
 sourcePackageBinaryNames package =
     sourceBinaryNames (sourceParagraph package)
 
-

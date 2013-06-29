@@ -28,5 +28,3 @@ sourcePackageBinaryIDs arch sourceIndex package =
       -- binaryIndex = sourceIndex { packageIndexArch = arch }
       info = sourceParagraph package
 
--- | Get the contents of a package index
-

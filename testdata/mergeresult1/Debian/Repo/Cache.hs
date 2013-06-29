@@ -252,7 +252,6 @@ data SourcesChangedAction =
 -- |Change the sources.list of an AptCache object, subject to the
 -- value of sourcesChangedAction.
 updateCacheSources :: (MonadApt m, AptCache c) => SourcesChangedAction -> c -> m c
--- Declaration reformatted because module qualifiers changed
 updateCacheSources sourcesChangedAction distro
   = qPutStrLn "Updating cache sources" >>
       do let baseSources = aptBaseSliceList distro
@@ -336,6 +335,7 @@ updateCacheSources sourcesChangedAction distro
                              (show (pretty baseSources))
          return distro
 
+-- | Return a sorted list of available source packages, newest version first.
 sourcePackages :: AptCache a => a -> [SrcPkgName] -> [SourcePackage]
 sourcePackages os names =
     sortBy cmp . filterNames . aptSourcePackages $ os
@@ -399,6 +399,7 @@ aptOpts os =
      " -o=Dir::Etc::SourceList=" ++ root ++ "/etc/apt/sources.list" ++
      " -o=Dir::Etc::SourceParts=" ++ root ++ "/etc/apt/sources.list.d")
     where root = rootPath . rootDir $ os
+
 
 
 prepareAptEnv :: MonadApt m =>

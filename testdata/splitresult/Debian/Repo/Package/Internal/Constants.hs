@@ -11,4 +11,3 @@ class Constants p where
     asBool :: p -> Maybe Bool
     fromBool :: Bool -> p
 
-

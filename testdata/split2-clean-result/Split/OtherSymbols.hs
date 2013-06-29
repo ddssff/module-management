@@ -11,4 +11,3 @@ module Split.OtherSymbols
 (+-+) :: Int
 (+-+) = 2
 
-

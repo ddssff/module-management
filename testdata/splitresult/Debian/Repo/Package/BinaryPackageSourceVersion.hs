@@ -16,4 +16,3 @@ binaryPackageSourceVersion package =
         binaryVersion = packageVersion . packageID $ package in
     binarySourceVersion' binaryName binaryVersion (packageInfo package)
 
-

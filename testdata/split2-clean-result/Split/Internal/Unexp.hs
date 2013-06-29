@@ -11,4 +11,3 @@ module Split.Internal.Unexp
 unexp :: Int
 unexp = 3
 
-

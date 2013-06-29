@@ -18,6 +18,7 @@ import Debian.Repo.Types.Repository (LocalRepository, repoRoot)
 import Extra.Files (writeAndZipFileWithBackup)
 import System.FilePath ((</>))
 
+-- | Write a set of packages into a package index.
 putPackages :: LocalRepository -> Release -> PackageIndexLocal ->  [BinaryPackageLocal] -> IO ()
 putPackages repo release index packages =
     writeAndZipFileWithBackup (outsidePath (repoRoot repo) </> packageIndexPath release index) (L.fromChunks [encodeUtf8 text]) >>= either (fail . intercalate "\n") return

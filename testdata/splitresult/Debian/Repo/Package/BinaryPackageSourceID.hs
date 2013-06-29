@@ -27,4 +27,3 @@ binaryPackageSourceID (PackageIndex component _) package =
       pid = packageID package
       re = mkRegex "^[ ]*([^ (]*)[ ]*(\\([ ]*([^ )]*)\\))?[ ]*$"
 
-

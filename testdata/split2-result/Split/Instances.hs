@@ -13,4 +13,3 @@ import URL
 instance Show Bar where
     show (Bar n) = "Bar " ++ show n
 
-

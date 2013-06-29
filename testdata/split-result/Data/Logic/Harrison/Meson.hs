@@ -19,6 +19,88 @@ import Data.Logic.Harrison.Tableaux (deepen, unify_literals)
 import qualified Data.Map as Map (empty, Map)
 import qualified Data.Set as Set (delete, empty, fold, insert, map, Set, size, union)
 
+-- =========================================================================
+-- Model elimination procedure (MESON version, based on Stickel's PTTP).     
+--                                                                           
+-- Copyright (c) 2003-2007, John Harrison. (See "LICENSE.txt" for details.)  
+-- ========================================================================= 
+
+-- ------------------------------------------------------------------------- 
+-- Example of naivety of tableau prover.                                     
+-- ------------------------------------------------------------------------- 
+
+{-
+START_INTERACTIVE;;
+tab <<forall a. ~(P(a) /\ (forall y z. Q(y) \/ R(z)) /\ ~P(a))>>;;
+
+tab <<forall a. ~(P(a) /\ ~P(a) /\ (forall y z. Q(y) \/ R(z)))>>;;
+
+-- ------------------------------------------------------------------------- 
+-- The interesting example where tableaux connections make the proof longer. 
+-- Unfortuntely this gets hammered by normalization first...                 
+-- ------------------------------------------------------------------------- 
+
+tab <<~p /\ (p \/ q) /\ (r \/ s) /\ (~q \/ t \/ u) /\
+      (~r \/ ~t) /\ (~r \/ ~u) /\ (~q \/ v \/ w) /\
+      (~s \/ ~v) /\ (~s \/ ~w) ==> false>>;;
+END_INTERACTIVE;;
+-}
+
+-- ------------------------------------------------------------------------- 
+-- Generation of contrapositives.                                            
+-- ------------------------------------------------------------------------- 
+
+contrapositives :: forall fof atom v. (FirstOrderFormula fof atom v, Ord fof) => Set.Set fof -> Set.Set (Set.Set fof, fof)
+contrapositives cls =
+    if setAll negative cls then Set.insert (Set.map (.~.) cls,false) base else base
+    where base = Set.map (\ c -> (Set.map (.~.) (Set.delete c cls), c)) cls
+
+-- ------------------------------------------------------------------------- 
+-- The core of MESON: ancestor unification or Prolog-style extension.        
+-- ------------------------------------------------------------------------- 
+
+mexpand :: forall fof atom term v f. (FirstOrderFormula fof atom v, Literal fof atom, Term term v f, Atom atom term v, Ord fof) =>
+           Set.Set (Set.Set fof, fof)
+        -> Set.Set fof
+        -> fof
+        -> ((Map.Map v term, Int, Int) -> Failing (Map.Map v term, Int, Int))
+        -> (Map.Map v term, Int, Int) -> Failing (Map.Map v term, Int, Int)
+mexpand rules ancestors g cont (env,n,k) =
+    if n < 0
+    then Failure ["Too deep"]
+    else case settryfind doAncestor ancestors of
+           Success a -> Success a
+           Failure _ -> settryfind doRule rules
+    where
+      doAncestor a =
+          do mp <- unify_literals env g ((.~.) a)
+             cont (mp, n, k)
+      doRule rule =
+          do mp <- unify_literals env g c
+             mexpand' (mp, n - Set.size asm, k')
+          where
+            mexpand' = Set.fold (mexpand rules (Set.insert g ancestors)) cont asm
+            ((asm, c), k') = renamerule k rule
+
+-- ------------------------------------------------------------------------- 
+-- Full MESON procedure.                                                     
+-- ------------------------------------------------------------------------- 
+
+puremeson :: forall fof atom term v f. (FirstOrderFormula fof atom v, Literal fof atom, Term term v f, Atom atom term v, Ord fof) =>
+             Maybe Int -> fof -> Failing ((Map.Map v term, Int, Int), Int)
+puremeson maxdl fm =
+    deepen f 0 maxdl
+    where
+      f n = mexpand rules Set.empty false return (Map.empty, n, 0)
+      rules = Set.fold (Set.union . contrapositives) Set.empty cls
+      cls = simpcnf (specialize (pnf fm))
+
+meson :: forall m fof atom term f v. (FirstOrderFormula fof atom v, PropositionalFormula fof atom, Literal fof atom, Term term v f, Atom atom term v, Ord fof, Monad m) =>
+         Maybe Int -> fof -> SkolemT v term m (Set.Set (Failing ((Map.Map v term, Int, Int), Int)))
+meson maxdl fm =
+    askolemize ((.~.)(generalize fm)) >>=
+    return . Set.map (puremeson maxdl . list_conj) . (simpdnf :: fof -> Set.Set (Set.Set fof))
+
 {-
 -- ------------------------------------------------------------------------- 
 -- With repetition checking and divide-and-conquer search.                   
@@ -463,85 +545,3 @@ meson <<~p /\ (p \/ q) /\ (r \/ s) /\ (~q \/ t \/ u) /\
         (~s \/ ~v) /\ (~s \/ ~w) ==> false>>;;
 END_INTERACTIVE;;
 -}
--- =========================================================================
--- Model elimination procedure (MESON version, based on Stickel's PTTP).     
---                                                                           
--- Copyright (c) 2003-2007, John Harrison. (See "LICENSE.txt" for details.)  
--- ========================================================================= 
-
--- ------------------------------------------------------------------------- 
--- Example of naivety of tableau prover.                                     
--- ------------------------------------------------------------------------- 
-
-{-
-START_INTERACTIVE;;
-tab <<forall a. ~(P(a) /\ (forall y z. Q(y) \/ R(z)) /\ ~P(a))>>;;
-
-tab <<forall a. ~(P(a) /\ ~P(a) /\ (forall y z. Q(y) \/ R(z)))>>;;
-
--- ------------------------------------------------------------------------- 
--- The interesting example where tableaux connections make the proof longer. 
--- Unfortuntely this gets hammered by normalization first...                 
--- ------------------------------------------------------------------------- 
-
-tab <<~p /\ (p \/ q) /\ (r \/ s) /\ (~q \/ t \/ u) /\
-      (~r \/ ~t) /\ (~r \/ ~u) /\ (~q \/ v \/ w) /\
-      (~s \/ ~v) /\ (~s \/ ~w) ==> false>>;;
-END_INTERACTIVE;;
--}
-
--- ------------------------------------------------------------------------- 
--- Generation of contrapositives.                                            
--- ------------------------------------------------------------------------- 
-
-contrapositives :: forall fof atom v. (FirstOrderFormula fof atom v, Ord fof) => Set.Set fof -> Set.Set (Set.Set fof, fof)
-contrapositives cls =
-    if setAll negative cls then Set.insert (Set.map (.~.) cls,false) base else base
-    where base = Set.map (\ c -> (Set.map (.~.) (Set.delete c cls), c)) cls
-
--- ------------------------------------------------------------------------- 
--- The core of MESON: ancestor unification or Prolog-style extension.        
--- ------------------------------------------------------------------------- 
-
-mexpand :: forall fof atom term v f. (FirstOrderFormula fof atom v, Literal fof atom, Term term v f, Atom atom term v, Ord fof) =>
-           Set.Set (Set.Set fof, fof)
-        -> Set.Set fof
-        -> fof
-        -> ((Map.Map v term, Int, Int) -> Failing (Map.Map v term, Int, Int))
-        -> (Map.Map v term, Int, Int) -> Failing (Map.Map v term, Int, Int)
-mexpand rules ancestors g cont (env,n,k) =
-    if n < 0
-    then Failure ["Too deep"]
-    else case settryfind doAncestor ancestors of
-           Success a -> Success a
-           Failure _ -> settryfind doRule rules
-    where
-      doAncestor a =
-          do mp <- unify_literals env g ((.~.) a)
-             cont (mp, n, k)
-      doRule rule =
-          do mp <- unify_literals env g c
-             mexpand' (mp, n - Set.size asm, k')
-          where
-            mexpand' = Set.fold (mexpand rules (Set.insert g ancestors)) cont asm
-            ((asm, c), k') = renamerule k rule
-
--- ------------------------------------------------------------------------- 
--- Full MESON procedure.                                                     
--- ------------------------------------------------------------------------- 
-
-puremeson :: forall fof atom term v f. (FirstOrderFormula fof atom v, Literal fof atom, Term term v f, Atom atom term v, Ord fof) =>
-             Maybe Int -> fof -> Failing ((Map.Map v term, Int, Int), Int)
-puremeson maxdl fm =
-    deepen f 0 maxdl
-    where
-      f n = mexpand rules Set.empty false return (Map.empty, n, 0)
-      rules = Set.fold (Set.union . contrapositives) Set.empty cls
-      cls = simpcnf (specialize (pnf fm))
-
-meson :: forall m fof atom term f v. (FirstOrderFormula fof atom v, PropositionalFormula fof atom, Literal fof atom, Term term v f, Atom atom term v, Ord fof, Monad m) =>
-         Maybe Int -> fof -> SkolemT v term m (Set.Set (Failing ((Map.Map v term, Int, Int), Int)))
-meson maxdl fm =
-    askolemize ((.~.)(generalize fm)) >>=
-    return . Set.map (puremeson maxdl . list_conj) . (simpdnf :: fof -> Set.Set (Set.Set fof))
-

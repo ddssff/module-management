@@ -8,4 +8,3 @@ module Debian.Repo.Package.ReExported
     ) where
 
 import qualified Language.Haskell.TH.Syntax as TH (Fixity(..), FixityDirection(..))
-

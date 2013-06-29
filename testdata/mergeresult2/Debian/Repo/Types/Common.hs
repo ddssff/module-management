@@ -16,7 +16,6 @@ import Network.URI (parseURI, URI(uriPath))
 import System.FilePath ((</>))
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
 
--- Declaration reformatted because module qualifiers changed
  
 data Slice = Slice{sliceRepoKey ::
                    Debian.Repo.Types.Common.RepoKey,
@@ -36,6 +35,7 @@ instance Pretty SliceList where
 
 deriving instance Show SourceType
 deriving instance Show DebSource
+
 
 
 data RepoKey

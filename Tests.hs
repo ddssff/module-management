@@ -49,8 +49,8 @@ tests = TestList [ Main.test1
                  , TestLabel "Imports" Imports.tests
                  , TestLabel "Split" Split.tests
                  -- If split-merge-merge fails try split and split-merge.
-                 -- , Main.logictest "split" test2a
-                 -- , Main.logictest "split-merge" test2b
+                 , Main.logictest "split" test2a
+                 , Main.logictest "split-merge" test2b
                  , Main.logictest "split-merge-merge" test2c
                  ]
 
@@ -75,7 +75,7 @@ logictest s f =
        assertEqual s (ExitSuccess, "", "") (code, out', err)
 
 test2a :: MonadClean m => Set ModuleName -> m ()
-test2a u = noisily $
+test2a u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
             qPutStrLn "\nSplitting module Literal"
@@ -83,7 +83,7 @@ test2a u = noisily $
             return ()
 
 test2b :: MonadClean m => Set ModuleName -> m ()
-test2b u = noisily $
+test2b u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
             qPutStrLn "\nSplitting module Literal"
@@ -109,7 +109,7 @@ test2b u = noisily $
                  (delete (ModuleName "Data.Logic.Classes.Literal") u)
 
 test2c :: MonadClean m => Set ModuleName -> m ()
-test2c u = noisily $
+test2c u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
             qPutStrLn "\nSplitting module Literal"

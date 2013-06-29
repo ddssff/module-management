@@ -13,4 +13,3 @@ import URL
 foo :: Int
 foo = 1
 
-

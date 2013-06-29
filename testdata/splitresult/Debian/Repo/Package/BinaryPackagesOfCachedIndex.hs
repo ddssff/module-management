@@ -17,6 +17,7 @@ import Debian.Repo.Types.Repo (RepoKey)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix (getFileStatus)
 
+-- FIXME: assuming the index is part of the cache
 binaryPackagesOfCachedIndex :: (MonadApt m, AptCache a) => a -> RepoKey -> Release -> PackageIndex -> m [BinaryPackage]
 binaryPackagesOfCachedIndex cache repo release index =
     do state <- getApt
@@ -30,6 +31,4 @@ binaryPackagesOfCachedIndex cache repo release index =
                  return packages
     where
       path = rootPath (rootDir cache) ++ indexCacheFile cache repo release index
-
--- | Return a list of all source packages.
 

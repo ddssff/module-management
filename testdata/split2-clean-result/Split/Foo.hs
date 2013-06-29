@@ -11,4 +11,3 @@ module Split.Foo
 foo :: Int
 foo = 1
 
-

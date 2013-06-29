@@ -55,4 +55,3 @@ indexPrefix repo release index =
             (s, []) -> [s]
             (h, t) -> h : wordsBy p (drop 1 t)
 
-

@@ -8,4 +8,3 @@ module Split.ReExported
 import Data.Char (isAlphaNum)
 import Data.List (dropWhile)
 import URL
-
