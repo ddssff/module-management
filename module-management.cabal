@@ -10,6 +10,8 @@ Category:           Editor, Haskell, IDE
 Stability:          experimental
 Build-type:         Simple
 Cabal-version:      >=1.8
+Data-Files:
+    testdata
 
 Flag build-tests
   Description: build the test executable
