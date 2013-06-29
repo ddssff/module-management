@@ -138,7 +138,7 @@ replaceImports newImports m =
     else Just (foldHeader (\ s r -> r <> s) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ _ pref s suff r -> r <> pref <> s <> suff) m "" ++
                foldExports (\ s r -> r <> s) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ s r -> r <> s) m "" ++
                newPretty <>
-               foldDecls  (\ _ pref s suff r -> r <> pref <> s <> suff) (\ r s -> r <> s) m "")
+               foldDecls  (\ _ pref s suff r -> r <> pref <> s <> suff) (\ r s -> s <> r) m "")
 
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: Bool         -- ^ If true, imports that turn into empty lists will be removed
