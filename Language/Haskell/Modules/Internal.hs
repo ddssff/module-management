@@ -99,7 +99,7 @@ runMonadClean action =
     withTempDirectory "." "scratch" $ \ scratch ->
     do (result, params) <- runStateT action (Params {scratchDir = scratch,
                                                      dryRun = False,
-                                                     verbosity = 0,
+                                                     verbosity = 1,
                                                      hsFlags = [],
                                                      extensions = Exts.extensions Exts.defaultParseMode,
                                                      sourceDirs = ["."],
