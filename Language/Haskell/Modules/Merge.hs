@@ -157,7 +157,7 @@ moduleDecls oldmap new name =
                     let d' = sDecl d
                         d'' = fixReferences oldmap' new d' in
                     r <> pref <>
-                    (if d'' /= d' then "-- Declaration reformatted because module qualifiers changed\n" <> prettyPrint d'' <> "\n\n" else (s <> suff)))
+                    (if d'' /= d' then prettyPrint d'' else s) <> suff)
               echo2
               m "" <> "\n"
     where

@@ -16,23 +16,26 @@ module Language.Haskell.Modules.Fold
     , tests
     ) where
 
+import Control.Applicative ((<$>))
+import Control.Monad (when)
 import Control.Monad.State (get, put, runState, State)
 import Control.Monad.Trans (liftIO)
 import Data.Char (isSpace)
 import Data.Default (Default(def))
 import Data.List (tails)
 import Data.Map (Map)
+import Data.Maybe (mapMaybe)
 import Data.Monoid ((<>), Monoid)
 import Data.Set.Extra as Set (fromList)
 import Data.Tree (Tree(..))
 import Language.Haskell.Exts.Annotated (ParseResult(..))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
-import Language.Haskell.Exts.Comments (Comment)
+import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (parseFileWithComments, runMonadClean)
-import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, makeTree, srcLoc, srcPairTextHead, srcPairTextTail)
+import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, makeTree, srcLoc, srcPairTextHead, srcPairTextTail, srcPairTextPair)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
 type Module = A.Module SrcSpanInfo
@@ -76,12 +79,85 @@ fixSpan sp =
     then sp {srcInfoSpan = (srcInfoSpan sp) {srcSpanEndColumn = 1}}
     else sp
 
--- | The spans returned by haskell-src-exts put comments and
+data St
+    = St { loc_ :: SrcLoc
+         , text_ :: String
+         , comms_ :: [Comment]
+         , sps_ :: [SrcSpanInfo] }
+      deriving (Show)
+
+setSpanEnd :: SrcLoc -> SrcSpan -> SrcSpan
+setSpanEnd loc sp = sp {srcSpanEndLine = srcLine loc, srcSpanEndColumn = srcColumn loc}
+setSpanStart :: SrcLoc -> SrcSpan -> SrcSpan
+setSpanStart loc sp = sp {srcSpanStartLine = srcLine loc, srcSpanStartColumn = srcColumn loc}
+
+-- | The spans returned by haskell-src-exts may put comments and
 -- whitespace in the suffix string of a declaration, we want them in
 -- the prefix string of the following declaration where possible.
 adjustSpans :: String -> [Comment] -> [SrcSpanInfo] -> [SrcSpanInfo]
-adjustSpans text comments spans =
-    spans
+adjustSpans _ _ [] = []
+adjustSpans _ _ [x] = [x]
+adjustSpans text comments sps =
+    fst $ runState f (St def text comments sps)
+    where
+      f = do st <- get
+             let b = loc_ st
+             case sps_ st of
+               (ss1 : ssis) ->
+                   do skip
+                      st' <- get
+                      let e = loc_ st'
+                      case e >= endLoc ss1 of
+                        True ->
+                            -- We reached the end of ss1, so the segment from b to e is
+                            -- trailing comments and space, some of which may belong in
+                            -- the following span.
+                            do put (st' {sps_ = ssis})
+                               sps' <- f
+                               let ss1' = ss1 {srcInfoSpan = setSpanEnd b (srcInfoSpan ss1)}
+                               return (ss1' : sps')
+                        False ->
+                           -- If we weren't able to skip to the end of
+                           -- the span, we encountered real text.
+                           -- Move past one char and try again.
+                           do case text_ st' of
+                                "" -> return (sps_ st') -- error $ "Ran out of text\n st=" ++ show st ++ "\n st'=" ++ show st'
+                                (c : t') -> do put (st' {text_ = t', loc_ = increaseSrcLoc [c] e})
+                                               f
+               sss -> return sss
+
+      -- loc is the current position in the input file, text
+      -- is the text starting at that location.
+      skip :: State St ()
+      skip = do loc1 <- loc_ <$> get
+                skipWhite
+                skipComment
+                loc2 <- loc_ <$> get
+                -- Repeat until failure
+                when (loc1 /= loc2) skip
+
+      skipWhite :: State St ()
+      skipWhite = do st <- get
+                     case span isSpace (text_ st) of
+                       ("", _) -> return ()
+                       (space, t') ->
+                           let loc' = increaseSrcLoc space (loc_ st) in
+                           put (st {loc_ = loc', text_ = t'})
+
+      skipComment :: State St ()
+      skipComment = do st <- get
+                       case comms_ st of
+                         (Comment _ csp _ : cs)
+                             | srcLoc csp <= loc_ st ->
+                                 -- We reached the comment, skip past it and discard
+                                 case srcPairTextPair (loc_ st) (endLoc csp) (text_ st) of
+                                   ("", _) -> return ()
+                                   (comm, t') ->
+                                       let loc' = increaseSrcLoc comm (loc_ st) in
+                                       put (st {loc_ = loc',
+                                                text_ = t',
+                                                comms_ = cs})
+                         _ -> return () -- No comments, or we didn't reach it
 
 -- | Given the result of parseModuleWithComments and the original
 -- module text, this does a fold over the parsed module contents,
@@ -109,85 +185,90 @@ foldModule :: forall r. (Show r) =>
 foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlPage _ _ _ _ _ _ _, _, _) _ = error "XmlPage: unsupported"
 foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlHybrid _ _ _ _ _ _ _ _ _, _, _) _ = error "XmlHybrid: unsupported"
 foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (m@(A.Module _ mh ps is ds), text, comments) r0 =
-    fst $ runState (doModule r0) (text, def, adjustSpans text comments (spans m))
+    (\ (_, (_, _, _, r)) -> r) $ runState doModule (text, def, spans m, r0)
     where
-      doModule r =
-          doSep topf r >>=
-          doList pragmaf ps >>=
-          maybe return doHeader mh >>=
-          doList importf is >>=
-          doList declf ds >>=
-          doTail sepf
-      doHeader (A.ModuleHead sp n mw me) r =
-          doItem namef n r >>=
-          maybe return (doItem warnf) mw >>=
-          doSep pref >>=
-          maybe return (\ (A.ExportSpecList _ es) -> doList exportf es) me >>=
-          doClose postf sp
-      doClose f sp r =
-          do (tl, l, sps) <- get
+      doModule =
+          do doSep topf
+             doList pragmaf ps
+             maybe (return ()) doHeader mh
+             doList importf is
+             (tl, l, sps, r) <- get
+             put (tl, l, adjustSpans text comments sps, r)
+             doList declf ds
+             doTail sepf
+      doHeader (A.ModuleHead sp n mw me) =
+          do doItem namef n
+             maybe (return ()) (doItem warnf) mw
+             doSep pref
+             maybe (return ()) (\ (A.ExportSpecList _ es) -> doList exportf es) me
+             doClose postf sp
+      doClose f sp =
+          do (tl, l, sps, r) <- get
              case l < endLoc sp of
-               True -> do put (srcPairTextTail l (endLoc sp) tl, endLoc sp, sps)
-                          return (f (srcPairTextHead l (endLoc sp) tl) r)
-               False -> return r
-      doTail f r =
-          do (tl, _, _) <- get
-             return $ f tl r
-      doSep :: (String -> r -> r) -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
-      doSep f r =
+               True -> put (srcPairTextTail l (endLoc sp) tl,
+                            endLoc sp,
+                            sps,
+                            f (srcPairTextHead l (endLoc sp) tl) r)
+               False -> return ()
+      doTail f =
+          do (tl, l, sps, r) <- get
+             put (tl, l, sps, f tl r)
+      doSep :: (String -> r -> r) -> State (String, SrcLoc, [SrcSpanInfo], r) ()
+      doSep f =
           do p <- get
              case p of
-               (tl, l, sps@(sp : _)) ->
+               (tl, l, sps@(sp : _), r) ->
                    do let l' = srcLoc sp
                       case l <= l' of
                         True ->
-                            do put (srcPairTextTail l l' tl, l', sps)
-                               return $ f (srcPairTextHead l l' tl) r
-                        False -> return r
+                            do put (srcPairTextTail l l' tl,
+                                    l',
+                                    sps,
+                                    f (srcPairTextHead l l' tl) r)
+                        False -> return ()
                _ -> error $ "foldModule - out of spans: " ++ show p
-      doList :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> [a] -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
-      doList _ [] r = return r
-      doList f (x : xs) r = doItem f x r >>= doList f xs
+      doList :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> [a] -> State (String, SrcLoc, [SrcSpanInfo], r) ()
+      doList _ [] = return ()
+      doList f (x : xs) = doItem f x >> doList f xs
 
-      doItem :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> a -> r -> State (String, SrcLoc, [SrcSpanInfo]) r
-      doItem f x r =
-          do (tl, l, (sp : sps')) <- get
+      doItem :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> a -> State (String, SrcLoc, [SrcSpanInfo], r) ()
+      doItem f x =
+          do (tl, l, (sp : sps'), r) <- get
              let -- Another haskell-src-exts bug?  If a module ends
                  -- with no newline, endLoc will be at the beginning
                  -- of the following (nonexistant) line.
-                 l' = endLoc sp
                  pre = srcPairTextHead l (srcLoc sp) tl
                  tl' = srcPairTextTail l (srcLoc sp) tl
+                 l' = endLoc sp
                  s = srcPairTextHead (srcLoc sp) l' tl'
                  tl'' = srcPairTextTail (srcLoc sp) l' tl'
-                 l'' = adjust tl'' l'
+                 l'' = adjust1 tl'' l'
                  post = srcPairTextHead l' l'' tl''
                  tl''' = srcPairTextTail l' l'' tl''
-             put (tl''', l'', sps')
-             return $ f x pre s post r
+             put (tl''', l'', sps', f x pre s post r)
+
+      -- Move to just past the last newline in the leading whitespace
+      -- adjust "\n  \n  hello\n" (SrcLoc "<unknown>.hs" 5 5) ->
+      --   (SrcLoc "<unknown>.hs" 7 1)
+      _adjust :: String -> SrcLoc -> SrcLoc
+      _adjust a l =
+          l'
+          where
+            w = takeWhile isSpace a
+            w' = take (length (takeWhile (elem '\n') (tails w))) w
+            l' = increaseSrcLoc w' l
 
       -- Move to just past the first newline in the leading whitespace
       -- adjust "\n  \n  hello\n" (SrcLoc "<unknown>.hs" 5 5) ->
       --   (SrcLoc "<unknown>.hs" 6 1)
-      _adjust2 :: String -> SrcLoc -> SrcLoc
-      _adjust2 a l =
+      adjust1 :: String -> SrcLoc -> SrcLoc
+      adjust1 a l =
           l'
           where
             w = takeWhile isSpace a
             w' = case span (/= '\n') w of
                    (w'', '\n' : _) -> w'' ++ ['\n']
                    (w'', "") -> w''
-            l' = increaseSrcLoc w' l
-
-      -- Move to just past the last newline in the leading whitespace
-      -- adjust "\n  \n  hello\n" (SrcLoc "<unknown>.hs" 5 5) ->
-      --   (SrcLoc "<unknown>.hs" 7 1)
-      adjust :: String -> SrcLoc -> SrcLoc
-      adjust a l =
-          l'
-          where
-            w = takeWhile isSpace a
-            w' = take (length (takeWhile (elem '\n') (tails w))) w
             l' = increaseSrcLoc w' l
 
 -- | Do just the header portion of 'foldModule'.

@@ -25,7 +25,6 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(..), ModuleName(.
 import Language.Haskell.Modules.Fold (ModuleInfo, echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Internal (doResult, modifyParams, modulePath, ModuleResult(..), MonadClean(getParams), Params(moduVerse, sourceDirs, testMode), parseFileWithComments, runMonadClean)
-import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
 import Prelude hiding (writeFile)
@@ -310,7 +309,7 @@ test2 :: Test
 test2 =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ testdata/copy"
-       runMonadClean $ noisily $ noisily $
+       runMonadClean $
          do modifyParams (\ p -> p {testMode = True,
                                     sourceDirs = ["testdata/copy"],
                                     -- extensions = NoImplicitPrelude : extensions p,
@@ -323,7 +322,7 @@ test3 :: Test
 test3 =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ testdata/copy"
-       runMonadClean $ noisily $ noisily $
+       runMonadClean $
          do modifyParams (\ p -> p {testMode = False,
                                     sourceDirs = ["testdata/copy"],
                                     -- extensions = NoImplicitPrelude : extensions p,

@@ -175,7 +175,7 @@ doResult x@(Removed name) =
 
 doResult x@(Modified name text) =
     do path <- modulePath name
-       qPutStr ("catModules: modifying " ++ show path)
+       qPutStr ("modifying " ++ show path)
        quietly (qPutStr (" new text: " ++ show text))
        qPutStr "\n"
        replaceFile tildeBackup path text
@@ -183,7 +183,7 @@ doResult x@(Modified name text) =
 
 doResult x@(Created name text) =
     do path <- modulePath name
-       qPutStr ("catModules: creating " ++ show path)
+       qPutStr ("creating " ++ show path)
        quietly (qPutStr (" containing " ++ show text))
        qPutStr "\n"
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)

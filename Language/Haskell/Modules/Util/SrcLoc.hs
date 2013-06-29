@@ -10,6 +10,7 @@ module Language.Haskell.Modules.Util.SrcLoc
     , textSpan
     , srcPairTextHead
     , srcPairTextTail
+    , srcPairTextPair
     , makeTree
     , tests
     ) where
@@ -60,6 +61,9 @@ type Decl = A.Decl SrcSpanInfo
 
 class HasSpanInfo a where
     spanInfo :: a -> SrcSpanInfo
+
+instance HasSpanInfo SrcSpan where
+    spanInfo x = SrcSpanInfo x []
 
 instance HasSpanInfo a => HasSpanInfo (Tree a) where
     spanInfo (Node x _) = spanInfo x
@@ -233,6 +237,10 @@ srcPairTextTail b e s =
                 ('\t' : s') -> srcPairTextTail (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e s'
                 (_ : s') -> srcPairTextTail (b {srcColumn = srcColumn b + 1}) e s'
          else s
+
+-- | Shirley there's a more efficient way to do this?
+srcPairTextPair :: SrcLoc -> SrcLoc -> String -> (String, String)
+srcPairTextPair b e s = (srcPairTextHead b e s, srcPairTextTail b e s)
 
 instance Default SrcLoc where
     def = SrcLoc "<unknown>.hs" 1 1
