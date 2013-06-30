@@ -17,7 +17,7 @@ import qualified Tests.Fold as Fold (tests)
 import qualified Tests.Imports as Imports (tests)
 import Language.Haskell.Modules.Internal (MonadClean, Params(extensions, moduVerse), runMonadClean, modifyParams)
 import qualified Tests.Split as Split (tests)
-import Language.Haskell.Modules.Util.QIO (noisily, qPutStrLn)
+import Language.Haskell.Modules.Util.QIO (noisily, qLnPutStr)
 import Language.Haskell.Modules.Util.Test (logicModules, diff', rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.Process (readProcess)
@@ -78,7 +78,7 @@ test2a :: MonadClean m => Set ModuleName -> m ()
 test2a u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
-            qPutStrLn "\nSplitting module Literal"
+            qLnPutStr "Splitting module Literal"
             splitModule (ModuleName "Data.Logic.Classes.Literal")
             return ()
 
@@ -86,16 +86,16 @@ test2b :: MonadClean m => Set ModuleName -> m ()
 test2b u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
-            qPutStrLn "\nSplitting module Literal"
+            qLnPutStr "Splitting module Literal"
             splitModule (ModuleName "Data.Logic.Classes.Literal")
-            qPutStrLn "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
+            qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
             -- modifyParams (\ p -> p {testMode = True})
             mergeModules
               [ModuleName "Data.Logic.Classes.FirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
               (ModuleName "Data.Logic.Classes.FirstOrder")
-            noisily (qPutStrLn "merge2")
+            noisily (qLnPutStr "merge2")
             return ()
     where
       u' = union (fromList [ModuleName "Data.Logic.Classes.Literal.Internal.FixityLiteral",
@@ -112,15 +112,15 @@ test2c :: MonadClean m => Set ModuleName -> m ()
 test2c u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
-            qPutStrLn "\nSplitting module Literal"
+            qLnPutStr "Splitting module Literal"
             splitModule (ModuleName "Data.Logic.Classes.Literal")
-            qPutStrLn "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
+            qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
             mergeModules
               [ModuleName "Data.Logic.Classes.FirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
                ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
               (ModuleName "Data.Logic.Classes.FirstOrder")
-            noisily (qPutStrLn "Merging remaining split modules into Literal")
+            noisily (qLnPutStr "Merging remaining split modules into Literal")
             -- modifyParams (\ p -> p {testMode = True})
             mergeModules
               [ModuleName "Data.Logic.Classes.Literal.Literal",

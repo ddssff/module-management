@@ -27,7 +27,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 import Language.Haskell.Modules.Common (modulePathBase)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
-import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qPutStr, qPutStrLn, quietly)
+import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qPutStr, qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import Prelude hiding (writeFile)
 import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
@@ -165,7 +165,7 @@ data ModuleResult
 -- the other hand, we might be able to maintain the moduVerse here.
 doResult :: MonadClean m => ModuleResult -> m ModuleResult
 doResult x@(Unchanged _name) =
-    do quietly (qPutStrLn ("unchanged: " ++ show _name))
+    do quietly (qLnPutStr ("unchanged: " ++ show _name))
        return x
 doResult x@(Removed name) =
     do path <- modulePath name
@@ -175,17 +175,15 @@ doResult x@(Removed name) =
 
 doResult x@(Modified name text) =
     do path <- modulePath name
-       qPutStr ("modifying " ++ show path)
-       quietly (qPutStr (" new text: " ++ show text))
-       qPutStr "\n"
+       qLnPutStr ("modifying " ++ show path)
+       (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
        return x
 
 doResult x@(Created name text) =
     do path <- modulePath name
-       qPutStr ("creating " ++ show path)
-       quietly (qPutStr (" containing " ++ show text))
-       qPutStr "\n"
+       qLnPutStr ("creating " ++ show path)
+       (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
        replaceFile tildeBackup path text
        return x

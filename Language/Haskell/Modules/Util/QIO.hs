@@ -9,7 +9,8 @@ module Language.Haskell.Modules.Util.QIO
     , noisily
     , qIO
     , qPutStr
-    , qPutStrLn
+    -- , qPutStrLn
+    , qLnPutStr
     ) where
 
 import Control.Monad (when)
@@ -41,8 +42,15 @@ qIO action =
     do v <- getVerbosity
        when (v > 0) action
 
-qPutStrLn :: MonadVerbosity m => String -> m ()
-qPutStrLn = qIO . liftIO . putStrLn
-
 qPutStr :: MonadVerbosity m => String -> m ()
 qPutStr = qIO . liftIO . putStr
+
+qPutStrLn :: MonadVerbosity m => String -> m ()
+qPutStrLn s =
+    qIO $ do v <- getVerbosity
+             liftIO $ putStrLn (replicate (5 - min 5 v) ' ' ++ s)
+
+qLnPutStr :: MonadVerbosity m => String -> m ()
+qLnPutStr s =
+    qIO $ do v <- getVerbosity
+             liftIO $ putStr  ("\n" ++ replicate (5 - min 5 v) ' ' ++ s)

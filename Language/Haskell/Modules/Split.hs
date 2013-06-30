@@ -26,6 +26,7 @@ import Language.Haskell.Modules.Fold (ModuleInfo, echo, echo2, foldDecls, foldEx
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Internal (doResult, modifyParams, modulePath, ModuleResult(..), MonadClean(getParams), Params(moduVerse, sourceDirs, testMode), parseFileWithComments, runMonadClean)
 import Language.Haskell.Modules.Params (modifyModuVerse)
+import Language.Haskell.Modules.Util.QIO (quietly, qLnPutStr)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
 import Prelude hiding (writeFile)
@@ -113,7 +114,9 @@ doSplit _ (A.Module _ _ _ _ [], _, _) = return Set.empty -- No declarations - no
 doSplit _ (A.Module _ _ _ _ [_], _, _) = return Set.empty -- One declaration - nothing to split (but maybe we should anyway?)
 doSplit _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
 doSplit univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ _ _, _, _) =
-    Set.mapM (updateImports (sModuleName moduleName) symbolToModule) univ' >>= return . union splitModules
+    qLnPutStr ("Splitting " ++ show moduleName) >>
+    Set.mapM (updateImports (sModuleName moduleName) symbolToModule) univ' >>=
+    return . union splitModules
     where
       -- The name of the module to be split
       old = sModuleName moduleName
@@ -211,6 +214,7 @@ doSeps ((_, hd) : tl) = hd <> concatMap (\ (a, b) -> a <> b) tl
 updateImports :: MonadClean m => S.ModuleName -> Map (Maybe S.Name) S.ModuleName -> S.ModuleName -> m ModuleResult
 updateImports old symbolToModule name =
     do path <- modulePath name
+       quietly $ qLnPutStr $ "updateImports " ++ show name
        text' <- liftIO $ readFile path
        parsed <- parseFileWithComments path
        case parsed of
