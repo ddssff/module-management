@@ -10,8 +10,7 @@ Category:           Editor, Haskell, IDE
 Stability:          experimental
 Build-type:         Simple
 Cabal-version:      >=1.8
-Data-Files:
-    testdata
+Extra-Source-Files: testdata.tar.gz
 
 Flag build-tests
   Description: build the test executable
@@ -34,7 +33,11 @@ Library
     Language.Haskell.Modules.Util.SrcLoc,
     Language.Haskell.Modules.Util.DryIO
   Other-Modules:
-    Language.Haskell.Modules.Internal
+    Language.Haskell.Modules.Internal,
+    Tests.Fold,
+    Tests.Imports,
+    Tests.Merge,
+    Tests.Split
   Build-Depends:
     applicative-extras,
     base >= 4 && < 5,

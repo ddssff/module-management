@@ -2,8 +2,6 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Imports
     ( cleanImports
-    -- , cleanBuildImports
-    , tests
     ) where
 
 import Control.Applicative ((<$>))
@@ -269,96 +267,3 @@ equalSpecs a b = compareSpecs a b == EQ
 nameString :: S.Name -> String
 nameString (S.Ident s) = s
 nameString (S.Symbol s) = s
-
-tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test2, test3, test4, test5, test6])
-
-test1 :: Test
-test1 =
-    TestLabel "Imports.test1" $ TestCase
-      (do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-          let name = S.ModuleName "Debian.Repo.Types.PackageIndex"
-          let base = modulePathBase name
-          _ <- withCurrentDirectory "testdata/copy" (runMonadClean (cleanImports base))
-          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> base, "testdata/copy" </> base] ""
-          assertEqual "cleanImports"
-                         (ExitFailure 1,
-                          ["@@ -22,13 +22,13 @@",
-                           "     , prettyPkgVersion",
-                           "     ) where",
-                           " ",
-                           "-import Data.Text (Text, map)",
-                           "+import Data.Text (Text)",
-                           " import Debian.Arch (Arch(..))",
-                           " import qualified Debian.Control.Text as T (Paragraph)",
-                           " import Debian.Relation (BinPkgName(..), SrcPkgName(..))",
-                           " import qualified Debian.Relation as B (PkgName, Relations)",
-                           " import Debian.Release (Section(..))",
-                           "-import Debian.Repo.Orphans ({- instances -})",
-                           "+import Debian.Repo.Orphans ()",
-                           " import Debian.Version (DebianVersion, prettyDebianVersion)",
-                           " import System.Posix.Types (FileOffset)",
-                           " import Text.PrettyPrint.ANSI.Leijen ((<>), Doc, Pretty(pretty), text)"],
-                          "")
-                          (code, drop 2 (lines diff), err))
-
-test2 :: Test
-test2 =
-    TestLabel "Imports.test2" $ TestCase
-      (do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-          let name = S.ModuleName "Debian.Repo.PackageIndex"
-              base = modulePathBase name
-          _ <- withCurrentDirectory "testdata/copy" (runMonadClean (cleanImports base))
-          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/original" </> base, "testdata/copy" </> base] ""
-          assertEqual "cleanImports" (ExitSuccess, "", "") (code, diff, err))
-
--- | Can we handle a Main module in a file named something other than Main.hs?
-test3 :: Test
-test3 =
-    TestLabel "Imports.test3" $ TestCase
-      (runMonadClean (modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/NotMain.hs") >>
-       assertEqual "module name" () ())
-
--- | Preserve imports with a "hiding" clause
-test4 :: Test
-test4 =
-    TestLabel "Imports.test4" $ TestCase
-      (system "cp testdata/HidingOrig.hs testdata/Hiding.hs" >>
-       runMonadClean (modifyParams (\ p -> p {sourceDirs = ["testdata"]}) >> cleanImports "testdata/Hiding.hs") >>
-       -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
-       assertEqual "module name" () ())
-
--- | Preserve imports used by a standalone deriving declaration
-test5 :: Test
-test5 =
-    TestLabel "Imports.test5" $ TestCase
-      (do _ <- system "cp testdata/DerivingOrig.hs testdata/Deriving.hs"
-          _ <- runMonadClean (modifyParams (\ p -> p {extensions = extensions p ++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances],
-                                                  sourceDirs = ["testdata"]}) >>
-                          cleanImports "testdata/Deriving.hs")
-          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/DerivingOrig.hs", "testdata/Deriving.hs"] ""
-          assertEqual "standalone deriving"
-                      (ExitFailure 1,
-                       (unlines
-                        ["@@ -1,7 +1,6 @@",
-                         " module Deriving where",
-                         " ",
-                         "-import Data.Text (Text)",
-                         "-import Debian.Control (Paragraph(..), Paragraph'(..), Field'(..))",
-                         "+import Debian.Control (Field'(..), Paragraph(..))",
-                         " ",
-                         " deriving instance Show (Field' String)",
-                         " deriving instance Show Paragraph"]),
-                       "")
-                      (code, unlines (drop 2 (lines diff)), err))
-
--- | Comment at EOF
-test6 :: Test
-test6 =
-    TestLabel "Imports.test6" $ TestCase
-      (do -- _ <- system "rsync -aHxS --delete testdata/logic/ testdata/copy"
-          _ <- system "cp testdata/EndCommentOrig.hs testdata/EndComment.hs"
-          let path = "EndComment.hs" -- "Data/Logic/Harrison/Tableaux.hs"
-          _ <- withCurrentDirectory "testdata" (runMonadClean (modifyTestMode (const True) >> cleanImports "EndComment.hs"))
-          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/EndCommentClean.hs", "testdata" </> "EndComment.hs"] ""
-          assertEqual "comment at end" "" diff)

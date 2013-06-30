@@ -19,7 +19,6 @@ class (Negatable lit, Constants lit, HasFixity atom, Formula lit atom, Ord lit) 
 
 
 
-
 zipLiterals :: Literal lit atom =>
                (lit -> lit -> Maybe r)
             -> (Bool -> Bool -> Maybe r)
@@ -34,11 +33,9 @@ zipLiterals neg tf at fm1 fm2 =
 
 
 
-
 toPropositional :: forall lit atom pf atom2. (Literal lit atom, P.PropositionalFormula pf atom2) =>
                    (atom -> atom2) -> lit -> pf
 toPropositional ca lit = foldLiteral (\ p -> (.~.) (toPropositional ca p)) fromBool (atomic . ca) lit
-
 
 
 
@@ -96,6 +93,5 @@ fixityLiteral formula =
 
 foldAtomsLiteral :: Literal lit atom => (r -> atom -> r) -> r -> lit -> r
 foldAtomsLiteral f i lit = foldLiteral (foldAtomsLiteral f i) (const i) (f i) lit
-
 
 

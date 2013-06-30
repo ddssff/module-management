@@ -11,14 +11,14 @@ import Language.Haskell.Exts.Extension (Extension(..))
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Modules (splitModule, mergeModules)
-import qualified Language.Haskell.Modules.Merge as Merge (tests)
+import qualified Tests.Merge as Merge (tests)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import qualified Language.Haskell.Modules.Fold as Fold (tests)
-import qualified Language.Haskell.Modules.Imports as Imports (tests)
+import qualified Tests.Fold as Fold (tests)
+import qualified Tests.Imports as Imports (tests)
 import Language.Haskell.Modules.Internal (MonadClean, Params(extensions, moduVerse), runMonadClean, modifyParams)
-import qualified Language.Haskell.Modules.Split as Split (tests)
+import qualified Tests.Split as Split (tests)
 import Language.Haskell.Modules.Util.QIO (noisily, qPutStrLn)
-import Language.Haskell.Modules.Util.Test (logicModules, diff')
+import Language.Haskell.Modules.Util.Test (logicModules, diff', rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.Process (readProcess)
 import Test.HUnit (assertEqual, Counts(..), runTestTT, Test(TestList, TestCase, TestLabel))
@@ -32,7 +32,7 @@ main =
          _ -> exitWith (ExitFailure 1)
 
 withTestData :: (A.Module SrcSpanInfo -> [Comment] -> String -> IO r) -> FilePath -> IO r
-withTestData f path = withCurrentDirectory "testdata/original" $
+withTestData f path = withCurrentDirectory "testdata/debian" $
     do text <- try (readFile path)
        source <- try (parseFileWithComments defaultParseMode path)
        case (text, source) of
@@ -68,9 +68,9 @@ test1 =
 -- logictest :: MonadClean m => String -> (Set ModuleName -> m ()) -> Test
 logictest s f =
     TestLabel s $ TestCase $
-    do _ <- readProcess "rsync" ["-aHxS", "--delete", {-"-v",-} "testdata/logic/", "testdata/copy"] ""
-       _ <- withCurrentDirectory "testdata/copy" $ runMonadClean $ f logicModules
-       (code, out, err) <- diff' ("testdata/" ++ s ++ "-result") "testdata/copy"
+    do _ <- rsync "testdata/logic" "tmp"
+       _ <- withCurrentDirectory "tmp" $ runMonadClean $ f logicModules
+       (code, out, err) <- diff' ("testdata/" ++ s ++ "-expected") "tmp"
        let out' = unlines (filter (not . isPrefixOf "Binary files") . map (takeWhile (/= '\t')) $ (lines out))
        assertEqual s (ExitSuccess, "", "") (code, out', err)
 

@@ -2,10 +2,6 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Merge
     ( mergeModules
-    , tests
-    , test1
-    , test2
-    , test3
     ) where
 
 import Control.Monad as List (mapM)
@@ -177,51 +173,6 @@ fixReferences oldmap new x =
     where
       moveModuleName :: S.ModuleName -> S.ModuleName
       moveModuleName name@(S.ModuleName _) = if Map.member name oldmap then new else name
-
-tests :: Test
-tests = TestList [test1, test2, test3]
-
-test1 :: Test
-test1 =
-    TestCase $
-      do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         _result <- runMonadClean $
-           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
-              mergeModules
-                     [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
-                     (S.ModuleName "Debian.Repo.Cache")
-              -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
-         (code, out, err) <- diff "testdata/mergeresult1" "testdata/copy"
-         assertEqual "mergeModules1" (ExitSuccess, "", "") (code, out, err)
-
-test2 :: Test
-test2 =
-    TestCase $
-      do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         _result <- runMonadClean $
-           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
-              mergeModules
-                     [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
-                     (S.ModuleName "Debian.Repo.Types.Common")
-              -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
-         (code, out, err) <- diff "testdata/mergeresult2" "testdata/copy"
-         assertEqual "mergeModules2" (ExitSuccess, "", "") (code, out, err)
-
-test3 :: Test
-test3 =
-    TestCase $
-      do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         _result <- withCurrentDirectory "testdata/copy" $
-                   runMonadClean $
-           do modifyParams (\ p -> p {moduVerse = Just repoModules})
-              mergeModules
-                     [S.ModuleName "Debian.Repo.Types.Slice",
-                      S.ModuleName "Debian.Repo.Types.Repo",
-                      S.ModuleName "Debian.Repo.Types.EnvPath"]
-                     (S.ModuleName "Debian.Repo.Types.Slice")
-              -- mapM_ (removeFileIfPresent . ("testdata/copy" </>)) junk
-         (code, out, err) <- diff "testdata/mergeresult3" "testdata/copy"
-         assertEqual "mergeModules3" (ExitSuccess, "", "") (code, out, err)
 
 -- junk :: String -> Bool
 -- junk s = isSuffixOf ".imports" s || isSuffixOf "~" s

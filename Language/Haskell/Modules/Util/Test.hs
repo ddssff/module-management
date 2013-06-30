@@ -3,6 +3,7 @@ module Language.Haskell.Modules.Util.Test
     , logicModules
     , diff
     , diff'
+    , rsync
     , findModules
     , findPaths
     ) where
@@ -14,7 +15,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents)
 import System.Exit (ExitCode)
 import System.FilePath ((</>))
-import System.Process (readProcessWithExitCode)
+import System.Process (readProcess, readProcessWithExitCode)
 
 repoModules :: Set S.ModuleName
 repoModules =
@@ -130,6 +131,9 @@ diff' a b =
     do (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "--unidirectional-new-file", "--exclude=*~", "--exclude=*.imports", a, b] ""
        let out' = unlines (List.filter (not . isPrefixOf "Binary files") . List.map (takeWhile (/= '\t')) $ (lines out))
        return (code, out', err)
+
+rsync :: FilePath -> FilePath -> IO ()
+rsync a b = readProcess "rsync" ["-aHxS", "--delete", a ++ "/", b] "" >> return ()
 
 -- | Find the paths of all the files below the directory @top@.
 findPaths :: FilePath -> IO (Set FilePath)

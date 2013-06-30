@@ -2,7 +2,6 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Split
     ( splitModule
-    , tests
     ) where
 
 import Control.Exception (throw)
@@ -22,16 +21,18 @@ import Language.Haskell.Exts.Annotated.Simplify (sImportDecl, sImportSpec, sModu
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(..), ModuleName(..), Name(..))
+import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (ModuleInfo, echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Internal (doResult, modifyParams, modulePath, ModuleResult(..), MonadClean(getParams), Params(moduVerse, sourceDirs, testMode), parseFileWithComments, runMonadClean)
+import Language.Haskell.Modules.Params (modifyModuVerse)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
 import Prelude hiding (writeFile)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((<.>))
-import Test.HUnit (assertEqual, Test(TestCase, TestList))
+import Test.HUnit (assertEqual, Test(TestCase, TestList, TestLabel))
 
 setAny :: Ord a => (a -> Bool) -> Set a -> Bool
 setAny f s = not (Set.null (Set.filter f s))
@@ -71,7 +72,7 @@ setMapM_ f s = do _ <- Set.mapM f s
 -- would go into @Start.Instances@.
 splitModule :: MonadClean m => S.ModuleName -> m ()
 splitModule old =
-    do univ <- getParams >>= return . fromMaybe (error "moduVerse not set") . moduVerse
+    do univ <- getParams >>= return . fromMaybe (error "moduVerse not set, use modifyModuVerse") . moduVerse
        path <- modulePath old
        text <- liftIO $ readFile path
        (parsed, comments) <- parseFileWithComments path >>= return . fromParseResult
@@ -291,46 +292,3 @@ toImportDecl (S.ModuleName modName) decls =
                   S.importPkg = Nothing,
                   S.importAs = Nothing,
                   S.importSpecs = Just (False, nub (concatMap (imports . fst) decls))}
-
-tests :: Test
-tests = TestList [test1, test2, test3]
-
-test1 :: Test
-test1 =
-    TestCase $
-      do _ <- system "rsync -aHxS --delete testdata/original/ testdata/copy"
-         runMonadClean $
-           do modifyParams (\ p -> p {sourceDirs = ["testdata/copy"], moduVerse = Just repoModules})
-              splitModule (S.ModuleName "Debian.Repo.Package")
-         (code, out, err) <- diff "testdata/splitresult" "testdata/copy"
-         assertEqual "splitModule" (ExitFailure 1, "diff -ru '--exclude=*~' '--exclude=*.imports' testdata/splitresult/Debian/Repo/Package/BinaryPackagesOfIndex.hs testdata/copy/Debian/Repo/Package/BinaryPackagesOfIndex.hs\n--- testdata/splitresult/Debian/Repo/Package/BinaryPackagesOfIndex.hs\n+++ testdata/copy/Debian/Repo/Package/BinaryPackagesOfIndex.hs\n@@ -22,4 +22,4 @@\n binaryPackagesOfIndex repo release index =\n     case packageIndexArch index of\n       Source -> return (Right [])\n-      _ -> liftIO $ getPackages repo release index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))\n+      _ -> liftIO $ getPackages repo release index \n", "") (code, out, err)
-
-test2 :: Test
-test2 =
-    TestCase $
-    do _ <- system "rsync -aHxS --delete testdata/split2/ testdata/copy"
-       runMonadClean $
-         do modifyParams (\ p -> p {testMode = True,
-                                    sourceDirs = ["testdata/copy"],
-                                    -- extensions = NoImplicitPrelude : extensions p,
-                                    moduVerse = Just (singleton (S.ModuleName "Split"))})
-            splitModule (S.ModuleName "Split")
-       (code, out, err) <- diff "testdata/split2-result" "testdata/copy"
-       assertEqual "split2" (ExitSuccess, "", "") (code, out, err)
-
-test3 :: Test
-test3 =
-    TestCase $
-    do _ <- system "rsync -aHxS --delete testdata/split2/ testdata/copy"
-       runMonadClean $
-         do modifyParams (\ p -> p {testMode = False,
-                                    sourceDirs = ["testdata/copy"],
-                                    -- extensions = NoImplicitPrelude : extensions p,
-                                    moduVerse = Just (singleton (S.ModuleName "Split"))})
-            splitModule (S.ModuleName "Split")
-       (code, out, err) <- diff "testdata/split2-clean-result" "testdata/copy"
-       -- The output of splitModule is "correct", but it will not be
-       -- accepted by GHC until the fix for
-       -- http://hackage.haskell.org/trac/ghc/ticket/8011 is
-       -- available.
-       assertEqual "split2-clean" (ExitFailure 1,"diff -ru '--exclude=*~' '--exclude=*.imports' testdata/split2-clean-result/Split/Clean.hs testdata/copy/Split/Clean.hs\n--- testdata/split2-clean-result/Split/Clean.hs\n+++ testdata/copy/Split/Clean.hs\n@@ -6,7 +6,7 @@\n \n \n import Data.Char (isAlphaNum)\n-import URL (ToURL(toURL), URLT)\n+import URL (ToURL(URLT, toURL))\n \n clean :: (ToURL url, Show (URLT url)) => url -> String\n clean = filter isAlphaNum . show . toURL\n", "") (code, out, err)

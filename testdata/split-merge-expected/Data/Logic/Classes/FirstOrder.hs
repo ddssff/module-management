@@ -311,7 +311,7 @@ fromFirstOrder ca formula
 
 
 
-
+ 
 fromLiteral ::
             forall lit atom v fof atom2 .
                 (Literal lit atom,
