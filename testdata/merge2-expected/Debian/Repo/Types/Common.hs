@@ -37,7 +37,6 @@ deriving instance Show SourceType
 deriving instance Show DebSource
 
 
-
 data RepoKey
     = Remote URI'
     | Local EnvPath
@@ -92,7 +91,6 @@ repoKeyURI (Remote uri) = fromURI' uri
 
 
 
-
 -- |The root directory of an OS image.
 data EnvRoot = EnvRoot { rootPath :: FilePath } deriving (Ord, Eq, Read, Show)
 
@@ -109,5 +107,4 @@ appendPath suff path = path { envPath = envPath path ++ suff }
 
 rootEnvPath :: FilePath -> EnvPath
 rootEnvPath s = EnvPath { envRoot = EnvRoot "", envPath = s }
-
 

@@ -25,6 +25,7 @@ import Data.List (tails)
 import Data.Map (Map)
 import Data.Maybe (mapMaybe)
 import Data.Monoid ((<>), Monoid)
+import Data.Sequence (Seq, (|>))
 import Data.Set.Extra as Set (fromList)
 import Data.Tree (Tree(..))
 import Language.Haskell.Exts.Annotated (ParseResult(..))
@@ -299,12 +300,12 @@ foldDecls declf sepf m r0 =
     foldModule ignore2 ignore ignore ignore ignore2 ignore ignore2 ignore declf sepf m r0
 
 -- | This can be passed to foldModule to include the original text in the result
-echo :: Monoid m => t -> m -> m -> m -> m -> m
-echo _ pref s suff r = r <> pref <> s <> suff
+echo :: Monoid m => t -> m -> m -> m -> Seq m -> Seq m
+echo _ pref s suff r = r |> pref <> s <> suff
 
 -- | Similar to 'echo', but used for the two argument separator functions
-echo2 :: Monoid m => m -> m -> m
-echo2 s r = r <> s
+echo2 :: Monoid m => m -> Seq m -> Seq m
+echo2 s r = r |> s
 
 -- | This can be passed to foldModule to omit the original text from the result.
 ignore :: t -> m -> m -> m -> r -> r

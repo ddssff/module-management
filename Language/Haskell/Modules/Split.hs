@@ -9,10 +9,12 @@ import Control.Monad (when)
 import Control.Monad.Trans (liftIO)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
+import Data.Foldable as Foldable (fold)
 import Data.List as List (filter, intercalate, map, nub)
 import Data.Map as Map (delete, elems, empty, filter, insertWith, lookup, Map, mapWithKey)
 import Data.Maybe (fromMaybe, mapMaybe)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), mempty)
+import Data.Sequence ((|>))
 import Data.Set as Set (delete, difference, empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
 import Data.Set.Extra as Set (gFind, mapM)
 import Language.Haskell.Exts (fromParseResult, ParseResult(ParseOk, ParseFailed))
@@ -113,7 +115,7 @@ doSplit :: MonadClean m => Set S.ModuleName -> ModuleInfo -> m (Set ModuleResult
 doSplit _ (A.Module _ _ _ _ [], _, _) = return Set.empty -- No declarations - nothing to split
 doSplit _ (A.Module _ _ _ _ [_], _, _) = return Set.empty -- One declaration - nothing to split (but maybe we should anyway?)
 doSplit _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
-doSplit univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ _ _, _, _) =
+doSplit univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ _)) _ _ _, _, _) =
     qLnPutStr ("Splitting " ++ show moduleName) >>
     Set.mapM (updateImports (sModuleName moduleName) symbolToModule) univ' >>=
     return . union splitModules
@@ -174,13 +176,15 @@ doSplit univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ _ _, 
           case Map.lookup name' moduleDeclMap of
             Nothing ->
                 -- Build a module that re-exports a symbol
-                foldHeader echo2 echo (\ _n pref _ suff r -> r <> pref <> modName <> suff) echo m "" <>
-                foldExports echo2 ignore ignore2 m "" <>
-                doSeps (foldExports ignore2 (\ e pref s suff r -> r <> if setAny (`member` reExported) (justs (symbols e)) then [(pref, s <> suff)] else []) (\ s r -> r ++ [("", s)]) m []) <>
-                foldImports (\ _i pref s suff r -> r <> pref <> s <> suff) m ""
+                Foldable.fold (foldHeader echo2 echo (\ _n pref _ suff r -> r |> pref <> modName <> suff) echo m mempty) <>
+                Foldable.fold (foldExports echo2 ignore ignore2 m mempty) <>
+                doSeps (Foldable.fold (foldExports ignore2
+                                          (\ e pref s suff r -> if setAny (`member` reExported) (justs (symbols e)) then r |> [(pref, s <> suff)] else r)
+                                          (\ s r -> r |> [("", s)]) m mempty)) <>
+                Foldable.fold (foldImports (\ _i pref s suff r -> r |> pref <> s <> suff) m mempty)
             Just modDecls ->
                 -- Change the module name in the header
-                foldHeader echo2 echo (\ _n pref _ suff r -> r <> pref <> modName <> suff) echo m "" <>
+                Foldable.fold (foldHeader echo2 echo (\ _n pref _ suff r -> r |> pref <> modName <> suff) echo m mempty) <>
                 "    ( " {-foldExports echo2 ignore ignore2 m text ""-} <>
                 intercalate "\n    , " (nub (List.map (prettyPrintWithMode defaultMode) (newExports modDecls))) <>
                 "\n    ) where" {-foldExports ignore2 ignore echo2 m text ""-} <>
@@ -203,7 +207,6 @@ doSplit univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just _))) _ _ _, 
                 -- In this module, we need to import any module that declares a symbol
                 -- referenced here.
                 referenced modDecls = Set.map sName (gFind modDecls :: Set (A.Name SrcSpanInfo))
-doSplit _ _ = error "splitModule'"
 
 -- Re-construct a separated list
 doSeps :: [(String, String)] -> String
@@ -219,9 +222,9 @@ updateImports old symbolToModule name =
        parsed <- parseFileWithComments path
        case parsed of
          ParseOk (m', comments') ->
-             let text'' = foldModule echo2 echo echo echo echo2 echo echo2
-                          (\ i pref s suff r -> r <> pref <> updateImportDecl s i <> suff)
-                          echo echo2 (m', text', comments') "" in
+             let text'' = Foldable.fold (foldModule echo2 echo echo echo echo2 echo echo2
+                                                    (\ i pref s suff r -> r |> pref <> updateImportDecl s i <> suff)
+                                                    echo echo2 (m', text', comments') mempty) in
              return $ if text' /= text'' then Modified name text'' else Unchanged name
          ParseFailed _ _ -> error $ "Parse error in " ++ show name
     where

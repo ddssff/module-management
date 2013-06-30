@@ -9,10 +9,12 @@ import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, throw)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
 import Data.Default (def, Default)
+import Data.Foldable (fold)
 import Data.Function (on)
 import Data.List (find, groupBy, intercalate, nub, nubBy, sortBy)
 import Data.Maybe (catMaybes, fromMaybe)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), mempty)
+import Data.Sequence ((|>))
 import Data.Set as Set (empty, member, Set, singleton, toList, union, unions)
 import Language.Haskell.Exts.Annotated (ParseResult(..))
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, sModuleName, sName)
@@ -127,17 +129,21 @@ updateSource _ _ _ _ _ = error "updateSource"
 -- the imports from the sourceText and insert the new ones.
 replaceImports :: [A.ImportDecl SrcSpanInfo] -> ModuleInfo -> Maybe String
 replaceImports newImports m =
-    let oldPretty = foldImports (\ _ pref s suff r -> r <> pref <> s <> suff) m ""
+    let oldPretty = fold (foldImports (\ _ pref s suff r -> r |> (pref <> s <> suff)) m mempty)
         -- Surround newPretty with the same prefix and suffix as oldPretty
         newPretty = fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just pref) Just r) m Nothing) <>
                     intercalate "\n" (map (prettyPrintWithMode (defaultMode {layout = PPInLine})) newImports) <>
-                    foldImports (\ _ _ _ suff _ -> suff) m "" in
+                    foldImports (\ _ _ _ suff _ -> suff) m mempty in
     if oldPretty == newPretty
     then Nothing
-    else Just (foldHeader (\ s r -> r <> s) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ _ pref s suff r -> r <> pref <> s <> suff) m "" ++
-               foldExports (\ s r -> r <> s) (\ _ pref s suff r -> r <> pref <> s <> suff) (\ s r -> r <> s) m "" ++
+    else Just (fold (foldHeader (\ s r -> r |> s) (\ _ pref s suff r -> r |> (pref <> s <> suff))
+                                (\ _ pref s suff r -> r |> pref <> s <> suff)
+                                (\ _ pref s suff r -> r |> pref <> s <> suff) m mempty) ++
+               fold (foldExports (\ s r -> r |> s)
+                                 (\ _ pref s suff r -> r |> pref <> s <> suff)
+                                 (\ s r -> r |> s) m mempty) ++
                newPretty <>
-               foldDecls  (\ _ pref s suff r -> r <> pref <> s <> suff) (\ r s -> s <> r) m "")
+               fold (foldDecls  (\ _ pref s suff r -> r |> pref <> s <> suff) (\ r s -> s |> r) m mempty))
 
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: Bool         -- ^ If true, imports that turn into empty lists will be removed

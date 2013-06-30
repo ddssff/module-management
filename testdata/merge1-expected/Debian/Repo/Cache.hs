@@ -401,7 +401,6 @@ aptOpts os =
     where root = rootPath . rootDir $ os
 
 
-
 prepareAptEnv :: MonadApt m =>
                  FilePath               -- Put environment in a subdirectory of this
               -> SourcesChangedAction   -- What to do if environment already exists and sources.list is different
@@ -469,5 +468,4 @@ updateAptEnv os =
       ExitSuccess -> return ()
       ExitFailure n -> error $ cmd ++ " -> ExitFailure " ++ show n
 -}
-
 

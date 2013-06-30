@@ -276,7 +276,6 @@ atom_union f fm = overatoms (\ h t -> Set.union (f h) t) fm Set.empty
 $(deriveSafeCopy 1 'base ''Quant)
 
 
-
 {- This makes bad things happen.
 -- | We can use an fof type as a lit, but it must not use some constructs.
 instance FirstOrderFormula fof atom v => Literal fof atom v where
@@ -310,7 +309,6 @@ fromFirstOrder ca formula
         co _ = Failure ["fromFirstOrder"]
 
 
-
  
 fromLiteral ::
             forall lit atom v fof atom2 .
@@ -318,5 +316,4 @@ fromLiteral ::
                  Data.Logic.Classes.FirstOrder.FirstOrderFormula fof atom2 v) =>
                 (atom -> atom2) -> lit -> fof
 fromLiteral ca lit = foldLiteral (\ p -> (.~.) (fromLiteral ca p)) fromBool (atomic . ca) lit
-
 

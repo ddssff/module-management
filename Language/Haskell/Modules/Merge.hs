@@ -6,11 +6,13 @@ module Language.Haskell.Modules.Merge
 
 import Control.Monad as List (mapM)
 import Control.Monad.Trans (liftIO)
+import Data.Foldable (fold)
 import Data.Generics (Data, everywhere, mkT, Typeable)
 import Data.List as List (intercalate, map)
 import Data.Map as Map (fromList, insert, lookup, Map, member, toAscList)
 import Data.Maybe (fromMaybe)
-import Data.Monoid ((<>))
+import Data.Monoid ((<>), mempty)
+import Data.Sequence ((|>))
 import Data.Set as Set (difference, fromList, insert, Set, union)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sImportDecl, sModuleName)
@@ -73,8 +75,8 @@ doOutput :: Map S.ModuleName ModuleInfo -> [S.ModuleName] -> S.ModuleName -> Mod
 doOutput inputInfo inNames outName m =
     header ++ exports ++ imports ++ decls
     where
-      header = foldHeader echo2 echo (\ _ pref _ suff r -> r <> pref <> prettyPrint outName <> suff) echo m "" <>
-               foldExports (\ s r -> r <> s <> maybe "" (intercalate ", " . List.map (prettyPrint)) (mergeExports inputInfo outName) <> "\n") ignore ignore2 m ""
+      header = fold (foldHeader echo2 echo (\ _ pref _ suff r -> r |> pref <> prettyPrint outName <> suff) echo m mempty) <>
+               fold (foldExports (\ s r -> r |> s <> maybe "" (intercalate ", " . List.map (prettyPrint)) (mergeExports inputInfo outName) <> "\n") ignore ignore2 m mempty)
       exports = fromMaybe "" (foldExports ignore2 (\ _e pref _ _ r -> maybe (Just pref) Just r) ignore2 m Nothing)
       imports = foldExports ignore2 ignore (\ s r -> r <> s {-where-}) m "" <>
                 -- Insert the new imports just after the first "pre" string of the imports
@@ -87,10 +89,10 @@ doOutput inputInfo inNames outName m =
 -- (Shouldn't this also fix qualified symbols?)
 doOther :: [S.ModuleName] -> S.ModuleName -> ModuleInfo -> String
 doOther inputs output m =
-    foldHeader echo2 echo echo echo m "" <>
-    foldExports echo2 (\ x pref s suff r -> r <> pref <> fromMaybe s (fixModuleExport inputs output (sExportSpec x)) <> suff) echo2 m "" <>
-    foldImports (\ x pref s suff r -> r <> pref <> fromMaybe s (fixModuleImport inputs output (sImportDecl x)) <> suff) m "" <>
-    foldDecls echo echo2 m ""
+    fold (foldHeader echo2 echo echo echo m mempty) <>
+    fold (foldExports echo2 (\ x pref s suff r -> r |> pref <> fromMaybe s (fixModuleExport inputs output (sExportSpec x)) <> suff) echo2 m mempty) <>
+    fold (foldImports (\ x pref s suff r -> r |> pref <> fromMaybe s (fixModuleImport inputs output (sImportDecl x)) <> suff) m mempty) <>
+    fold (foldDecls echo echo2 m mempty)
 
 fixModuleExport :: [S.ModuleName] -> S.ModuleName -> S.ExportSpec -> Maybe String
 fixModuleExport inputs output x =
@@ -149,13 +151,11 @@ moduleDecls :: Map S.ModuleName ModuleInfo -> S.ModuleName -> S.ModuleName -> St
 moduleDecls oldmap new name =
     let (Just m@(A.Module _ _ _ imports _, _, _)) = Map.lookup name oldmap in
     let oldmap' = foldr f oldmap imports in
-    foldDecls (\ d pref s suff r ->
-                    let d' = sDecl d
-                        d'' = fixReferences oldmap' new d' in
-                    r <> pref <>
-                    (if d'' /= d' then prettyPrint d'' else s) <> suff)
-              echo2
-              m "" <> "\n"
+    fold (foldDecls (\ d pref s suff r ->
+                         let d' = sDecl d
+                             d'' = fixReferences oldmap' new d' in
+                         r |> pref <> (if d'' /= d' then prettyPrint d'' else s) <> suff)
+                    echo2 m mempty)
     where
       f (A.ImportDecl _ m _ _ _ (Just a) _specs) mp =
           case Map.lookup (sModuleName m) oldmap of

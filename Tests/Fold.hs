@@ -6,10 +6,12 @@ import Control.Monad.State (get, put, runState, State)
 import Control.Monad.Trans (liftIO)
 import Data.Char (isSpace)
 import Data.Default (Default(def))
+import Data.Foldable (fold)
 import Data.List (tails)
 import Data.Map (Map)
 import Data.Maybe (mapMaybe)
-import Data.Monoid ((<>), Monoid)
+import Data.Monoid (Monoid, (<>), mempty)
+import Data.Sequence as Seq (Seq, (|>), fromList, filter, zip)
 import Data.Set.Extra as Set (fromList)
 import Data.Tree (Tree(..))
 import Language.Haskell.Exts.Annotated (ParseResult(..))
@@ -36,7 +38,7 @@ test1 =
        assertEqual "echo" original output
     where
       test :: ModuleInfo -> (String, String)
-      test m@(_, text, _) = (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m "", text)
+      test m@(_, text, _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
 
 test1b :: Test
 test1b =
@@ -45,9 +47,11 @@ test1b =
        text <- liftIO $ readFile path
        ParseOk (m, comments) <- runMonadClean $ parseFileWithComments path
        let output = test (m, text, comments)
-       assertEqual "echo" [] (mapMaybe (\ (a, b) -> if a == b then Nothing else Just (a, b)) (zip expected output))
+       assertEqual "echo" mempty (Seq.filter (\ (a, b) -> a /= b) (Seq.zip expected output))
     where
-      expected =   [("-- Comment above module head\nmodule ","","",""),
+      expected :: Seq (String, String, String, String)
+      expected = Seq.fromList
+                   [("-- Comment above module head\nmodule ","","",""),
                     ("","Debian.Repo.Sync"," ","[2.8:2.24]"),
                     ("","{-# WARNING \"this is a warning\" #-}","\n","[2.25:2.60]"),
                     ("    ( ","","",""),
@@ -65,24 +69,17 @@ test1b =
                     ("\n-- Comment between two decls\n","foo :: Int","\n","[29.1:29.11]"),
                     ("","foo = 1","\n","[30.1:30.8]"),
                     ("\n{-\nhandleExit 1 = \"Syntax or usage error\"\nhandleExit 2 = \"Protocol incompatibility\"\nhandleExit 3 = \"Errors selecting input/output files, dirs\"\nhandleExit 4 = \"Requested action not supported: an attempt was made to manipulate 64-bit files on a platform that cannot support them; or an option was specified that is supported by the client and not by the server.\"\nhandleExit 5 = \"Error starting client-server protocol\"\nhandleExit 6 = \"Daemon unable to append to log-file\"\nhandleExit 10 = \"Error in socket I/O\"\nhandleExit 11 = \"Error in file I/O\"\nhandleExit 12 = \"Error in rsync protocol data stream\"\nhandleExit 13 = \"Errors with program diagnostics\"\nhandleExit 14 = \"Error in IPC code\"\nhandleExit 20 = \"Received SIGUSR1 or SIGINT\"\nhandleExit 21 = \"Some error returned by waitpid()\"\nhandleExit 22 = \"Error allocating core memory buffers\"\nhandleExit 23 = \"Partial transfer due to error\"\nhandleExit 24 = \"Partial transfer due to vanished source files\"\nhandleExit 25 = \"The --max-delete limit stopped deletions\"\nhandleExit 30 = \"Timeout in data send/receive\"\nhandleExit 35 = \"Timeout waiting for daemon connection\"\n-}\n","","","")]
-      test :: ModuleInfo -> [(String, String, String, String)]
+      test :: ModuleInfo -> Seq (String, String, String, String)
       test m =
-          foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m []
+          foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m mempty
           where
-            pragmaf :: A.ModulePragma SrcSpanInfo -> String -> String -> String -> [(String, String, String, String)] -> [(String, String, String, String)]
-            pragmaf x pref s suff r = r ++ [(pref, s, suff,int (spanInfo x))]
-            namef :: A.ModuleName SrcSpanInfo -> String -> String -> String -> [(String, String, String, String)] -> [(String, String, String, String)]
-            namef x pref s suff r = r ++ [(pref, s, suff,int (spanInfo x))]
-            warningf :: A.WarningText SrcSpanInfo -> String -> String -> String -> [(String, String, String, String)] -> [(String, String, String, String)]
-            warningf x pref s suff r = r ++ [(pref, s, suff,int (spanInfo x))]
-            exportf :: A.ExportSpec SrcSpanInfo -> String -> String -> String -> [(String, String, String, String)] -> [(String, String, String, String)]
-            exportf x pref s suff r = r ++ [(pref, s, suff,int (spanInfo x))]
-            importf :: A.ImportDecl SrcSpanInfo -> String -> String -> String -> [(String, String, String, String)] -> [(String, String, String, String)]
-            importf x pref s suff r = r ++ [(pref, s, suff,int (spanInfo x))]
-            declf :: A.Decl SrcSpanInfo -> String -> String -> String -> [(String, String, String, String)] -> [(String, String, String, String)]
-            declf x pref s suff r = r ++ [(pref, s, suff,int (spanInfo x))]
-            tailf :: String -> [(String, String, String, String)] -> [(String, String, String, String)]
-            tailf s r = r ++ [(s, "", "", "")]
+            pragmaf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
+            namef x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
+            warningf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
+            exportf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
+            importf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
+            declf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
+            tailf s r = r |> (s, "", "", "")
 
 int :: HasSpanInfo a => a -> String
 int x = let (SrcSpanInfo (SrcSpan _ a b c d) _) = spanInfo x in "[" ++ show a ++ "." ++ show b ++ ":" ++ show c ++ "." ++ show d ++ "]"
@@ -97,7 +94,7 @@ test3 =
        assertEqual "echo" original output
     where
       test :: ModuleInfo -> (String, String)
-      test m@(_, text, _) = (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m "", text)
+      test m@(_, text, _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
 
 test5 :: Test
 test5 =
@@ -156,7 +153,7 @@ test6 = TestCase (assertEqual "tree1"
                                                                      Node {rootLabel = sp 8 9, subForest = []}]},
                                                   Node {rootLabel = sp 11 18,
                                                         subForest = [Node {rootLabel = sp 12 15, subForest = []}]}]})
-                              (makeTree (fromList
+                              (makeTree (Set.fromList
                                          [sp 2 20,
                                           sp 5 10,
                                           sp 11 18,
