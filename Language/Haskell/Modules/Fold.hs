@@ -35,7 +35,7 @@ import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (parseFileWithComments, runMonadClean)
-import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, makeTree, srcLoc, srcPairTextHead, srcPairTextTail, srcPairTextPair)
+import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, makeTree, srcLoc, srcPairText, srcPairText)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
 type Module = A.Module SrcSpanInfo
@@ -150,7 +150,7 @@ adjustSpans text comments sps =
                          (Comment _ csp _ : cs)
                              | srcLoc csp <= loc_ st ->
                                  -- We reached the comment, skip past it and discard
-                                 case srcPairTextPair (loc_ st) (endLoc csp) (text_ st) of
+                                 case srcPairText (loc_ st) (endLoc csp) (text_ st) of
                                    ("", _) -> return ()
                                    (comm, t') ->
                                        let loc' = increaseSrcLoc comm (loc_ st) in
@@ -205,10 +205,9 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (m@(A.
       doClose f sp =
           do (tl, l, sps, r) <- get
              case l < endLoc sp of
-               True -> put (srcPairTextTail l (endLoc sp) tl,
-                            endLoc sp,
-                            sps,
-                            f (srcPairTextHead l (endLoc sp) tl) r)
+               True ->
+                   let (p, s) = srcPairText l (endLoc sp) tl in
+                   put (s, endLoc sp, sps, f p r)
                False -> return ()
       doTail f =
           do (tl, l, sps, r) <- get
@@ -221,10 +220,8 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (m@(A.
                    do let l' = srcLoc sp
                       case l <= l' of
                         True ->
-                            do put (srcPairTextTail l l' tl,
-                                    l',
-                                    sps,
-                                    f (srcPairTextHead l l' tl) r)
+                            let (p, s) = srcPairText l l' tl in
+                            put (s, l', sps, f p r)
                         False -> return ()
                _ -> error $ "foldModule - out of spans: " ++ show p
       doList :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> [a] -> State (String, SrcLoc, [SrcSpanInfo], r) ()
@@ -237,14 +234,11 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (m@(A.
              let -- Another haskell-src-exts bug?  If a module ends
                  -- with no newline, endLoc will be at the beginning
                  -- of the following (nonexistant) line.
-                 pre = srcPairTextHead l (srcLoc sp) tl
-                 tl' = srcPairTextTail l (srcLoc sp) tl
+                 (pre, tl') = srcPairText l (srcLoc sp) tl
                  l' = endLoc sp
-                 s = srcPairTextHead (srcLoc sp) l' tl'
-                 tl'' = srcPairTextTail (srcLoc sp) l' tl'
+                 (s, tl'') = srcPairText (srcLoc sp) l' tl'
                  l'' = adjust1 tl'' l'
-                 post = srcPairTextHead l' l'' tl''
-                 tl''' = srcPairTextTail l' l'' tl''
+                 (post, tl''') = srcPairText l' l'' tl''
              put (tl''', l'', sps', f x pre s post r)
 
       -- Move to just past the last newline in the leading whitespace

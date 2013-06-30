@@ -8,13 +8,12 @@ module Language.Haskell.Modules.Util.SrcLoc
     , textEndLoc
     , increaseSrcLoc
     , textSpan
-    , srcPairTextHead
-    , srcPairTextTail
-    , srcPairTextPair
+    , srcPairText
     , makeTree
     , tests
     ) where
 
+import Control.Monad.State (State, runState, get, put)
 import Data.Default (def, Default)
 import Data.List (groupBy, partition, sort)
 import Data.Set (Set, toList)
@@ -169,78 +168,53 @@ tests :: Test
 tests = TestList [test1, test2, test3, test4, test5]
 
 test1 :: Test
-test1 = TestCase (assertEqual "srcPairTextTail1" "hi\tjkl\n" (srcPairTextTail (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 2) "abc\tdef\nghi\tjkl\n"))
+test1 = TestCase (assertEqual "srcPairTextTail1" "hi\tjkl\n" (snd (srcPairText (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 2) "abc\tdef\nghi\tjkl\n")))
 test2 :: Test
-test2 = TestCase (assertEqual "srcPairTextTail2" "kl\n" (srcPairTextTail (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 9) "abc\tdef\nghi\tjkl\n"))
+test2 = TestCase (assertEqual "srcPairTextTail2" "kl\n" (snd (srcPairText (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 9) "abc\tdef\nghi\tjkl\n")))
 test3 :: Test
-test3 = TestCase (assertEqual "srcPairTextHead1" "abc\tdef\ng" (srcPairTextHead (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 2) "abc\tdef\nghi\tjkl\n"))
+test3 = TestCase (assertEqual "srcPairTextHead1" "abc\tdef\ng" (fst (srcPairText (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 2) "abc\tdef\nghi\tjkl\n")))
 test4 :: Test
-test4 = TestCase (assertEqual "srcPairTextHead21" "abc\tdef\nghi\tj" (srcPairTextHead (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 9) "abc\tdef\nghi\tjkl\n"))
+test4 = TestCase (assertEqual "srcPairTextHead21" "abc\tdef\nghi\tj" (fst (srcPairText (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 9) "abc\tdef\nghi\tjkl\n")))
 test5 :: Test
 test5 = TestCase (assertEqual "srcPairTextTail3"
                               "{-# OPTIONS_GHC -fno-warn-orphans #-}\nmodule Debian.Repo.Orphans where\n\nimport Data.Text (Text)\nimport qualified Debian.Control.Text as T\n\nderiving instance Show (T.Field' Text)\nderiving instance Ord (T.Field' Text)\nderiving instance Show T.Paragraph\nderiving instance Ord T.Paragraph\n"
-                              (srcPairTextTail
+                              (snd
+                               (srcPairText
                                  (SrcLoc "<unknown>.hs" 1 77)
                                  (SrcLoc "<unknown>.hs" 2 1)
-                                 "\n{-# OPTIONS_GHC -fno-warn-orphans #-}\nmodule Debian.Repo.Orphans where\n\nimport Data.Text (Text)\nimport qualified Debian.Control.Text as T\n\nderiving instance Show (T.Field' Text)\nderiving instance Ord (T.Field' Text)\nderiving instance Show T.Paragraph\nderiving instance Ord T.Paragraph\n"))
+                                 "\n{-# OPTIONS_GHC -fno-warn-orphans #-}\nmodule Debian.Repo.Orphans where\n\nimport Data.Text (Text)\nimport qualified Debian.Control.Text as T\n\nderiving instance Show (T.Field' Text)\nderiving instance Ord (T.Field' Text)\nderiving instance Show T.Paragraph\nderiving instance Ord T.Paragraph\n")))
 
 textSpan :: String -> SrcSpanInfo
 textSpan s = let end = textEndLoc s in
              SrcSpanInfo (def {srcSpanStartLine = 1, srcSpanStartColumn = 1, srcSpanEndLine = srcLine end, srcSpanEndColumn = srcColumn end}) []
 
--- | Return the beginning portion of s which the span b thru e covers,
--- assuming that the beginning of s is at position b - that is, that
--- the prefix of s from (1,1) to b has already been removed.
-srcPairTextHead :: SrcLoc -> SrcLoc -> String -> String
-srcPairTextHead b0 e0 s0 =
-    f b0 e0 [] s0
+srcPairText :: SrcLoc -> SrcLoc -> String -> (String, String)
+srcPairText b0 e0 s0 =
+    fst $ runState f (b0, e0, "", s0)
     where
-      f b e r s =
-          if srcLine b < srcLine e
-          then case span (/= '\n') s of
-                 (r', '\n' : s') ->
-                     f (b {srcLine = srcLine b + 1, srcColumn = 1}) e ("\n" : r' : r) s'
-                 (_, "") ->
-                     -- This should not happen, but if the last line
-                     -- lacks a newline terminator, haskell-src-exts
-                     -- will set the end location as if the terminator
-                     -- was present.
-                     case s of
-                       "" -> concat (reverse r)
-                       ('\t' : s') -> f (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e (['\t'] : r) s'
-                       (c : s') -> f (b {srcColumn = srcColumn b + 1}) e ([c] : r) s'
-                 _ -> error $ "srcPairTextHead: " ++ show (b, e, s)
-          else if srcColumn b < srcColumn e
-               then case s of
-                      [] -> error $ "srcPairTextHead: " ++ show (b0, e0, s0)
-                      ('\t' : s') -> f (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e (['\t'] : r) s'
-                      (c : s') -> f (b {srcColumn = srcColumn b + 1}) e ([c] : r) s'
-               else concat (reverse r)
-
--- | Like srcPairTextHead, but returns the tail of s instead of the head.
-srcPairTextTail :: SrcLoc -> SrcLoc -> String -> String
-srcPairTextTail b e s =
-    if srcLine b < srcLine e
-    then case dropWhile (/= '\n') s of
-           ('\n' : s') -> srcPairTextTail (b {srcLine = srcLine b + 1, srcColumn = 1}) e s'
-           -- This should not happen, but if the last line lacks a
-           -- newline terminator, haskell-src-exts will set the end
-           -- location as if the terminator was present.
-           [] -> case s of
-                   [] -> ""
-                   ('\t' : s') -> srcPairTextTail (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e s'
-                   (_ : s') -> srcPairTextTail (b {srcColumn = srcColumn b + 1}) e s'
-           _ -> error $ "srcPairTextTail: b=" ++ show b ++ ", e=" ++ show e ++ ", s = " ++ show s
-    else if srcColumn b < srcColumn e
-         then case s of
-                [] -> error $ "srcPairTextTail: b=" ++ show b ++ ", e=" ++ show e ++ ", s = " ++ show s
-                ('\t' : s') -> srcPairTextTail (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}) e s'
-                (_ : s') -> srcPairTextTail (b {srcColumn = srcColumn b + 1}) e s'
-         else s
-
--- | Shirley there's a more efficient way to do this?
-srcPairTextPair :: SrcLoc -> SrcLoc -> String -> (String, String)
-srcPairTextPair b e s = (srcPairTextHead b e s, srcPairTextTail b e s)
+      f :: State (SrcLoc, SrcLoc, String, String) (String, String)
+      f = do (b, e, r, s) <- get
+             case (srcLine b < srcLine e, srcColumn b < srcColumn e) of
+               (True, _) ->
+                   case span (/= '\n') s of
+                     (r', '\n' : s') ->
+                         put (b {srcLine = srcLine b + 1, srcColumn = 1}, e, r ++ r' ++ "\n", s') >> f
+                     (_, "") ->
+                        -- This should not happen, but if the last line
+                        -- lacks a newline terminator, haskell-src-exts
+                        -- will set the end location as if the terminator
+                        -- was present.
+                        case s of
+                          "" -> return (r, s)
+                          ('\t' : s') -> put (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}, e, r ++ "\t", s') >> f
+                          (c : s') -> put (b {srcColumn = srcColumn b + 1}, e, r ++ [c], s') >> f
+               (_, True) ->
+                   case s of
+                     [] -> error $ "srcPairText: " ++ show (b0, e0, s0)
+                     ('\t' : s') -> put (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}, e, r ++ ['\t'], s') >> f
+                     (c : s') -> put (b {srcColumn = srcColumn b + 1}, e, r ++ [c], s') >> f
+               _ ->
+                   return (r, s)
 
 instance Default SrcLoc where
     def = SrcLoc "<unknown>.hs" 1 1
