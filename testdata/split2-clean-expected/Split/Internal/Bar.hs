@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 -- Split a module with a re-export
 module Split.Internal.Bar
-    ( Bar(Bar)
+    ( -- Symbols that are exported but not declared go into ReExported
+      Bar(Bar)
     ) where
 
 

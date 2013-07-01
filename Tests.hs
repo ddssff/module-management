@@ -20,12 +20,13 @@ import qualified Tests.Split as Split (tests)
 import Language.Haskell.Modules.Util.QIO (noisily, qLnPutStr)
 import Language.Haskell.Modules.Util.Test (logicModules, diff', rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
-import System.Process (readProcess)
+import System.Process (system, readProcess)
 import Test.HUnit (assertEqual, Counts(..), runTestTT, Test(TestList, TestCase, TestLabel))
 
 main :: IO ()
 main =
-    do counts <- runTestTT (TestList [TestLabel "Main" Main.tests])
+    do _ <- system "[ -d testdata ] || tar xfz testdata.tar.gz"
+       counts <- runTestTT (TestList [TestLabel "Main" Main.tests])
        putStrLn (show counts)
        case (errors counts + failures counts) of
          0 -> exitWith ExitSuccess

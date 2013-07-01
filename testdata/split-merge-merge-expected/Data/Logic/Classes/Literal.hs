@@ -86,7 +86,6 @@ fixityLiteral formula =
       at = fixity
 
 
-
 foldAtomsLiteral :: Literal lit atom => (r -> atom -> r) -> r -> lit -> r
 foldAtomsLiteral f i lit = foldLiteral (foldAtomsLiteral f i) (const i) (f i) lit
 

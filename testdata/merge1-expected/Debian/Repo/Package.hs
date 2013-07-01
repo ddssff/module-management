@@ -1,8 +1,7 @@
 {-# LANGUAGE PackageImports, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS -fno-warn-name-shadowing #-}
 module Debian.Repo.Package
-    ( -- * Source and binary packages
-      sourceFilePaths
+    ( sourceFilePaths
     , binaryPackageSourceVersion
     , binarySourceVersion
     , sourcePackageBinaryNames
@@ -21,7 +20,6 @@ module Debian.Repo.Package
     , releaseBinaryPackages
     , TH.FixityDirection(..)
     , TH.Fixity(..)
-    -- * Deprecated stuff for interfacing with Debian.Relation
     ) where
 
 import Control.Exception as E (catch, ErrorCall(..), SomeException(..), try)

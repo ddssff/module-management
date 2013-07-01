@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 -- Split a module with a re-export
 module Split.OtherSymbols
-    ( (+-+)
+    ( -- Symbols that are exported but not declared go into ReExported
+      (+-+)
     ) where
 
 

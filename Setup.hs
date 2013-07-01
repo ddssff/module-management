@@ -11,8 +11,7 @@ import System.FilePath ((</>))
 
 main = defaultMainWithHooks simpleUserHooks
          { sDistHook = \ p l u f ->
-             system "tar cfz testdata.tar.gz testdata" >> (sDistHook simpleUserHooks) p l u f }
-       -- {
-       --   postBuild = \ _ _ _ lbi -> do code <- system (buildDir lbi </> "tests/tests")
-       --                                 if code == ExitSuccess then putStrLn "Tests passed" else error "Tests failed"
-       -- }
+             system "tar cfz testdata.tar.gz testdata" >> (sDistHook simpleUserHooks) p l u f
+         -- , postBuild = \ _ _ _ lbi -> do code <- system (buildDir lbi </> "tests/tests")
+         --                               if code == ExitSuccess then putStrLn "Tests passed" else error "Tests failed"
+         }

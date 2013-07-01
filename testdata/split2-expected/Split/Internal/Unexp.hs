@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 -- Split a module with a re-export
 module Split.Internal.Unexp
-    ( unexp
+    ( -- Symbols that are exported but not declared go into ReExported
+      unexp
     ) where
 
 
