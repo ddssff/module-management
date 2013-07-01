@@ -1,3 +1,13 @@
+haskell-module-management (0.10.1) unstable; urgency=low
+
+  * Changes to compile under ghc-7.4.1
+  * Formatting fix - eliminate extra newline added to split modules
+  * Find a way to include the test data without listing hundreds of files
+  * Add testdata tarball and debian/changelog to distribution
+  * Performance fixes
+
+ -- David Fox <dsf@seereason.com>  Sat, 29 Jun 2013 16:57:20 -0700
+
 haskell-module-management (0.10) unstable; urgency=low
 
   * Extend documentation
