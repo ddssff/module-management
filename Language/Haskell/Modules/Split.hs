@@ -37,6 +37,13 @@ import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import System.FilePath ((<.>))
 import Test.HUnit (assertEqual, Test(TestCase, TestList, TestLabel))
 
+data DeclName
+    = Exported S.Name -- Maybe because...?
+    | Internal S.Name
+    | ReExported S.Name
+    | Instance
+    deriving (Eq, Ord, Show)
+
 setAny :: Ord a => (a -> Bool) -> Set a -> Bool
 setAny f s = not (Set.null (Set.filter f s))
 
@@ -117,16 +124,12 @@ doSplit _ (A.Module _ _ _ _ [_], _, _) = return Set.empty -- One declaration - n
 doSplit _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
 doSplit univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ _)) _ _ _, _, _) =
     qLnPutStr ("Splitting " ++ show moduleName) >>
-    Set.mapM (updateImports (sModuleName moduleName) symbolToModule) univ' >>=
+    Set.mapM (updateImports reExported internal (sModuleName moduleName) symbolToModule) univ' >>=
     return . union splitModules
     where
+      symbolToModule = defaultSymbolToModule m reExported internal old
       -- The name of the module to be split
       old = sModuleName moduleName
-      -- Build a map from module name to the list of declarations that
-      -- will be in that module.  All of these declarations used to be
-      -- in moduleName.
-
-      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (subModuleName reExported internal old sym) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 m Map.empty
 
       -- This returns a set of maybe because there may be instance
       -- declarations, in which case we want an Instances module to
@@ -153,20 +156,6 @@ doSplit univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ _)) _ _ _, _, _) =
       splitModules =
           union (Set.map newModule newModuleNames)
                 (if member old newModuleNames then Set.empty else singleton (Removed old))
-
-      -- Map from symbol name to the module that symbol will move to
-      symbolToModule :: Map (Maybe S.Name) S.ModuleName
-      symbolToModule =
-          mp'
-          where
-            mp' = foldExports ignore2 (\ e _ _ _ r -> Set.fold f r (symbols e)) ignore2 m mp
-            mp = foldDecls (\ d _ _ _ r -> Set.fold f r (symbols d)) ignore2 m Map.empty
-            f sym mp'' =
-                Map.insertWith
-                   (\ a b -> if a /= b then error ("symbolToModule - two modules for " ++ show sym ++ ": " ++ show (a, b)) else a)
-                   sym
-                   (subModuleName reExported internal old sym)
-                   mp''
 
       -- Build a new module given its name and the list of
       -- declarations it should contain.
@@ -208,14 +197,20 @@ doSplit univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ _)) _ _ _, _, _) =
                 -- referenced here.
                 referenced modDecls = Set.map sName (gFind modDecls :: Set (A.Name SrcSpanInfo))
 
+      -- Build a map from module name to the list of declarations that
+      -- will be in that module.  All of these declarations used to be
+      -- in moduleName.
+      moduleDeclMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
+      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (subModuleName reExported internal old sym) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 m Map.empty
+
 -- Re-construct a separated list
 doSeps :: [(String, String)] -> String
 doSeps [] = ""
 doSeps ((_, hd) : tl) = hd <> concatMap (\ (a, b) -> a <> b) tl
 
 -- | Update the imports to reflect the changed module names in symbolToModule.
-updateImports :: MonadClean m => S.ModuleName -> Map (Maybe S.Name) S.ModuleName -> S.ModuleName -> m ModuleResult
-updateImports old symbolToModule name =
+updateImports :: MonadClean m => Set S.Name -> Set S.Name -> S.ModuleName -> Map DeclName S.ModuleName -> S.ModuleName -> m ModuleResult
+updateImports reExported internal old symbolToModule name =
     do path <- modulePath name
        quietly $ qLnPutStr $ "updateImports " ++ show name
        text' <- liftIO $ readFile path
@@ -239,7 +234,7 @@ updateImports old symbolToModule name =
       updateImportSpecs i Nothing = List.map (\ x -> (sImportDecl i) {S.importModule = x}) (Map.elems symbolToModule)
       -- If flag is True this is a "hiding" import
       updateImportSpecs i (Just (A.ImportSpecList _ flag specs)) =
-          concatMap (\ spec -> let xs = mapMaybe (\ sym -> Map.lookup sym symbolToModule) (toList (symbols spec)) in
+          concatMap (\ spec -> let xs = mapMaybe (\ sym -> Map.lookup (declName reExported internal sym) symbolToModule) (toList (symbols spec)) in
                                List.map (\ x -> (sImportDecl i) {S.importModule = x, S.importSpecs = Just (flag, [sImportSpec spec])}) xs) specs
 
 {-
@@ -269,6 +264,20 @@ splitModule' _ (ParseOk (m@(A.Module _ (Just (A.ModuleHead _ moduleName _ (Just 
 splitModule' _ _ _ = error "splitModule'"
 -}
 
+-- | Map from symbol name to the module that symbol will move to
+defaultSymbolToModule :: ModuleInfo -> Set S.Name -> Set S.Name -> S.ModuleName -> Map DeclName S.ModuleName
+defaultSymbolToModule m reExported internal old =
+    mp'
+    where
+      mp' = foldExports ignore2 (\ e _ _ _ r -> Set.fold f r (symbols e)) ignore2 m mp
+      mp = foldDecls (\ d _ _ _ r -> Set.fold f r (symbols d)) ignore2 m Map.empty
+      f sym mp'' =
+          Map.insertWith
+            (\ a b -> if a /= b then error ("symbolToModule - two modules for " ++ show sym ++ ": " ++ show (a, b)) else a)
+            (declName  reExported internal sym)
+            (subModuleName reExported internal old sym)
+            mp''
+
 -- | What module should this symbol be moved to?
 subModuleName :: Set S.Name -> Set S.Name -> S.ModuleName -> Maybe S.Name -> S.ModuleName
 subModuleName reExported internal (S.ModuleName moduleName) name =
@@ -288,6 +297,18 @@ subModuleName reExported internal (S.ModuleName moduleName) name =
                   -- by capitalizing and keeping the remaining alphaNum characters.
                   (c : s) | isAlpha c -> toUpper c : List.filter isAlphaNum s
                   _ -> "OtherSymbols"
+
+declName :: Set S.Name -> Set S.Name -> Maybe S.Name -> DeclName
+declName reExported internal name =
+    case name of
+      Nothing -> Instance
+      Just name' ->
+          if member name' reExported
+          then ReExported name'
+          else if member name' internal
+               then Internal name'
+               else Exported name'
+
 
 -- | Build an import of the symbols created by a declaration.
 toImportDecl :: S.ModuleName -> [(A.Decl SrcSpanInfo, String)] -> S.ImportDecl
