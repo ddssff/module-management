@@ -11,7 +11,7 @@ import Data.List (tails)
 import Data.Map (Map)
 import Data.Maybe (mapMaybe)
 import Data.Monoid (Monoid, (<>), mempty)
-import Data.Sequence as Seq (Seq, (|>), fromList, filter, zip)
+import Data.Sequence as Seq (Seq, (|>), (<|), fromList, filter, zip)
 import Data.Set.Extra as Set (fromList)
 import Data.Tree (Tree(..))
 import Language.Haskell.Exts.Annotated (ParseResult(..))
@@ -20,13 +20,14 @@ import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Fold (ModuleInfo, ModuleMap, foldModule, foldDecls, echo, echo2)
+import Language.Haskell.Modules.Fold (ModuleInfo, ModuleMap, foldModule, foldDecls, echo, echo2, ignore2)
 import Language.Haskell.Modules.Internal (parseFileWithComments, runMonadClean)
 import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, makeTree, srcLoc, srcPairText, srcPairText)
+import Language.Haskell.Modules.Util.Test (rsync)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
 tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test1b, test3, test4, test5, test5b, test6])
+tests = TestLabel "Clean" (TestList [test1, test1b, test3, test4, test5, test5b, test6, test7])
 
 test1 :: Test
 test1 =
@@ -98,8 +99,8 @@ test3 =
 
 test5 :: Test
 test5 =
-    TestLabel "test5" $ TestCase $
-    do let path = "testdata/test5.hs" -- "testdata/logic/Data/Logic/Classes/Literal.hs"
+    TestLabel "fold5" $ TestCase $
+    do let path = "testdata/fold5.hs" -- "testdata/logic/Data/Logic/Classes/Literal.hs"
        text <- liftIO $ readFile path
        ParseOk (m, comments) <- runMonadClean $ parseFileWithComments path
        -- let actual = map f (adjustSpans text comments (spans m))
@@ -171,3 +172,31 @@ test6 = TestCase (assertEqual "tree1"
 
 test4 :: Test
 test4 = TestCase (assertEqual "test4" (SrcLoc "<unknown>.hs" 2 24 < SrcLoc "<unknown>.hs" 29 7) True)
+
+test7 :: Test
+test7 =
+    TestCase $
+    do text <- readFile "testdata/Fold7.hs"
+       ParseOk (m, comments) <- runMonadClean $ parseFileWithComments "testdata/Fold7.hs"
+       let actual = foldModule (\ s r -> r |> (s, "", ""))
+                               (\ _ b s a r -> r |> (b, s, a))
+                               (\ _ b s a r -> r |> (b, s, a))
+                               (\ _ b s a r -> r |> (b, s, a))
+                               (\ s r -> r |> (s, "", ""))
+                               (\ _ b s a r -> r |> (b, s, a))
+                               (\ s r -> r |> (s, "", ""))
+                               (\ _ b s a r -> r |> (b, s, a))
+                               (\ _ b s a r -> r |> (b, s, a))
+                               (\ s r -> r |> (s, "", ""))
+                               (m, text, comments) mempty
+       assertEqual "fold7" expected actual
+    where
+      expected = Seq.fromList $
+             [ ("module ","","")
+             , ("","Main"," ")
+             , ("where\n\n-- | Get the contents of a package index\n","","")
+            -- What we are getting
+             , ("","binaryPackagesOfIndex repo release index =\n    liftIO $ getPackages repo release index"," "), ("-- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))\n\n","a=1","  ")
+            -- What we want
+             -- , ("","binaryPackagesOfIndex repo release index =\n    liftIO $ getPackages repo release index", " -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))\n"), ("\n", "a=1","  ")
+             , ("-- This is a comment too\n","","") ]
