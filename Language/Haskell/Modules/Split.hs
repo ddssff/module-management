@@ -14,7 +14,7 @@ import Data.List as List (filter, intercalate, map, nub)
 import Data.Map as Map (delete, elems, empty, filter, insertWith, lookup, Map, mapWithKey)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>), mempty)
-import Data.Sequence ((|>))
+import Data.Sequence ((|>), (<|))
 import Data.Set as Set (delete, difference, empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
 import Data.Set.Extra as Set (gFind, mapM)
 import Language.Haskell.Exts (fromParseResult, ParseResult(ParseOk, ParseFailed))
@@ -174,9 +174,12 @@ doSplit univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ _)) _ _ _, _, _) =
             Just modDecls ->
                 -- Change the module name in the header
                 Foldable.fold (foldHeader echo2 echo (\ _n pref _ suff r -> r |> pref <> modName <> suff) echo m mempty) <>
-                "    ( " {-foldExports echo2 ignore ignore2 m text ""-} <>
-                intercalate "\n    , " (nub (List.map (prettyPrintWithMode defaultMode) (newExports modDecls))) <>
-                "\n    ) where" {-foldExports ignore2 ignore echo2 m text ""-} <>
+                -- If the module has an export list use its outline
+                (let mh = let (A.Module _ x _ _ _, _, _) = m in x
+                     me = maybe Nothing (\ h -> let (A.ModuleHead _ _ _ x) = h in x) mh in
+                 maybe "\n    ( " (\ _ -> Foldable.fold $ foldExports (<|) ignore ignore2 m mempty) me <>
+                 intercalate "\n    , " (nub (List.map (prettyPrintWithMode defaultMode) (newExports modDecls))) <> "\n" <>
+                 maybe "    ) where\n" (\ _ -> Foldable.fold $ foldExports ignore2 ignore (<|) m mempty) me) <>
                 -- The prefix of the imports section
                 fromMaybe "" (foldImports (\ _i pref _ _ r -> maybe (Just pref) Just r) m Nothing) <>
                 unlines (List.map (prettyPrintWithMode defaultMode) (elems (newImports modDecls))) <> "\n" <>
