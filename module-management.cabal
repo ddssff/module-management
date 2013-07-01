@@ -10,7 +10,7 @@ Category:           Editor, Haskell, IDE
 Stability:          experimental
 Build-type:         Simple
 Cabal-version:      >=1.8
-Extra-Source-Files: testdata.tar.gz
+Extra-Source-Files: testdata.tar.gz, debian/changelog
 
 Flag build-tests
   Description: build the test executable
