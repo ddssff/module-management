@@ -23,7 +23,7 @@ test1 =
           let name = S.ModuleName "Debian.Repo.Types.PackageIndex"
           let base = modulePathBase name
           _ <- withCurrentDirectory "tmp" (runMonadClean (cleanImports base))
-          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> base, "tmp" </> base] ""
+          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> base, "tmp" </> base] ""
           assertEqual "cleanImports"
                          (ExitFailure 1,
                           ["@@ -22,13 +22,13 @@",
@@ -43,7 +43,7 @@ test1 =
                            " import System.Posix.Types (FileOffset)",
                            " import Text.PrettyPrint.ANSI.Leijen ((<>), Doc, Pretty(pretty), text)"],
                           "")
-                          (code, drop 2 (lines diff), err))
+                          (code, drop 2 (lines out), err))
 
 test2 :: Test
 test2 =
@@ -52,8 +52,8 @@ test2 =
           let name = S.ModuleName "Debian.Repo.PackageIndex"
               base = modulePathBase name
           _ <- withCurrentDirectory "tmp" (runMonadClean (cleanImports base))
-          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> base, "tmp" </> base] ""
-          assertEqual "cleanImports" (ExitSuccess, "", "") (code, diff, err))
+          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> base, "tmp" </> base] ""
+          assertEqual "cleanImports" (ExitSuccess, "", "") (code, out, err))
 
 -- | Can we handle a Main module in a file named something other than Main.hs?
 test3 :: Test
@@ -80,7 +80,7 @@ test5 =
           _ <- runMonadClean (modifyParams (\ p -> p {extensions = extensions p ++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances],
                                                   sourceDirs = ["tmp"]}) >>
                           cleanImports "tmp/Deriving.hs")
-          (code, diff, err) <- diff "testdata/imports5" "tmp"
+          (code, out, err) <- diff "testdata/imports5" "tmp"
           assertEqual "standalone deriving"
                       (ExitFailure 1,
                        (unlines
@@ -94,7 +94,7 @@ test5 =
                          " deriving instance Show (Field' String)",
                          " deriving instance Show Paragraph"]),
                        "")
-                      (code, unlines (drop 3 (lines diff)), err))
+                      (code, unlines (drop 3 (lines out)), err))
 
 -- | Comment at EOF
 test6 :: Test
@@ -102,5 +102,5 @@ test6 =
     TestLabel "imports6" $ TestCase
       (do _ <- rsync "testdata/imports6" "tmp"
           _ <- withCurrentDirectory "tmp" (runMonadClean (modifyTestMode (const True) >> cleanImports "EndComment.hs"))
-          (code, diff, err) <- readProcessWithExitCode "diff" ["-ru", "imports6-expected", "tmp"] ""
-          assertEqual "comment at end" "" diff)
+          (_, out, _) <- readProcessWithExitCode "diff" ["-ru", "imports6-expected", "tmp"] ""
+          assertEqual "comment at end" "" out)

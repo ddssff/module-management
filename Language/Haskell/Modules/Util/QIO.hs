@@ -9,7 +9,7 @@ module Language.Haskell.Modules.Util.QIO
     , noisily
     , qIO
     , qPutStr
-    -- , qPutStrLn
+    , qPutStrLn
     , qLnPutStr
     ) where
 

@@ -14,7 +14,7 @@ import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import Test.HUnit (assertEqual, Test(TestCase, TestList, TestLabel))
 
 tests :: Test
-tests = TestList [split1, split2a, split2b, split4, split4b]
+tests = TestList [split1, split2a, split2b, split4, split4b, split4c]
 
 split1 :: Test
 split1 =
@@ -59,7 +59,7 @@ split2b =
 split4 :: Test
 split4 =
     TestLabel "Split4" $ TestCase $
-    do system "rsync -aHxs --delete testdata/split4/ tmp"
+    do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        withCurrentDirectory "tmp" $
          runMonadClean $ modifyTestMode (const True) >> modifyModuVerse (const Set.empty) >> splitModuleDecls (S.ModuleName "Split4")
        result <- diff "testdata/split4-expected" "tmp"
@@ -68,13 +68,26 @@ split4 =
 split4b :: Test
 split4b =
     TestLabel "Split4b" $ TestCase $
-    do system "rsync -aHxs --delete testdata/split4/ tmp"
+    do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        withCurrentDirectory "tmp" $
          runMonadClean $ modifyTestMode (const True) >> modifyModuVerse (const Set.empty) >> splitModule f (S.ModuleName "Split4")
        result <- diff "testdata/split4b-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
     where
-      f :: DeclName -> S.ModuleName
-      f x@(Exported (S.Ident "getPackages")) = S.ModuleName "Split4.A"
-      f x = S.ModuleName "Split4.B"
+      f :: S.ModuleName -> DeclName -> S.ModuleName
+      f (S.ModuleName parent) (Exported (S.Ident "getPackages")) = S.ModuleName (parent ++ ".A")
+      f (S.ModuleName parent) _ = S.ModuleName (parent ++ ".B")
 
+
+split4c :: Test
+split4c =
+    TestLabel "Split4b" $ TestCase $
+    do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
+       withCurrentDirectory "tmp" $
+         runMonadClean $ modifyTestMode (const True) >> modifyModuVerse (const Set.empty) >> splitModule f (S.ModuleName "Split4")
+       result <- diff "testdata/split4c-expected" "tmp"
+       assertEqual "Split4" (ExitSuccess, "", "") result
+    where
+      f :: S.ModuleName -> DeclName -> S.ModuleName
+      f (S.ModuleName parent) (Exported (S.Ident "getPackages")) = S.ModuleName (parent ++ ".A")
+      f (S.ModuleName parent) _ = S.ModuleName parent

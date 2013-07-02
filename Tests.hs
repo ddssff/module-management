@@ -2,8 +2,9 @@
 {-# OPTIONS -Wall #-}
 
 import Control.Exception (SomeException, try)
+import Control.Monad.State (StateT)
 import Data.List (isPrefixOf)
-import Data.Set as Set (delete, fromList, Set, union)
+import Data.Set as Set (Set)
 import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
@@ -66,7 +67,7 @@ test1 =
     where
       test parsed comments text = return (exactPrint parsed comments, text)
 
--- logictest :: MonadClean m => String -> (Set ModuleName -> m ()) -> Test
+logictest :: String -> (Set ModuleName -> StateT Params IO ()) -> Test
 logictest s f =
     TestLabel s $ TestCase $
     do _ <- rsync "testdata/logic" "tmp"
@@ -91,23 +92,13 @@ test2b u =
             splitModuleDecls (ModuleName "Data.Logic.Classes.Literal")
             qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
             -- modifyParams (\ p -> p {testMode = True})
-            mergeModules
-              [ModuleName "Data.Logic.Classes.FirstOrder",
-               ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
-               ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
-              (ModuleName "Data.Logic.Classes.FirstOrder")
+            _ <- mergeModules
+                   [ModuleName "Data.Logic.Classes.FirstOrder",
+                    ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
+                    ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
+                   (ModuleName "Data.Logic.Classes.FirstOrder")
             noisily (qLnPutStr "merge2")
             return ()
-    where
-      u' = union (fromList [ModuleName "Data.Logic.Classes.Literal.Internal.FixityLiteral",
-                            ModuleName "Data.Logic.Classes.Literal.FoldAtomsLiteral",
-                            ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
-                            ModuleName "Data.Logic.Classes.Literal.FromLiteral",
-                            ModuleName "Data.Logic.Classes.Literal.Literal",
-                            ModuleName "Data.Logic.Classes.Literal.PrettyLit",
-                            ModuleName "Data.Logic.Classes.Literal.ToPropositional",
-                            ModuleName "Data.Logic.Classes.Literal.ZipLiterals"])
-                 (delete (ModuleName "Data.Logic.Classes.Literal") u)
 
 test2c :: MonadClean m => Set ModuleName -> m ()
 test2c u =
@@ -116,19 +107,19 @@ test2c u =
             qLnPutStr "Splitting module Literal"
             splitModuleDecls (ModuleName "Data.Logic.Classes.Literal")
             qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
-            mergeModules
-              [ModuleName "Data.Logic.Classes.FirstOrder",
-               ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
-               ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
-              (ModuleName "Data.Logic.Classes.FirstOrder")
+            _ <- mergeModules
+                   [ModuleName "Data.Logic.Classes.FirstOrder",
+                    ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
+                    ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
+                   (ModuleName "Data.Logic.Classes.FirstOrder")
             noisily (qLnPutStr "Merging remaining split modules into Literal")
             -- modifyParams (\ p -> p {testMode = True})
-            mergeModules
-              [ModuleName "Data.Logic.Classes.Literal.Literal",
-               ModuleName "Data.Logic.Classes.Literal.ZipLiterals",
-               ModuleName "Data.Logic.Classes.Literal.ToPropositional",
-               ModuleName "Data.Logic.Classes.Literal.PrettyLit",
-               ModuleName "Data.Logic.Classes.Literal.Internal.FixityLiteral",
-               ModuleName "Data.Logic.Classes.Literal.FoldAtomsLiteral"]
-              (ModuleName "Data.Logic.Classes.Literal")
+            _ <- mergeModules
+                   [ModuleName "Data.Logic.Classes.Literal.Literal",
+                    ModuleName "Data.Logic.Classes.Literal.ZipLiterals",
+                    ModuleName "Data.Logic.Classes.Literal.ToPropositional",
+                    ModuleName "Data.Logic.Classes.Literal.PrettyLit",
+                    ModuleName "Data.Logic.Classes.Literal.Internal.FixityLiteral",
+                    ModuleName "Data.Logic.Classes.Literal.FoldAtomsLiteral"]
+                   (ModuleName "Data.Logic.Classes.Literal")
             return ()

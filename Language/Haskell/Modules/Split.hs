@@ -4,6 +4,7 @@ module Language.Haskell.Modules.Split
     ( DeclName(..)
     , splitModule
     , splitModuleDecls
+    , defaultSymbolToModule
     ) where
 
 import Control.Exception (throw)
@@ -20,7 +21,7 @@ import Data.Sequence ((<|), (|>))
 import Data.Set as Set (delete, difference, empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
 import Data.Set.Extra as Set (gFind, mapM)
 import Language.Haskell.Exts (fromParseResult, ParseResult(ParseOk, ParseFailed))
-import qualified Language.Haskell.Exts.Annotated as A (Decl, ImportDecl(..), ImportSpecList(..), Module(Module), ModuleHead(ModuleHead), Name)
+import qualified Language.Haskell.Exts.Annotated as A (Decl, ImportDecl(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
 import Language.Haskell.Exts.Annotated.Simplify (sImportDecl, sImportSpec, sModuleName, sName)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
@@ -51,13 +52,6 @@ parseModule name =
        (parsed, comments) <- parseFileWithComments path >>= return . fromParseResult
        return (parsed, text, comments)
 
--- | Do splitModuleBy with a custom symbol to module mapping
-splitModule :: MonadClean m => (DeclName -> S.ModuleName) -> S.ModuleName -> m ()
-splitModule symbolToModule old = parseModule old >>= splitModuleBy symbolToModule old
-
--- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
-splitModuleDecls :: MonadClean m => S.ModuleName -> m ()
-splitModuleDecls old = parseModule old >>= \ m -> splitModuleBy (defaultSymbolToModule old) old m
 
 -- | Split each of a module's declarations into a new module.  Update
 -- the imports of all the modules in the moduVerse to reflect the split.
@@ -73,7 +67,7 @@ splitModuleDecls old = parseModule old >>= \ m -> splitModuleBy (defaultSymbolTo
 -- (.+.) = b + c
 -- @
 --
--- After running @splitModule@ the @Start@ module will be gone.  The
+-- After running @splitModule defaultSymbolToModule@ the @Start@ module will be gone.  The
 -- @a@ and @b@ symbols will be in new modules named @Start.A@ and
 -- @Start.B@.  Because they were not exported by @Start@, the @c@ and
 -- @c'@ symbols will both be in a new module named @Start.Internal.C@.
@@ -84,11 +78,23 @@ splitModuleDecls old = parseModule old >>= \ m -> splitModuleBy (defaultSymbolTo
 -- If we had imported and then re-exported a symbol in Start it would
 -- go into a module named @Start.ReExported@.  Any instance declarations
 -- would go into @Start.Instances@.
-splitModuleBy :: MonadClean m => (DeclName -> S.ModuleName) -> S.ModuleName -> ModuleInfo -> m ()
+splitModule :: MonadClean m =>
+               (S.ModuleName -> DeclName -> S.ModuleName) -- ^ Map declaration to new module name
+            -> S.ModuleName
+            -> m ()
+splitModule symbolToModule old = parseModule old >>= splitModuleBy symbolToModule old
+
+-- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
+splitModuleDecls :: MonadClean m => S.ModuleName -> m ()
+splitModuleDecls old = parseModule old >>= \ m -> splitModuleBy defaultSymbolToModule old m
+
+splitModuleBy :: MonadClean m =>
+                 (S.ModuleName -> DeclName -> S.ModuleName)
+              -> S.ModuleName               -- ^ Parent module name
+              -> ModuleInfo -> m ()
 splitModuleBy symbolToModule old m =
     do univ <- moduVerseCheck
-       m <- parseModule old
-       changes <- doSplit symbolToModule univ m >>= return . collisionCheck univ
+       changes <- doSplit (symbolToModule old) univ m >>= return . collisionCheck univ
        setMapM_ doResult changes       -- Write the new modules
        setMapM_ doClean changes        -- Clean the new modules after all edits are finished
     where
@@ -100,16 +106,16 @@ splitModuleBy symbolToModule old m =
           where
             illegal = Set.intersection univ (created s)
       created :: Set ModuleResult -> Set S.ModuleName
-      created = setMapMaybe (\ x -> case x of Created m _ -> Just m; _ -> Nothing)
+      created = setMapMaybe (\ x -> case x of Created m' _ -> Just m'; _ -> Nothing)
       -- Make sure this isn't trying to clobber a module that exists (other than 'old'.)
       doClean :: MonadClean m => ModuleResult -> m ()
-      doClean (Created m _) = doClean' m
-      doClean (Modified m _) = doClean' m
+      doClean (Created m' _) = doClean' m'
+      doClean (Modified m' _) = doClean' m'
       doClean (Removed _) = return ()
       doClean (Unchanged _) = return ()
-      doClean' m =
+      doClean' m' =
           do flag <- getParams >>= return . not . testMode
-             when flag (modulePath m >>= cleanImports >> return ())
+             when flag (modulePath m' >>= cleanImports >> return ())
 
 -- This returns a set of maybe because there may be instance
 -- declarations, in which case we want an Instances module to
@@ -126,20 +132,20 @@ exported m =
                     (if member Nothing (declared m) then singleton Nothing else Set.empty)
     where
       hasExportList :: ModuleInfo -> Bool
-      hasExportList m@(A.Module _ Nothing _ _ _, _, _) = False
-      hasExportList m@(A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _, _) = False
+      hasExportList (A.Module _ Nothing _ _ _, _, _) = False
+      hasExportList (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _, _) = False
       hasExportList _ = True
 
-newModuleNames :: (DeclName -> S.ModuleName) -> S.ModuleName -> ModuleInfo -> Set S.ModuleName
-newModuleNames symbolToModule old m =
+newModuleNames :: (DeclName -> S.ModuleName) -> ModuleInfo -> Set S.ModuleName
+newModuleNames symbolToModule m =
     Set.map (symbolToModule . declName' m) (union (declared m) (exported m))
 
 declName' :: ModuleInfo -> Maybe S.Name -> DeclName
 declName' m =
-    declName (reExported m) (internal m)
+    declName
     where
-      declName :: (S.Name -> Bool) -> (S.Name -> Bool) -> Maybe S.Name -> DeclName
-      declName reExported internal name =
+      declName :: Maybe S.Name -> DeclName
+      declName name =
           case name of
             Nothing -> Instance
             Just name' ->
@@ -148,26 +154,31 @@ declName' m =
                 else if internal name'
                      then Internal name'
                      else Exported name'
-      internal :: ModuleInfo -> S.Name -> Bool
-      internal m name = member (Just name) (difference (declared m) (exported m))
-      reExported :: ModuleInfo -> S.Name -> Bool
-      reExported m name = member (Just name) (difference (exported m) (declared m))
+      internal :: S.Name -> Bool
+      internal name = member (Just name) (difference (declared m) (exported m))
+      reExported :: S.Name -> Bool
+      reExported name = member (Just name) (difference (exported m) (declared m))
 
 -- | Create the set of module results implied by the split -
 -- creations, removals, and modifications.  This includes the changes
 -- to the imports in modules that imported the original module.
 doSplit :: MonadClean m => (DeclName -> S.ModuleName) -> Set S.ModuleName -> ModuleInfo -> m (Set ModuleResult)
+doSplit _ _ (A.XmlPage {}, _, _) = error "XmlPage"
+doSplit _ _ (A.XmlHybrid {}, _, _) = error "XmlPage"
 doSplit _ _ (A.Module _ _ _ _ [], _, _) = return Set.empty -- No declarations - nothing to split
 doSplit _ _ (A.Module _ _ _ _ [_], _, _) = return Set.empty -- One declaration - nothing to split (but maybe we should anyway?)
 doSplit _ _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
 doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ _)) _ _ _, _, _) =
     do qLnPutStr ("Splitting " ++ show moduleName)
-       updated <- Set.mapM (updateImports m (sModuleName moduleName) symbolToModule) (Set.delete old univ)
-       let moduleNames = newModuleNames symbolToModule old m
-       let split = union (Set.map newModule moduleNames)
-                         (if member old moduleNames then Set.empty else singleton (Removed old))
-       return $ union split updated
+       importChanges <- Set.mapM (updateImports m (sModuleName moduleName) symbolToModule) (Set.delete old univ)
+       return $ unions [ -- The changes required to existing imports
+                         importChanges
+                         -- Compute the result of splitting the parent module
+                       , Set.map newModule moduleNames
+                         -- Did the parent module disappear, or was it replaced?
+                       , if member old moduleNames then Set.empty else singleton (Removed old) ]
     where
+      moduleNames = newModuleNames symbolToModule m
       -- The name of the module to be split
       old = sModuleName moduleName
 
@@ -210,18 +221,18 @@ doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ _))
               where
                 -- Build export specs of the symbols created by each declaration.
                 newExports :: [(A.Decl SrcSpanInfo, String)] -> [S.ExportSpec]
-                newExports modDecls = nub (concatMap (exports . fst) modDecls)
+                newExports xs = nub (concatMap (exports . fst) xs)
 
                 newImports :: [(A.Decl SrcSpanInfo, String)] -> Map S.ModuleName S.ImportDecl
-                newImports modDecls =
+                newImports xs =
                     mapWithKey toImportDecl (Map.delete name'
                                              (Map.filter (\ pairs ->
-                                                              let declared = justs (Set.unions (List.map (symbols . fst) pairs)) in
-                                                              not (Set.null (Set.intersection declared (referenced modDecls)))) moduleDeclMap))
+                                                              let declared' = justs (Set.unions (List.map (symbols . fst) pairs)) in
+                                                              not (Set.null (Set.intersection declared' (referenced xs)))) moduleDeclMap))
                 -- In this module, we need to import any module that declares a symbol
                 -- referenced here.
                 referenced :: [(A.Decl SrcSpanInfo, String)] -> Set S.Name
-                referenced modDecls = Set.map sName (gFind modDecls :: Set (A.Name SrcSpanInfo))
+                referenced xs = Set.map sName (gFind xs :: Set (A.Name SrcSpanInfo))
 
 -- Re-construct a separated list
 doSeps :: [(String, String)] -> String
@@ -272,7 +283,9 @@ symbolToModuleMap symbolToModule m =
             mp''
 
 -- | What module should this symbol be moved to?
-defaultSymbolToModule :: S.ModuleName -> DeclName -> S.ModuleName
+defaultSymbolToModule :: S.ModuleName -- ^ Parent module name
+                      -> DeclName     -- ^ Declared symbol
+                      -> S.ModuleName
 defaultSymbolToModule (S.ModuleName parentModuleName) name =
     S.ModuleName (parentModuleName <.> case name of
                                          Instance -> "Instances"

@@ -80,8 +80,8 @@ data St
 
 setSpanEnd :: SrcLoc -> SrcSpan -> SrcSpan
 setSpanEnd loc sp = sp {srcSpanEndLine = srcLine loc, srcSpanEndColumn = srcColumn loc}
-setSpanStart :: SrcLoc -> SrcSpan -> SrcSpan
-setSpanStart loc sp = sp {srcSpanStartLine = srcLine loc, srcSpanStartColumn = srcColumn loc}
+-- setSpanStart :: SrcLoc -> SrcSpan -> SrcSpan
+-- setSpanStart loc sp = sp {srcSpanStartLine = srcLine loc, srcSpanStartColumn = srcColumn loc}
 
 -- | The spans returned by haskell-src-exts may put comments and
 -- whitespace in the suffix string of a declaration, we want them in
@@ -212,8 +212,8 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (m@(A.
                    do let l' = srcLoc sp
                       case l <= l' of
                         True ->
-                            let (p, s) = srcPairText l l' tl in
-                            put (s, l', sps, f p r)
+                            let (b, a) = srcPairText l l' tl in
+                            put (a, l', sps, f b r)
                         False -> return ()
                _ -> error $ "foldModule - out of spans: " ++ show p
       doList :: (HasSpanInfo a, Show a) => (a -> String -> String -> String -> r -> r) -> [a] -> State (String, SrcLoc, [SrcSpanInfo], r) ()
@@ -255,6 +255,7 @@ foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (m@(A.
             w' = case span (/= '\n') w of
                    (w'', '\n' : _) -> w'' ++ ['\n']
                    (w'', "") -> w''
+                   _ -> error "Impossible: span stopped on the wrong char"
             l' = increaseSrcLoc w' l
 
 -- | Do just the header portion of 'foldModule'.

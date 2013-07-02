@@ -208,6 +208,7 @@ srcPairText b0 e0 s0 =
                           "" -> return (r, s)
                           ('\t' : s') -> put (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}, e, r ++ "\t", s') >> f
                           (c : s') -> put (b {srcColumn = srcColumn b + 1}, e, r ++ [c], s') >> f
+                     _ -> error "Impossible: span stopped at the wrong character"
                (_, True) ->
                    case s of
                      [] -> error $ "srcPairText: " ++ show (b0, e0, s0)

@@ -1,3 +1,10 @@
+haskell-module-management (0.11.1) unstable; urgency=low
+
+  * Export defaultSymbolToModule
+  * Allow moduleSplit to leave some symbols in the original module
+
+ -- David Fox <dsf@seereason.com>  Tue, 02 Jul 2013 10:31:13 -0700
+
 haskell-module-management (0.11) unstable; urgency=low
 
   * Rename splitModule -> splitModuleDecls
