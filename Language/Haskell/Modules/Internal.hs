@@ -18,7 +18,8 @@ import Control.Exception (SomeException, try)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
-import Data.Set (empty, insert, Set, toList)
+import Data.Maybe (fromMaybe)
+import Data.Set as Set (empty, insert, Set, toList, delete)
 import qualified Language.Haskell.Exts.Annotated as A (Module, parseFileWithComments, parseFileWithMode)
 import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension)
@@ -171,6 +172,7 @@ doResult x@(Removed name) =
     do path <- modulePath name
        -- I think this event handler is redundant.
        removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
+       modifyModuVerse (Set.delete name)
        return x
 
 doResult x@(Modified name text) =
@@ -186,4 +188,11 @@ doResult x@(Created name text) =
        (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
        replaceFile tildeBackup path text
+       modifyModuVerse (Set.insert name)
        return x
+
+-- | Modify the set of modules whose imports will be updated when
+-- modules are split or merged.  No default, it is an error to run
+-- splitModules or catModules without first setting this.
+modifyModuVerse :: MonadClean m => (Set S.ModuleName -> Set S.ModuleName) -> m ()
+modifyModuVerse f = modifyParams (\ p -> p {moduVerse = Just (f (fromMaybe empty (moduVerse p)))})

@@ -1,8 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Split4.Internal.SourcePackagesOfIndex 
+module Split4.SourcePackagesOfIndex 
     ( sourcePackagesOfIndex
     ) where
-import Split4.Internal.GetPackages (getPackages)
+import Split4.GetPackages (getPackages)
 
 -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 

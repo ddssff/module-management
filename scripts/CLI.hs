@@ -6,7 +6,7 @@ import Data.List (intercalate, isPrefixOf)
 import Data.Maybe (fromMaybe)
 import Data.Set (Set, union, toList, empty, size, unions, singleton)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
-import Language.Haskell.Modules (runMonadClean, cleanImports, splitModule, mergeModules,
+import Language.Haskell.Modules (runMonadClean, cleanImports, splitModuleDecls, mergeModules,
                                  modifyModuVerse, modifySourceDirs)
 import Language.Haskell.Modules.Internal (getParams, Params(..))
 import Language.Haskell.Modules.Params (MonadClean)
@@ -82,7 +82,7 @@ clean [] = liftIO $ hPutStrLn stderr "Usage: clean <modulepath1> <modulepath2> .
 clean args = mapM_ cleanImports args
 
 split :: MonadClean m => [String] -> m ()
-split [arg] = splitModule (ModuleName arg)
+split [arg] = splitModuleDecls (ModuleName arg)
 split _ = liftIO $ hPutStrLn stderr "Usage: split <modulename>"
 
 merge :: MonadClean m => [String] -> m ()

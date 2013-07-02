@@ -2,22 +2,26 @@
 -- function uses ghc's -ddump-minimal-imports flag to generate
 -- minimized and explicit imports and re-insert them into the module.
 --
--- The 'splitModule' moves each declaration of a module into a
--- separate new module, and may also create three additional modules:
--- ReExported (for identifiers that were re-exported from other
--- imports), Instances (for declarations that don't result in an
+-- The 'splitModuleDecls' function moves each declaration of a module
+-- into a separate new module, and may also create three additional
+-- modules: ReExported (for identifiers that were re-exported from
+-- other imports), Instances (for declarations that don't result in an
 -- identifier to export), and OtherSymbols (for declarations that
 -- can't be turned into a module name.)
 --
--- In addition to creating new modules, 'splitModule' also scans the
+-- In addition to creating new modules, 'splitModuleDecls' also scans the
 -- a set of modules (known as the moduVerse) and updates their imports
 -- to account for the new locations of the symbols.  The moduVerse is
 -- stored in MonadClean's state, and is updated as modules are created
 -- and destroyed by 'splitModule' and 'catModules'.
 --
--- The 'catModules' function is the inverse operation of 'splitModule',
--- it merges two or more modules into a new or existing module, updating
--- imports of the moduVerse elements as necessary.
+-- The 'splitModule' function is a version of 'splitModuleDecls' that
+-- allows the caller to customize the mapping from symbols to new
+-- modules.
+--
+-- The 'mergeModules' function is the inverse operation of
+-- 'splitModule', it merges two or more modules into a new or existing
+-- module, updating imports of the moduVerse elements as necessary.
 --
 -- There are several features worth noting.  The 'Params' type in the
 -- state of 'MonadClean' has a 'removeEmptyImports' field, which is
@@ -58,6 +62,7 @@
 module Language.Haskell.Modules
     ( cleanImports
     , splitModule
+    , splitModuleDecls
     , mergeModules
     , module Language.Haskell.Modules.Params
     , module Language.Haskell.Modules.Fold
@@ -71,6 +76,6 @@ import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.Params (runMonadClean, modifyDryRun, modifyExtensions, modifyHsFlags, modifyModuVerse,
                                         modifyRemoveEmptyImports, modifySourceDirs, modifyTestMode)
-import Language.Haskell.Modules.Split (splitModule)
+import Language.Haskell.Modules.Split (splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
 import Language.Haskell.Modules.Util.Test (findModules, findPaths)

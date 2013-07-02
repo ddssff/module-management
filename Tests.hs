@@ -10,7 +10,7 @@ import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(..))
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import Language.Haskell.Modules (splitModule, mergeModules)
+import Language.Haskell.Modules (splitModuleDecls, mergeModules)
 import qualified Tests.Merge as Merge (tests)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import qualified Tests.Fold as Fold (tests)
@@ -80,7 +80,7 @@ test2a u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
             qLnPutStr "Splitting module Literal"
-            splitModule (ModuleName "Data.Logic.Classes.Literal")
+            splitModuleDecls (ModuleName "Data.Logic.Classes.Literal")
             return ()
 
 test2b :: MonadClean m => Set ModuleName -> m ()
@@ -88,7 +88,7 @@ test2b u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
             qLnPutStr "Splitting module Literal"
-            splitModule (ModuleName "Data.Logic.Classes.Literal")
+            splitModuleDecls (ModuleName "Data.Logic.Classes.Literal")
             qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
             -- modifyParams (\ p -> p {testMode = True})
             mergeModules
@@ -114,7 +114,7 @@ test2c u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
             qLnPutStr "Splitting module Literal"
-            splitModule (ModuleName "Data.Logic.Classes.Literal")
+            splitModuleDecls (ModuleName "Data.Logic.Classes.Literal")
             qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
             mergeModules
               [ModuleName "Data.Logic.Classes.FirstOrder",

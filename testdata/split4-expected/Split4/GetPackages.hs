@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Split4.Internal.GetPackages 
+module Split4.GetPackages 
     ( getPackages
     ) where
 
