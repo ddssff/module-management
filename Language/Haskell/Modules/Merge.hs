@@ -22,14 +22,9 @@ import Language.Haskell.Exts.Parser (fromParseResult)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(..), ModuleName(..))
-import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Fold (ModuleInfo, echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
+import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2, ModuleInfo)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (doResult, getParams, modifyParams, modulePath, ModuleResult(..), MonadClean, Params(sourceDirs, moduVerse, testMode), parseFileWithComments, runMonadClean)
-import Language.Haskell.Modules.Util.Test (diff, repoModules)
-import System.Cmd (system)
-import System.Exit (ExitCode(ExitSuccess))
-import Test.HUnit (assertEqual, Test(TestCase, TestList))
+import Language.Haskell.Modules.Internal (doResult, modifyParams, modulePath, ModuleResult(Modified, Removed, Unchanged), MonadClean(getParams), Params(moduVerse, testMode), parseFileWithComments)
 
 -- | Merge the declarations from several modules into a single new
 -- one, updating the imports of the modules in the moduVerse to

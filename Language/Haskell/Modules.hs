@@ -74,8 +74,7 @@ module Language.Haskell.Modules
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
-import Language.Haskell.Modules.Params (runMonadClean, modifyDryRun, modifyExtensions, modifyHsFlags, modifyModuVerse,
-                                        modifyRemoveEmptyImports, modifySourceDirs, modifyTestMode)
+import Language.Haskell.Modules.Params (modifyDryRun, modifyExtensions, modifyHsFlags, modifyModuVerse, modifyRemoveEmptyImports, modifySourceDirs, modifyTestMode, runMonadClean)
 import Language.Haskell.Modules.Split (splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
 import Language.Haskell.Modules.Util.Test (findModules, findPaths)

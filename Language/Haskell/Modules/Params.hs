@@ -17,7 +17,7 @@ import Data.Maybe (fromMaybe)
 import Data.Set (empty, Set)
 import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
-import Language.Haskell.Modules.Internal (MonadClean, modifyParams, Params(dryRun, extensions, hsFlags, moduVerse, removeEmptyImports, sourceDirs, testMode), runMonadClean)
+import Language.Haskell.Modules.Internal (modifyParams, MonadClean, Params(dryRun, extensions, hsFlags, moduVerse, removeEmptyImports, sourceDirs, testMode), runMonadClean)
 import Prelude hiding (writeFile)
 
 -- | Modify the set of modules whose imports will be updated when

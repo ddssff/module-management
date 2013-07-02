@@ -13,7 +13,7 @@ module Language.Haskell.Modules.Util.SrcLoc
     , tests
     ) where
 
-import Control.Monad.State (State, runState, get, put)
+import Control.Monad.State (get, put, runState, State)
 import Data.Default (def, Default)
 import Data.List (groupBy, partition, sort)
 import Data.Set (Set, toList)
