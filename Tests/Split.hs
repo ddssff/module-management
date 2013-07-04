@@ -22,7 +22,7 @@ split1 =
       do _ <- system "rsync -aHxS --delete testdata/debian/ tmp"
          runMonadClean $ noisily $ noisily $
            do modifyParams (\ p -> p {sourceDirs = ["tmp"], moduVerse = Just repoModules})
-              splitModuleDecls (S.ModuleName "Debian.Repo.Package")
+              splitModuleDecls "tmp/Debian/Repo/Package.hs"
          (code, out, err) <- diff "testdata/split1-expected" "tmp"
          assertEqual "splitModule" (ExitSuccess, "", "") {- (ExitFailure 1, "diff -ru '--exclude=*~' '--exclude=*.imports' testdata/split1-expected/Debian/Repo/Package/BinaryPackagesOfIndex.hs tmp/Debian/Repo/Package/BinaryPackagesOfIndex.hs\n--- testdata/split1-expected/Debian/Repo/Package/BinaryPackagesOfIndex.hs\n+++ tmp/Debian/Repo/Package/BinaryPackagesOfIndex.hs\n@@ -22,4 +22,4 @@\n binaryPackagesOfIndex repo release index =\n     case packageIndexArch index of\n       Source -> return (Right [])\n-      _ -> liftIO $ getPackages repo release index -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))\n\\ No newline at end of file\n+      _ -> liftIO $ getPackages repo release index \n\\ No newline at end of file\n", "") -} (code, out, err)
 
@@ -35,7 +35,7 @@ split2a =
                                     sourceDirs = ["tmp"],
                                     -- extensions = NoImplicitPrelude : extensions p,
                                     moduVerse = Just (singleton (S.ModuleName "Split"))})
-            splitModuleDecls (S.ModuleName "Split")
+            splitModuleDecls "tmp/Split.hs"
        (code, out, err) <- diff "testdata/split2-expected" "tmp"
        assertEqual "split2" (ExitSuccess, "", "") (code, out, err)
 
@@ -48,7 +48,7 @@ split2b =
                                     sourceDirs = ["tmp"],
                                     -- extensions = NoImplicitPrelude : extensions p,
                                     moduVerse = Just (singleton (S.ModuleName "Split"))})
-            splitModuleDecls (S.ModuleName "Split")
+            splitModuleDecls "tmp/Split.hs"
        (code, out, err) <- diff "testdata/split2-clean-expected" "tmp"
        -- The output of splitModule is "correct", but it will not be
        -- accepted by GHC until the fix for
@@ -61,7 +61,7 @@ split4 =
     TestLabel "Split4" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        withCurrentDirectory "tmp" $
-         runMonadClean $ modifyTestMode (const True) >> modifyModuVerse (const Set.empty) >> splitModuleDecls (S.ModuleName "Split4")
+         runMonadClean $ modifyTestMode (const True) >> modifyModuVerse (const Set.empty) >> splitModuleDecls "Split4.hs"
        result <- diff "testdata/split4-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
 
@@ -70,7 +70,7 @@ split4b =
     TestLabel "Split4b" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        withCurrentDirectory "tmp" $
-         runMonadClean $ modifyTestMode (const True) >> modifyModuVerse (const Set.empty) >> splitModule f (S.ModuleName "Split4")
+         runMonadClean $ modifyTestMode (const True) >> modifyModuVerse (const Set.empty) >> splitModule f "Split4.hs"
        result <- diff "testdata/split4b-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
     where
@@ -84,7 +84,7 @@ split4c =
     TestLabel "Split4b" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        withCurrentDirectory "tmp" $
-         runMonadClean $ modifyTestMode (const True) >> modifyModuVerse (const Set.empty) >> splitModule f (S.ModuleName "Split4")
+         runMonadClean $ modifyTestMode (const True) >> modifyModuVerse (const Set.empty) >> splitModule f "Split4.hs"
        result <- diff "testdata/split4c-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
     where

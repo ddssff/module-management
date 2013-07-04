@@ -16,15 +16,14 @@ import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((|>))
 import Data.Set as Set (empty, member, Set, singleton, toList, union, unions)
-import Language.Haskell.Exts.Annotated (ParseResult(..))
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, sModuleName, sName)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleHead(ModuleHead), ModuleName(ModuleName), QName(..), Type(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleName(ModuleName), QName(..), Type(..))
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
-import Language.Haskell.Modules.Internal (markForDelete, modifyParams, ModuleResult(Modified, Unchanged), MonadClean(getParams), Params(extensions, hsFlags, removeEmptyImports, scratchDir, sourceDirs), parseFile, parseFileWithComments, ModuleInfo)
+import Language.Haskell.Modules.Internal (markForDelete, modifyParams, ModuleResult(Modified, Unchanged), MonadClean(getParams), Params(extensions, hsFlags, removeEmptyImports, scratchDir, sourceDirs), parseModule, ModuleInfo, moduleName)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (symbols)
@@ -59,18 +58,14 @@ cleanBuildImports lbi =
 -- | Clean up the imports of a source file.
 cleanImports :: MonadClean m => FilePath -> m ModuleResult
 cleanImports path =
-    do text <- liftIO $ readFile path
-       source <- parseFileWithComments path
+    do source <- parseModule path
        case source of
-         ParseOk (m@(A.Module _ h _ imports _decls), comments) ->
-             do let name = case h of
-                             Just (A.ModuleHead _ x _ _) -> sModuleName x
-                             _ -> S.ModuleName "Main"
+         mi@(m@(A.Module _ _ _ imports _decls), _, _) ->
+             do let name = moduleName m
                     hiddenImports = filter isHiddenImport imports
-                dumpImports path >> checkImports path name (m, text, comments) hiddenImports
-         ParseOk (A.XmlPage {}, _) -> error "cleanImports: XmlPage"
-         ParseOk (A.XmlHybrid {}, _) -> error "cleanImports: XmlHybrid"
-         ParseFailed _loc msg -> error ("cleanImports: - parse of " ++ path ++ " failed: " ++ msg)
+                dumpImports path >> checkImports path name mi hiddenImports
+         (A.XmlPage {}, _, _) -> error "cleanImports: XmlPage"
+         (A.XmlHybrid {}, _, _) -> error "cleanImports: XmlHybrid"
     where
       isHiddenImport (A.ImportDecl {A.importSpecs = Just (A.ImportSpecList _ True _)}) = True
       isHiddenImport _ = False
@@ -99,14 +94,12 @@ checkImports :: MonadClean m => FilePath -> S.ModuleName -> ModuleInfo -> [A.Imp
 checkImports path name@(S.ModuleName name') m extraImports =
     do let importsPath = name' <.> ".imports"
        markForDelete importsPath
-       result <-
+       (newImports, _, _) <-
            bracket (getParams >>= return . extensions)
                    (\ saved -> modifyParams (\ p -> p {extensions = saved}))
                    (\ saved -> modifyParams (\ p -> p {extensions = PackageImports : saved}) >>
-                               parseFile importsPath `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here -> throw . userError $ here ++ ": " ++ show e)))
-       case result of
-         ParseOk newImports -> updateSource path m newImports name extraImports
-         _ -> error ("checkImports: parse of " ++ importsPath ++ " failed - " ++ show result)
+                               parseModule importsPath `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here -> throw . userError $ here ++ ": " ++ show e)))
+       updateSource path m newImports name extraImports
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.

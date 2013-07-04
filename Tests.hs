@@ -81,7 +81,7 @@ test2a u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
             qLnPutStr "Splitting module Literal"
-            splitModuleDecls (ModuleName "Data.Logic.Classes.Literal")
+            splitModuleDecls "Data/Logic/Classes/Literal.hs"
             return ()
 
 test2b :: MonadClean m => Set ModuleName -> m ()
@@ -89,7 +89,7 @@ test2b u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
             qLnPutStr "Splitting module Literal"
-            splitModuleDecls (ModuleName "Data.Logic.Classes.Literal")
+            splitModuleDecls "Data/Logic/Classes/Literal.hs"
             qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
             -- modifyParams (\ p -> p {testMode = True})
             _ <- mergeModules
@@ -105,7 +105,7 @@ test2c u =
          do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
                                     moduVerse = Just u})
             qLnPutStr "Splitting module Literal"
-            splitModuleDecls (ModuleName "Data.Logic.Classes.Literal")
+            splitModuleDecls "Data/Logic/Classes/Literal.hs"
             qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
             _ <- mergeModules
                    [ModuleName "Data.Logic.Classes.FirstOrder",

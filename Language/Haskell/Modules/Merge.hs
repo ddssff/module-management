@@ -5,7 +5,6 @@ module Language.Haskell.Modules.Merge
     ) where
 
 import Control.Monad as List (mapM)
-import Control.Monad.Trans (liftIO)
 import Data.Foldable (fold)
 import Data.Generics (Data, everywhere, mkT, Typeable)
 import Data.List as List (intercalate, map)
@@ -18,13 +17,12 @@ import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sImportDecl, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(..), Module(Module), ModuleHead(ModuleHead))
 import Language.Haskell.Exts.Comments (Comment)
-import Language.Haskell.Exts.Parser (fromParseResult)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(..), ModuleName(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (doResult, modifyParams, modulePath, ModuleResult(Modified, Removed, Unchanged), MonadClean(getParams), Params(moduVerse, testMode), parseFileWithComments, ModuleInfo)
+import Language.Haskell.Modules.Internal (doResult, modifyParams, modulePath, ModuleResult(Modified, Removed, Unchanged), MonadClean(getParams), Params(moduVerse, testMode), parseModule, ModuleInfo)
 
 -- | Merge the declarations from several modules into a single new
 -- one, updating the imports of the modules in the moduVerse to
@@ -176,8 +174,4 @@ loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName ModuleInfo)
 loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names
 
 loadModule :: MonadClean m => S.ModuleName -> m ModuleInfo
-loadModule name =
-    do path <- modulePath name
-       text <- liftIO $ readFile path
-       (m, comments) <- parseFileWithComments path >>= return . fromParseResult
-       return (m, text, comments)
+loadModule name = modulePath name >>= parseModule

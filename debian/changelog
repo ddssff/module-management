@@ -1,3 +1,10 @@
+haskell-module-management (0.12) unstable; urgency=low
+
+  * splitModule and splitModuleDecls now take a FilePath instead of
+    a module name.
+
+ -- David Fox <dsf@seereason.com>  Thu, 04 Jul 2013 07:15:23 -0700
+
 haskell-module-management (0.11.1) unstable; urgency=low
 
   * Export defaultSymbolToModule

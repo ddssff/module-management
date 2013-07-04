@@ -4,11 +4,12 @@
 module Language.Haskell.Modules.Internal
     ( ModuleInfo
     , ModuleMap
+    , moduleName
     , parseModule
     , runMonadClean
     , modifyParams
-    , parseFileWithComments
-    , parseFile
+    -- , parseFileWithComments
+    -- , parseFile
     , modulePath
     , modulePathBase
     , markForDelete
@@ -26,7 +27,8 @@ import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Map (Map)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (delete, empty, insert, Set, toList)
-import qualified Language.Haskell.Exts.Annotated as A (Module, parseFileWithComments, parseFileWithMode)
+import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
+import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions), ParseResult, fromParseResult)
@@ -118,13 +120,16 @@ runMonadClean action =
        mapM_ (\ x -> liftIO (try (removeFile x)) >>= \ (_ :: Either SomeException ()) -> return ()) (toList (junk params))
        return result
 
+moduleName :: A.Module a -> S.ModuleName
+moduleName (A.Module _ (Just (A.ModuleHead _ x _ _)) _ _ _) = sModuleName x
+moduleName _ = S.ModuleName "Main"
+
 type ModuleInfo = (A.Module SrcSpanInfo, String, [Comment])
 type ModuleMap = Map S.ModuleName ModuleInfo
 
-parseModule :: MonadClean m => S.ModuleName -> m ModuleInfo
-parseModule name =
-    do path <- modulePath name
-       text <- liftIO $ readFile path
+parseModule :: MonadClean m => FilePath -> m ModuleInfo
+parseModule path =
+    do text <- liftIO $ readFile path
        (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
        return (parsed, text, comments)
 
@@ -135,10 +140,12 @@ parseFileWithComments path =
        liftIO (A.parseFileWithComments (Exts.defaultParseMode {Exts.extensions = exts}) path)
 
 -- | Run 'A.parseFileWithMode' with the extensions stored in the state.
+{-
 parseFile :: MonadClean m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo))
 parseFile path =
     do exts <- getParams >>= return . extensions
        liftIO (A.parseFileWithMode (Exts.defaultParseMode {Exts.extensions = exts}) path)
+-}
 
 -- | Search the path directory list for a source file that already exists.
 findSourcePath :: MonadClean m => FilePath -> m FilePath

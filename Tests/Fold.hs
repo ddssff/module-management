@@ -1,16 +1,14 @@
 module Tests.Fold where
 
-import Control.Monad.Trans (liftIO)
 import Data.Foldable (fold)
 import Data.Monoid (Monoid(mempty))
 import Data.Sequence as Seq (filter, fromList, Seq, zip, (|>))
 import Data.Set.Extra as Set (fromList)
 import Data.Tree (Tree(..))
-import Language.Haskell.Exts.Annotated (ParseResult(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldModule)
-import Language.Haskell.Modules.Internal (parseFileWithComments, runMonadClean, ModuleInfo)
+import Language.Haskell.Modules.Internal (parseModule, runMonadClean, ModuleInfo)
 import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), makeTree)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
@@ -21,8 +19,7 @@ test1 :: Test
 test1 =
     TestLabel "test1" $ TestCase $ withCurrentDirectory "testdata/debian" $
     do let path = "Debian/Repo/Orphans.hs"
-       text <- liftIO $ readFile path
-       ParseOk (m, comments) <- runMonadClean $ parseFileWithComments path
+       (m, text, comments) <- runMonadClean $ parseModule path
        let (output, original) = test (m, text, comments)
        assertEqual "echo" original output
     where
@@ -33,8 +30,7 @@ test1b :: Test
 test1b =
     TestLabel "test1b" $ TestCase $ withCurrentDirectory "testdata/debian" $
     do let path = "Debian/Repo/Sync.hs"
-       text <- liftIO $ readFile path
-       ParseOk (m, comments) <- runMonadClean $ parseFileWithComments path
+       (m, text, comments) <- runMonadClean $ parseModule path
        let output = test (m, text, comments)
        assertEqual "echo" mempty (Seq.filter (\ (a, b) -> a /= b) (Seq.zip expected output))
     where
@@ -77,8 +73,7 @@ test3 :: Test
 test3 =
     TestLabel "test3" $ TestCase $ withCurrentDirectory "testdata" $
     do let path = "Equal.hs"
-       text <- liftIO $ readFile path
-       ParseOk (m, comments) <- runMonadClean $ parseFileWithComments path
+       (m, text, comments) <- runMonadClean $ parseModule path
        let (output, original) = test (m, text, comments)
        assertEqual "echo" original output
     where
@@ -89,8 +84,7 @@ test5 :: Test
 test5 =
     TestLabel "fold5" $ TestCase $
     do let path = "testdata/fold5.hs" -- "testdata/logic/Data/Logic/Classes/Literal.hs"
-       text <- liftIO $ readFile path
-       ParseOk (m, comments) <- runMonadClean $ parseFileWithComments path
+       (m, text, comments) <- runMonadClean $ parseModule path
        -- let actual = map f (adjustSpans text comments (spans m))
        -- assertEqual "spans" original actual
        let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) (m, text, comments) []
@@ -104,8 +98,7 @@ test5b :: Test
 test5b =
     TestLabel "test5b" $ TestCase $
     do let path = "testdata/logic/Data/Logic/Classes/Literal.hs"
-       text <- liftIO $ readFile path
-       ParseOk (m, comments) <- runMonadClean $ parseFileWithComments path
+       (m, text, comments) <- runMonadClean $ parseModule path
        let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) (m, text, comments) []
        assertEqual "spans" expected actual
     where
@@ -164,8 +157,7 @@ test4 = TestCase (assertEqual "test4" (SrcLoc "<unknown>.hs" 2 24 < SrcLoc "<unk
 test7 :: Test
 test7 =
     TestCase $
-    do text <- readFile "testdata/Fold7.hs"
-       ParseOk (m, comments) <- runMonadClean $ parseFileWithComments "testdata/Fold7.hs"
+    do (m, text, comments) <- runMonadClean $ parseModule "testdata/Fold7.hs"
        let actual = foldModule (\ s r -> r |> (s, "", ""))
                                (\ _ b s a r -> r |> (b, s, a))
                                (\ _ b s a r -> r |> (b, s, a))

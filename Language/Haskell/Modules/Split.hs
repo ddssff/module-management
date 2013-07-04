@@ -9,7 +9,6 @@ module Language.Haskell.Modules.Split
 
 import Control.Exception (throw)
 import Control.Monad (when)
-import Control.Monad.Trans (liftIO)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
 import Data.Foldable as Foldable (fold)
@@ -20,7 +19,6 @@ import Data.Monoid ((<>), mempty)
 import Data.Sequence ((<|), (|>))
 import Data.Set as Set (delete, difference, empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
 import Data.Set.Extra as Set (gFind, mapM)
-import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
 import qualified Language.Haskell.Exts.Annotated as A (Decl, ImportDecl(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
 import Language.Haskell.Exts.Annotated.Simplify (sImportDecl, sImportSpec, sModuleName, sName)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
@@ -28,7 +26,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec, ImportDecl(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (doResult, modulePath, ModuleResult(..), MonadClean(getParams), Params(moduVerse, testMode), parseFileWithComments, ModuleInfo, parseModule)
+import Language.Haskell.Modules.Internal (doResult, modulePath, ModuleResult(..), MonadClean(getParams), Params(moduVerse, testMode), ModuleInfo, parseModule, moduleName)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
 import Prelude hiding (writeFile)
@@ -72,21 +70,25 @@ isReExported _ = False
 -- would go into @Start.Instances@.
 splitModule :: MonadClean m =>
                (S.ModuleName -> DeclName -> S.ModuleName) -- ^ Map declaration to new module name
-            -> S.ModuleName
+            -> FilePath
             -> m ()
-splitModule symbolToModule old = parseModule old >>= splitModuleBy symbolToModule old
+splitModule symbolToModule path =
+    do info@(m, _, _) <- parseModule path
+       splitModuleBy (symbolToModule (moduleName m)) info
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
-splitModuleDecls :: MonadClean m => S.ModuleName -> m ()
-splitModuleDecls old = parseModule old >>= \ m -> splitModuleBy defaultSymbolToModule old m
+splitModuleDecls :: MonadClean m => FilePath -> m ()
+splitModuleDecls path =
+    do info@(m, _, _) <- parseModule path
+       let name = moduleName m
+       splitModuleBy (defaultSymbolToModule name) info
 
 splitModuleBy :: MonadClean m =>
-                 (S.ModuleName -> DeclName -> S.ModuleName)
-              -> S.ModuleName               -- ^ Parent module name
+                 (DeclName -> S.ModuleName)
               -> ModuleInfo -> m ()
-splitModuleBy symbolToModule old m =
+splitModuleBy symbolToModule m =
     do univ <- moduVerseCheck
-       changes <- doSplit (symbolToModule old) univ m >>= return . collisionCheck univ
+       changes <- doSplit symbolToModule univ m >>= return . collisionCheck univ
        setMapM_ doResult changes       -- Write the new modules
        setMapM_ doClean changes        -- Clean the new modules after all edits are finished
     where
@@ -160,19 +162,19 @@ doSplit _ _ (A.XmlHybrid {}, _, _) = error "XmlPage"
 doSplit _ _ (A.Module _ _ _ _ [], _, _) = return Set.empty -- No declarations - nothing to split
 doSplit _ _ (A.Module _ _ _ _ [_], _, _) = return Set.empty -- One declaration - nothing to split (but maybe we should anyway?)
 doSplit _ _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
-doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ moduleName _ _)) _ _ _, _, _) =
-    do qLnPutStr ("Splitting " ++ show moduleName)
-       importChanges <- Set.mapM (updateImports m (sModuleName moduleName) symbolToModule) (Set.delete old univ)
+doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _ _, _, _) =
+    do qLnPutStr ("Splitting " ++ show parent)
+       importChanges <- Set.mapM (updateImports m (sModuleName parent) symbolToModule) (Set.delete parent' univ)
        return $ unions [ -- The changes required to existing imports
                          importChanges
                          -- Compute the result of splitting the parent module
                        , Set.map newModule moduleNames
                          -- Did the parent module disappear, or was it replaced?
-                       , if member old moduleNames then Set.empty else singleton (Removed old) ]
+                       , if member parent' moduleNames then Set.empty else singleton (Removed parent') ]
     where
       moduleNames = newModuleNames symbolToModule m
       -- The name of the module to be split
-      old = sModuleName moduleName
+      parent' = sModuleName parent
 
       -- Build a map from module name to the list of declarations that
       -- will be in that module.  All of these declarations used to be
@@ -236,15 +238,11 @@ updateImports :: MonadClean m => ModuleInfo -> S.ModuleName -> (DeclName -> S.Mo
 updateImports m old symbolToModule name =
     do path <- modulePath name
        quietly $ qLnPutStr $ "updateImports " ++ show name
-       text' <- liftIO $ readFile path
-       parsed <- parseFileWithComments path
-       case parsed of
-         ParseOk (m', comments') ->
-             let text'' = Foldable.fold (foldModule echo2 echo echo echo echo2 echo echo2
-                                                    (\ i pref s suff r -> r |> pref <> updateImportDecl s i <> suff)
-                                                    echo echo2 (m', text', comments') mempty) in
-             return $ if text' /= text'' then Modified name text'' else Unchanged name
-         ParseFailed _ _ -> error $ "Parse error in " ++ show name
+       (m', text', comments') <- parseModule path
+       let text'' = Foldable.fold (foldModule echo2 echo echo echo echo2 echo echo2
+                                                  (\ i pref s suff r -> r |> pref <> updateImportDecl s i <> suff)
+                                                  echo echo2 (m', text', comments') mempty)
+       return $ if text' /= text'' then Modified name text'' else Unchanged name
     where
       updateImportDecl :: String -> A.ImportDecl SrcSpanInfo -> String
       updateImportDecl s i =
