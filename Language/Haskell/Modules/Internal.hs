@@ -1,11 +1,16 @@
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
+{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports,
+             ScopedTypeVariables, StandaloneDeriving, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Internal
-    ( runMonadClean
+    ( ModuleInfo
+    , ModuleMap
+    , parseModule
+    , runMonadClean
     , modifyParams
     , parseFileWithComments
     , parseFile
     , modulePath
+    , modulePathBase
     , markForDelete
     , Params(..)
     , MonadClean(getParams, putParams)
@@ -18,12 +23,13 @@ import Control.Exception (SomeException, try)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
+import Data.Map (Map)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (delete, empty, insert, Set, toList)
 import qualified Language.Haskell.Exts.Annotated as A (Module, parseFileWithComments, parseFileWithMode)
-import Language.Haskell.Exts.Comments (Comment)
+import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Extension (Extension)
-import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions), ParseResult)
+import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions), ParseResult, fromParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
@@ -33,6 +39,8 @@ import Prelude hiding (writeFile)
 import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
 import System.FilePath ((</>), dropExtension, takeDirectory, (<.>))
 import System.IO.Error (isDoesNotExistError)
+
+deriving instance Ord Comment
 
 -- | This contains the information required to run the state monad for
 -- import cleaning and module spliting/mergeing.
@@ -110,6 +118,16 @@ runMonadClean action =
        mapM_ (\ x -> liftIO (try (removeFile x)) >>= \ (_ :: Either SomeException ()) -> return ()) (toList (junk params))
        return result
 
+type ModuleInfo = (A.Module SrcSpanInfo, String, [Comment])
+type ModuleMap = Map S.ModuleName ModuleInfo
+
+parseModule :: MonadClean m => S.ModuleName -> m ModuleInfo
+parseModule name =
+    do path <- modulePath name
+       text <- liftIO $ readFile path
+       (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
+       return (parsed, text, comments)
+
 -- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: MonadClean m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))
 parseFileWithComments path =
@@ -149,13 +167,13 @@ modulePath name =
                [] -> return (modulePathBase name) -- should this be an error?
                (d : _) -> return $ d </> modulePathBase name
 
-      -- Construct the base of a module path.
-      modulePathBase :: S.ModuleName -> FilePath
-      modulePathBase (S.ModuleName name) =
-          map f name <.> "hs"
-          where
-            f '.' = '/'
-            f c = c
+-- | Construct the base of a module path.
+modulePathBase :: S.ModuleName -> FilePath
+modulePathBase (S.ModuleName name) =
+    map f name <.> "hs"
+    where
+      f '.' = '/'
+      f c = c
 
 markForDelete :: MonadClean m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk = insert x (junk p)})

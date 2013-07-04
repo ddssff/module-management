@@ -20,15 +20,15 @@ import Data.Monoid ((<>), mempty)
 import Data.Sequence ((<|), (|>))
 import Data.Set as Set (delete, difference, empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
 import Data.Set.Extra as Set (gFind, mapM)
-import Language.Haskell.Exts (fromParseResult, ParseResult(ParseOk, ParseFailed))
+import Language.Haskell.Exts (ParseResult(ParseOk, ParseFailed))
 import qualified Language.Haskell.Exts.Annotated as A (Decl, ImportDecl(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
 import Language.Haskell.Exts.Annotated.Simplify (sImportDecl, sImportSpec, sModuleName, sName)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec, ImportDecl(..), ModuleName(..), Name(..))
-import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2, ModuleInfo)
+import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (doResult, modulePath, ModuleResult(..), MonadClean(getParams), Params(moduVerse, testMode), parseFileWithComments)
+import Language.Haskell.Modules.Internal (doResult, modulePath, ModuleResult(..), MonadClean(getParams), Params(moduVerse, testMode), parseFileWithComments, ModuleInfo, parseModule)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
 import Prelude hiding (writeFile)
@@ -44,14 +44,6 @@ data DeclName
 isReExported :: DeclName -> Bool
 isReExported (ReExported _) = True
 isReExported _ = False
-
-parseModule :: MonadClean m => S.ModuleName -> m ModuleInfo
-parseModule name =
-    do path <- modulePath name
-       text <- liftIO $ readFile path
-       (parsed, comments) <- parseFileWithComments path >>= return . fromParseResult
-       return (parsed, text, comments)
-
 
 -- | Split each of a module's declarations into a new module.  Update
 -- the imports of all the modules in the moduVerse to reflect the split.

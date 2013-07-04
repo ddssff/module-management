@@ -2,9 +2,7 @@
 {-# LANGUAGE BangPatterns, CPP, FlexibleInstances, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Fold
-    ( ModuleInfo
-    , ModuleMap
-    , foldModule
+    ( foldModule
     , foldHeader
     , foldExports
     , foldImports
@@ -21,16 +19,15 @@ import Control.Monad.State (get, put, runState, State)
 import Data.Char (isSpace)
 import Data.Default (Default(def))
 import Data.List (tails)
-import Data.Map (Map)
 import Data.Monoid ((<>), Monoid)
 import Data.Sequence (Seq, (|>))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
+import Language.Haskell.Modules.Internal (ModuleInfo)
 import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, srcLoc, srcPairText)
 
-type Module = A.Module SrcSpanInfo
+--type Module = A.Module SrcSpanInfo
 --type ModuleHead = A.ModuleHead SrcSpanInfo
 type ModulePragma = A.ModulePragma SrcSpanInfo
 type ModuleName = A.ModuleName SrcSpanInfo
@@ -59,9 +56,6 @@ instance Spans (A.ImportDecl SrcSpanInfo) where spans x = [fixSpan $ spanInfo x]
 instance Spans (A.Decl SrcSpanInfo) where spans x = [fixSpan $ spanInfo x]
 instance Spans (A.ModuleName SrcSpanInfo) where spans x = [fixSpan $ spanInfo x]
 instance Spans (A.WarningText SrcSpanInfo) where spans x = [fixSpan $ spanInfo x]
-
-type ModuleInfo = (Module, String, [Comment])
-type ModuleMap = Map S.ModuleName ModuleInfo
 
 -- This happens, a span with end column 0, even though column
 -- numbering begins at 1.  Is it a bug in haskell-src-exts?
