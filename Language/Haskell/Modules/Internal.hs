@@ -25,14 +25,13 @@ import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
-import Language.Haskell.Modules.Common (modulePathBase)
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qLnPutStr, qPutStr, quietly)
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import Prelude hiding (writeFile)
 import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
-import System.FilePath ((</>), dropExtension, takeDirectory)
+import System.FilePath ((</>), dropExtension, takeDirectory, (<.>))
 import System.IO.Error (isDoesNotExistError)
 
 -- | This contains the information required to run the state monad for
@@ -149,6 +148,14 @@ modulePath name =
              case dirs of
                [] -> return (modulePathBase name) -- should this be an error?
                (d : _) -> return $ d </> modulePathBase name
+
+      -- Construct the base of a module path.
+      modulePathBase :: S.ModuleName -> FilePath
+      modulePathBase (S.ModuleName name) =
+          map f name <.> "hs"
+          where
+            f '.' = '/'
+            f c = c
 
 markForDelete :: MonadClean m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk = insert x (junk p)})
