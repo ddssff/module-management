@@ -7,12 +7,8 @@ module Language.Haskell.Modules.Common
 
 import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO, bracket)
 import Control.Monad.Trans (liftIO)
-import Data.Default (def, Default)
 import Data.List (groupBy, sortBy)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Name(..))
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(..))
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
-import System.FilePath ((<.>))
 
 -- | Convert a compare function into an (==)
 toEq :: Ord a => (a -> a -> Ordering) -> (a -> a -> Bool)

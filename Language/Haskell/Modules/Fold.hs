@@ -17,7 +17,6 @@ import Control.Applicative ((<$>))
 import Control.Monad (when)
 import Control.Monad.State (get, put, runState, State)
 import Data.Char (isSpace)
-import Data.Default (Default(def))
 import Data.List (tails)
 import Data.Monoid ((<>), Monoid)
 import Data.Sequence (Seq, (|>))
@@ -83,8 +82,8 @@ setSpanEnd loc sp = sp {srcSpanEndLine = srcLine loc, srcSpanEndColumn = srcColu
 adjustSpans :: String -> [Comment] -> [SrcSpanInfo] -> [SrcSpanInfo]
 adjustSpans _ _ [] = []
 adjustSpans _ _ [x] = [x]
-adjustSpans text comments sps =
-    fst $ runState f (St def text comments sps)
+adjustSpans text comments sps@(x : _) =
+    fst $ runState f (St (SrcLoc (srcFilename (srcLoc x)) 1 1) text comments sps)
     where
       f = do st <- get
              let b = loc_ st
@@ -170,8 +169,8 @@ foldModule :: forall r. (Show r) =>
            -> r -- ^ Result
 foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlPage _ _ _ _ _ _ _, _, _) _ = error "XmlPage: unsupported"
 foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlHybrid _ _ _ _ _ _ _ _ _, _, _) _ = error "XmlHybrid: unsupported"
-foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (m@(A.Module _ mh ps is ds), text, comments) r0 =
-    (\ (_, (_, _, _, r)) -> r) $ runState doModule (text, def, spans m, r0)
+foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (m@(A.Module (SrcSpanInfo (SrcSpan path _ _ _ _) _) mh ps is ds), text, comments) r0 =
+    (\ (_, (_, _, _, r)) -> r) $ runState doModule (text, (SrcLoc path 1 1), spans m, r0)
     where
       doModule =
           do doSep topf

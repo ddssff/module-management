@@ -9,14 +9,13 @@ module Language.Haskell.Modules.Util.Symbols
     , tests
     ) where
 
-import Data.Default (def)
 import Data.List (sort)
 import Data.Maybe (mapMaybe)
 import Data.Set as Set (empty, insert, Set, toList)
 import Language.Haskell.Exts.Annotated.Simplify (sName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), Exp(..), ExportSpec(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name(..), Pat(..), PatField(..), QName(..), QualConDecl(..), Rhs(..), RPat(..), Type(..))
 import Language.Haskell.Exts.Pretty (prettyPrint)
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
+import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..), SrcSpan(..))
 import qualified Language.Haskell.Exts.Syntax as S (CName(..), ExportSpec(..), ImportSpec(..), Name(..), QName(..))
 import Language.Haskell.Modules.Util.SrcLoc ()
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
@@ -201,3 +200,6 @@ test3 :: Test
 test3 = TestCase (assertEqual "Pat" "pvar" (prettyPrint (A.PVar def (A.Ident def "pvar") :: A.Pat SrcSpanInfo)))
 test4 :: Test
 test4 = TestCase (assertEqual "Pat" "unqual pvar" (prettyPrint (A.PApp def (A.UnQual def (A.Ident def "unqual")) [A.PVar def (A.Ident def "pvar")] :: A.Pat SrcSpanInfo)))
+
+def :: SrcSpanInfo
+def = SrcSpanInfo (SrcSpan "test" 1 1 1 1) []

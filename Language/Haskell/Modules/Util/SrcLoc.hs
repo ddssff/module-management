@@ -14,7 +14,6 @@ module Language.Haskell.Modules.Util.SrcLoc
     ) where
 
 import Control.Monad.State (get, put, runState, State)
-import Data.Default (def, Default)
 import Data.List (groupBy, partition, sort)
 import Data.Set (Set, toList)
 import Data.Tree (Tree(Node), unfoldTree)
@@ -153,9 +152,9 @@ srcLoc x = let (SrcSpan f b e _ _) = srcSpan x in SrcLoc f b e
 endLoc :: HasSpanInfo x => x -> SrcLoc
 endLoc x = let (SrcSpan f _ _ b e) = srcSpan x in SrcLoc f b e
 
-textEndLoc :: String -> SrcLoc
-textEndLoc text =
-    def {srcLine = length ls, srcColumn = length (last ls) + 1}
+textEndLoc :: FilePath -> String -> SrcLoc
+textEndLoc path text =
+    SrcLoc {srcFilename = path, srcLine = length ls, srcColumn = length (last ls) + 1}
     where ls = lines' text
 
 -- | Update a SrcLoc to move it from l past the string argument.
@@ -184,9 +183,10 @@ test5 = TestCase (assertEqual "srcPairTextTail3"
                                  (SrcLoc "<unknown>.hs" 2 1)
                                  "\n{-# OPTIONS_GHC -fno-warn-orphans #-}\nmodule Debian.Repo.Orphans where\n\nimport Data.Text (Text)\nimport qualified Debian.Control.Text as T\n\nderiving instance Show (T.Field' Text)\nderiving instance Ord (T.Field' Text)\nderiving instance Show T.Paragraph\nderiving instance Ord T.Paragraph\n")))
 
-textSpan :: String -> SrcSpanInfo
-textSpan s = let end = textEndLoc s in
-             SrcSpanInfo (def {srcSpanStartLine = 1, srcSpanStartColumn = 1, srcSpanEndLine = srcLine end, srcSpanEndColumn = srcColumn end}) []
+textSpan :: FilePath -> String -> SrcSpanInfo
+textSpan path s =
+    let end = textEndLoc path s in
+    SrcSpanInfo (SrcSpan {srcSpanFilename = path, srcSpanStartLine = 1, srcSpanStartColumn = 1, srcSpanEndLine = srcLine end, srcSpanEndColumn = srcColumn end}) []
 
 srcPairText :: SrcLoc -> SrcLoc -> String -> (String, String)
 srcPairText b0 e0 s0 =
@@ -216,15 +216,6 @@ srcPairText b0 e0 s0 =
                      (c : s') -> put (b {srcColumn = srcColumn b + 1}, e, r ++ [c], s') >> f
                _ ->
                    return (r, s)
-
-instance Default SrcLoc where
-    def = SrcLoc "<unknown>.hs" 1 1
-
-instance Default SrcSpanInfo where
-    def = SrcSpanInfo {srcInfoSpan = def, srcInfoPoints = def}
-
-instance Default SrcSpan where
-    def = SrcSpan {srcSpanFilename = "<unknown>.hs", srcSpanStartLine = 1, srcSpanEndLine = 1, srcSpanStartColumn = 1, srcSpanEndColumn = 1}
 
 -- | Build a tree of SrcSpanInfo 
 

@@ -8,7 +8,6 @@ import Control.Applicative ((<$>))
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, throw)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
-import Data.Default (def, Default)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.List (find, groupBy, intercalate, nub, nubBy, sortBy)
@@ -20,12 +19,13 @@ import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, 
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleName(ModuleName), QName(..), Type(..))
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
+import Language.Haskell.Exts.SrcLoc (SrcSpanInfo, SrcLoc(..))
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (markForDelete, modifyParams, ModuleResult(Modified, Unchanged), MonadClean(getParams), Params(extensions, hsFlags, removeEmptyImports, scratchDir, sourceDirs), parseModule, ModuleInfo, moduleName)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
+import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
 import Language.Haskell.Modules.Util.Symbols (symbols)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 import System.Exit (ExitCode(..))
@@ -232,8 +232,9 @@ importMergable a b =
       -- source locations.  This will distinguish "import Foo as F" from
       -- "import Foo", but will let us group imports that can be merged.
       -- Don't merge hiding imports with regular imports.
+      SrcLoc path _ _ = srcLoc a
       noSpecs :: S.ImportDecl -> S.ImportDecl
-      noSpecs x = x { S.importLoc = def,
+      noSpecs x = x { S.importLoc = SrcLoc path 1 1, -- can we just use srcLoc a?
                       S.importSpecs = case S.importSpecs x of
                                         Just (True, _) -> Just (True, []) -- hiding
                                         Just (False, _) -> Nothing

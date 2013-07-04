@@ -10,7 +10,6 @@ module Language.Haskell.Modules.Split
 import Control.Exception (throw)
 import Control.Monad (when)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
-import Data.Default (Default(def))
 import Data.Foldable as Foldable (fold)
 import Data.List as List (filter, intercalate, map, nub)
 import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, lookup, Map, mapWithKey)
@@ -22,12 +21,13 @@ import Data.Set.Extra as Set (gFind, mapM)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, ImportDecl(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
 import Language.Haskell.Exts.Annotated.Simplify (sImportDecl, sImportSpec, sModuleName, sName)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
+import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..), SrcLoc(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec, ImportDecl(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Internal (doResult, modulePath, ModuleResult(..), MonadClean(getParams), Params(moduVerse, testMode), ModuleInfo, parseModule, moduleName)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
+import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
 import Prelude hiding (writeFile)
 import System.FilePath ((<.>))
@@ -292,14 +292,17 @@ defaultSymbolToModule (S.ModuleName parentModuleName) name =
 
 -- | Build an import of the symbols created by a declaration.
 toImportDecl :: S.ModuleName -> [(A.Decl SrcSpanInfo, String)] -> S.ImportDecl
-toImportDecl (S.ModuleName modName) decls =
-    S.ImportDecl {S.importLoc = def,
+toImportDecl _ [] = error "toImportDecl: missing declaration"
+toImportDecl (S.ModuleName modName) decls@((d, _) : _) =
+    S.ImportDecl {S.importLoc = SrcLoc path 1 1,  -- can we just use srcLoc d?
                   S.importModule = S.ModuleName modName,
                   S.importQualified = False,
                   S.importSrc = False,
                   S.importPkg = Nothing,
                   S.importAs = Nothing,
                   S.importSpecs = Just (False, nub (concatMap (imports . fst) decls))}
+    where
+      SrcLoc path _ _ = srcLoc d
 
 justs :: Ord a => Set (Maybe a) -> Set a
 justs = Set.fold (\ mx s -> maybe s (`Set.insert` s) mx) Set.empty

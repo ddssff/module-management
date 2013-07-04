@@ -31,7 +31,7 @@ import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..
 import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Extension (Extension)
-import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions), ParseResult, fromParseResult)
+import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
@@ -137,15 +137,7 @@ parseModule path =
 parseFileWithComments :: MonadClean m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))
 parseFileWithComments path =
     do exts <- getParams >>= return . extensions
-       liftIO (A.parseFileWithComments (Exts.defaultParseMode {Exts.extensions = exts}) path)
-
--- | Run 'A.parseFileWithMode' with the extensions stored in the state.
-{-
-parseFile :: MonadClean m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo))
-parseFile path =
-    do exts <- getParams >>= return . extensions
-       liftIO (A.parseFileWithMode (Exts.defaultParseMode {Exts.extensions = exts}) path)
--}
+       liftIO (A.parseFileWithComments (Exts.defaultParseMode {Exts.extensions = exts, Exts.parseFilename = path}) path)
 
 -- | Search the path directory list for a source file that already exists.
 findSourcePath :: MonadClean m => FilePath -> m FilePath
