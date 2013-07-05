@@ -64,8 +64,9 @@ module Language.Haskell.Modules
     , splitModule
     , splitModuleDecls
     , mergeModules
-    , module Language.Haskell.Modules.Params
     , module Language.Haskell.Modules.Fold
+    , module Language.Haskell.Modules.ModuVerse
+    , module Language.Haskell.Modules.Params
     , module Language.Haskell.Modules.Util.QIO
     , findModules
     , findPaths
@@ -74,7 +75,8 @@ module Language.Haskell.Modules
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
-import Language.Haskell.Modules.Params (modifyDryRun, modifyExtensions, modifyHsFlags, modifyModuVerse, modifyRemoveEmptyImports, modifySourceDirs, modifyTestMode, runMonadClean)
+import Language.Haskell.Modules.ModuVerse (ModuVerse(..), modifySourceDirs)
+import Language.Haskell.Modules.Params (modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode, runMonadClean)
 import Language.Haskell.Modules.Split (splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
 import Language.Haskell.Modules.Util.Test (findModules, findPaths)

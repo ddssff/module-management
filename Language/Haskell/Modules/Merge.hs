@@ -12,7 +12,7 @@ import Data.Map as Map (fromList, insert, lookup, Map, member, toAscList)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((|>))
-import Data.Set as Set (difference, fromList, insert, Set, union)
+import Data.Set as Set (fromList, Set, union)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sImportDecl, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpecList(ExportSpecList), ImportDecl(..), Module(Module), ModuleHead(ModuleHead))
@@ -22,7 +22,8 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(..), ModuleName(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (doResult, modifyParams, modulePath, ModuleResult(Modified, Removed, Unchanged), MonadClean(getParams), Params(moduVerse, testMode), parseModule, ModuleInfo)
+import Language.Haskell.Modules.Internal (doResult, ModuleResult(Modified, Removed, Unchanged), MonadClean(getParams), Params(testMode))
+import Language.Haskell.Modules.ModuVerse (ModuleInfo, getNames, delName, putName, parseModule, loadModules, loadModule, modulePath)
 
 -- | Merge the declarations from several modules into a single new
 -- one, updating the imports of the modules in the moduVerse to
@@ -31,13 +32,14 @@ import Language.Haskell.Modules.Internal (doResult, modifyParams, modulePath, Mo
 -- created by this operation.
 mergeModules :: MonadClean m => [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
 mergeModules inputs output =
-    do Just univ <- getParams >>= return . moduVerse
+    do univ <- getNames
        let univ' = union univ (Set.fromList (output : inputs))
        inputInfo <- loadModules inputs
        result <- Set.mapM (doModule inputInfo inputs output) univ' >>= Set.mapM doResult
       -- The inputs disappear and the output appears.  If the output is one
       -- of the inputs, it does not disappear.
-       modifyParams (\ p -> p {moduVerse = fmap (\ s -> Set.insert output (Set.difference s (Set.fromList inputs))) (moduVerse p)})
+       mapM_ delName inputs
+       putName output
        Set.mapM clean result
     where
       clean x =
@@ -169,9 +171,3 @@ fixReferences oldmap new x =
 
 -- junk :: String -> Bool
 -- junk s = isSuffixOf ".imports" s || isSuffixOf "~" s
-
-loadModules :: MonadClean m => [S.ModuleName] -> m (Map S.ModuleName ModuleInfo)
-loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names
-
-loadModule :: MonadClean m => S.ModuleName -> m ModuleInfo
-loadModule name = modulePath name >>= parseModule

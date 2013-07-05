@@ -23,7 +23,7 @@ import Data.Sequence (Seq, (|>))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
-import Language.Haskell.Modules.Internal (ModuleInfo)
+import Language.Haskell.Modules.ModuVerse (ModuleInfo)
 import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, srcLoc, srcPairText)
 
 --type Module = A.Module SrcSpanInfo

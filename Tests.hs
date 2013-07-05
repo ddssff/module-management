@@ -4,7 +4,7 @@
 import Control.Exception (SomeException, try)
 import Control.Monad.State (StateT)
 import Data.List (isPrefixOf)
-import Data.Set as Set (Set)
+import Data.Set.Extra as Set (Set, mapM_)
 import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
@@ -13,7 +13,8 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules (mergeModules, splitModuleDecls)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Internal (modifyParams, MonadClean, Params(extensions, moduVerse), runMonadClean)
+import Language.Haskell.Modules.Internal (Params, MonadClean, runMonadClean)
+import Language.Haskell.Modules.ModuVerse (putName, modifyExtensions)
 import Language.Haskell.Modules.Util.QIO (noisily, qLnPutStr)
 import Language.Haskell.Modules.Util.Test (diff', logicModules, rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
@@ -78,16 +79,16 @@ logictest s f =
 
 test2a :: MonadClean m => Set ModuleName -> m ()
 test2a u =
-         do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
-                                    moduVerse = Just u})
+         do modifyExtensions (++ [MultiParamTypeClasses])
+            Set.mapM_ putName u
             qLnPutStr "Splitting module Literal"
             splitModuleDecls "Data/Logic/Classes/Literal.hs"
             return ()
 
 test2b :: MonadClean m => Set ModuleName -> m ()
 test2b u =
-         do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
-                                    moduVerse = Just u})
+         do modifyExtensions (++ [MultiParamTypeClasses])
+            Set.mapM_ putName u
             qLnPutStr "Splitting module Literal"
             splitModuleDecls "Data/Logic/Classes/Literal.hs"
             qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
@@ -102,8 +103,8 @@ test2b u =
 
 test2c :: MonadClean m => Set ModuleName -> m ()
 test2c u =
-         do modifyParams (\ p -> p {extensions = extensions p ++ [MultiParamTypeClasses],
-                                    moduVerse = Just u})
+         do modifyExtensions (++ [MultiParamTypeClasses])
+            Set.mapM_ putName u
             qLnPutStr "Splitting module Literal"
             splitModuleDecls "Data/Logic/Classes/Literal.hs"
             qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"

@@ -20,18 +20,19 @@ Library
   ghc-Options:      -Wall -O2
   Exposed-Modules:
     Language.Haskell.Modules,
-    Language.Haskell.Modules.Fold,
     Language.Haskell.Modules.Common,
+    Language.Haskell.Modules.Fold,
     Language.Haskell.Modules.Imports,
     Language.Haskell.Modules.Merge,
+    Language.Haskell.Modules.ModuVerse,
     Language.Haskell.Modules.Params,
     Language.Haskell.Modules.Split,
+    Language.Haskell.Modules.Util.DryIO,
     Language.Haskell.Modules.Util.QIO,
-    Language.Haskell.Modules.Util.Symbols,
-    Language.Haskell.Modules.Util.Test,
-    Language.Haskell.Modules.Util.Temp,
     Language.Haskell.Modules.Util.SrcLoc,
-    Language.Haskell.Modules.Util.DryIO
+    Language.Haskell.Modules.Util.Symbols,
+    Language.Haskell.Modules.Util.Temp,
+    Language.Haskell.Modules.Util.Test
   Other-Modules:
     Language.Haskell.Modules.Internal,
     Tests.Fold,

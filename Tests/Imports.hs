@@ -5,7 +5,8 @@ import Language.Haskell.Exts.Extension (Extension(FlexibleInstances, StandaloneD
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (modifyParams, Params(extensions, sourceDirs), runMonadClean, modulePathBase)
+import Language.Haskell.Modules.Internal (runMonadClean)
+import Language.Haskell.Modules.ModuVerse (modifyExtensions, modifySourceDirs, modulePathBase)
 import Language.Haskell.Modules.Params (modifyTestMode)
 import Language.Haskell.Modules.Util.Test (diff, rsync)
 import System.Exit (ExitCode(..))
@@ -60,7 +61,7 @@ test3 :: Test
 test3 =
     TestLabel "imports3" $ TestCase
       (rsync "testdata/imports3" "tmp" >>
-       runMonadClean (modifyParams (\ p -> p {sourceDirs = ["tmp"]}) >> cleanImports "tmp/NotMain.hs") >>
+       runMonadClean (modifySourceDirs (const ["tmp"]) >> cleanImports "tmp/NotMain.hs") >>
        assertEqual "module name" () ())
 
 -- | Preserve imports with a "hiding" clause
@@ -68,7 +69,7 @@ test4 :: Test
 test4 =
     TestLabel "imports4" $ TestCase
       (rsync "testdata/imports4" "tmp" >>
-       runMonadClean (modifyParams (\ p -> p {sourceDirs = ["tmp"]}) >> cleanImports "tmp/Hiding.hs") >>
+       runMonadClean (modifySourceDirs (const ["tmp"]) >> cleanImports "tmp/Hiding.hs") >>
        -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
        assertEqual "module name" () ())
 
@@ -77,9 +78,10 @@ test5 :: Test
 test5 =
     TestLabel "imports5" $ TestCase
       (do _ <- rsync "testdata/imports5" "tmp"
-          _ <- runMonadClean (modifyParams (\ p -> p {extensions = extensions p ++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances],
-                                                  sourceDirs = ["tmp"]}) >>
-                          cleanImports "tmp/Deriving.hs")
+          _ <- runMonadClean
+                 (modifySourceDirs (const ["tmp"]) >>
+                  modifyExtensions (++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
+                  cleanImports "tmp/Deriving.hs")
           (code, out, err) <- diff "testdata/imports5" "tmp"
           assertEqual "standalone deriving"
                       (ExitFailure 1,

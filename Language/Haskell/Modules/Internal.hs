@@ -2,17 +2,10 @@
              ScopedTypeVariables, StandaloneDeriving, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Internal
-    ( ModuleInfo
-    , ModuleMap
-    , moduleName
-    , parseModule
-    , runMonadClean
+    ( runMonadClean
     , modifyParams
-    , modifyModuVerse
     -- , parseFileWithComments
     -- , parseFile
-    , modulePath
-    , modulePathBase
     , markForDelete
     , Params(..)
     , MonadClean(getParams, putParams)
@@ -25,25 +18,23 @@ import Control.Exception (SomeException, try)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
-import Data.Map (Map)
-import Data.Maybe (fromMaybe)
-import Data.Set as Set (delete, empty, insert, Set, toList)
-import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
-import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
-import Language.Haskell.Exts.Comments (Comment(..))
-import Language.Haskell.Exts.Extension (Extension)
-import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
+import Data.Set as Set (empty, insert, Set, toList)
+--import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
+--import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
+--import Language.Haskell.Exts.Comments (Comment(..))
+--import Language.Haskell.Exts.Extension (Extension)
+--import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
+--import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
+import Language.Haskell.Modules.ModuVerse (ModuleInfo, ModuVerse(..), ModuVerseState, moduVerseInit,
+                                           putName, delName, modulePath)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qLnPutStr, qPutStr, quietly)
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import Prelude hiding (writeFile)
 import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
-import System.FilePath ((</>), dropExtension, takeDirectory, (<.>))
+import System.FilePath (dropExtension, takeDirectory)
 import System.IO.Error (isDoesNotExistError)
-
-deriving instance Ord Comment
 
 -- | This contains the information required to run the state monad for
 -- import cleaning and module spliting/mergeing.
@@ -56,17 +47,9 @@ data Params
       -- be performed if this is ture.
       , verbosity :: Int
       -- ^ Increase or decrease the amount of progress reporting.
-      , extensions :: [Extension]
-      -- ^ Supply compiler extensions.  These are provided to the module
-      -- parser and to GHC when it does the minimal import dumping.
       , hsFlags :: [String]
       -- ^ Extra flags to pass to GHC.
-      , sourceDirs :: [FilePath]
-      -- ^ Top level directories to search for source files and
-      -- imports.  These directories would be the value used in the
-      -- hs-source-dirs parameter of a cabal file, and passed to ghc
-      -- via the -i option.
-      , moduVerse :: Maybe (Set S.ModuleName)
+      , moduVerse :: ModuVerseState
       -- ^ The set of modules that splitModules and catModules will
       -- check for imports of symbols that moved.
       , junk :: Set FilePath
@@ -82,6 +65,10 @@ data Params
       -- ^ For testing, do not run cleanImports on the results of the
       -- splitModule and catModules operations.
       } deriving (Eq, Ord, Show)
+
+instance MonadClean m => ModuVerse m where
+    getModuVerse = getParams >>= return . moduVerse
+    modifyModuVerse f = modifyParams (\ p -> p {moduVerse = f (moduVerse p)})
 
 class (MonadIO m, MonadCatchIO m, Functor m) => MonadClean m where
     getParams :: m Params
@@ -112,68 +99,12 @@ runMonadClean action =
                                                      dryRun = False,
                                                      verbosity = 1,
                                                      hsFlags = [],
-                                                     extensions = Exts.extensions Exts.defaultParseMode,
-                                                     sourceDirs = ["."],
-                                                     moduVerse = Nothing,
+                                                     moduVerse = moduVerseInit,
                                                      junk = empty,
                                                      removeEmptyImports = True,
                                                      testMode = False})
        mapM_ (\ x -> liftIO (try (removeFile x)) >>= \ (_ :: Either SomeException ()) -> return ()) (toList (junk params))
        return result
-
-moduleName :: A.Module a -> S.ModuleName
-moduleName (A.Module _ (Just (A.ModuleHead _ x _ _)) _ _ _) = sModuleName x
-moduleName _ = S.ModuleName "Main"
-
-type ModuleInfo = (A.Module SrcSpanInfo, String, [Comment])
-type ModuleMap = Map S.ModuleName ModuleInfo
-
-parseModule :: MonadClean m => FilePath -> m ModuleInfo
-parseModule path =
-    do text <- liftIO $ readFile path
-       (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
-       return (parsed, text, comments)
-
--- | Run 'A.parseFileWithComments' with the extensions stored in the state.
-parseFileWithComments :: MonadClean m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))
-parseFileWithComments path =
-    do exts <- getParams >>= return . extensions
-       liftIO (A.parseFileWithComments (Exts.defaultParseMode {Exts.extensions = exts, Exts.parseFilename = path}) path)
-
--- | Search the path directory list for a source file that already exists.
-findSourcePath :: MonadClean m => FilePath -> m FilePath
-findSourcePath path =
-    findFile =<< (sourceDirs <$> getParams)
-    where
-      findFile (dir : dirs) =
-          do let x = dir </> path
-             exists <- liftIO $ doesFileExist x
-             if exists then return x else findFile dirs
-      findFile [] =
-          do -- Just building an error message here
-             here <- liftIO getCurrentDirectory
-             dirs <- sourceDirs <$> getParams
-             liftIO . throw . userError $ "findSourcePath failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ path
-
--- | Search the path directory list, preferring an already existing file, but
--- if there is none construct one using the first element of the directory list.
-modulePath :: MonadClean m => S.ModuleName -> m FilePath
-modulePath name =
-    findSourcePath (modulePathBase name) `IO.catch` (\ (_ :: IOError) -> makePath)
-    where
-      makePath =
-          do dirs <- sourceDirs <$> getParams
-             case dirs of
-               [] -> return (modulePathBase name) -- should this be an error?
-               (d : _) -> return $ d </> modulePathBase name
-
--- | Construct the base of a module path.
-modulePathBase :: S.ModuleName -> FilePath
-modulePathBase (S.ModuleName name) =
-    map f name <.> "hs"
-    where
-      f '.' = '/'
-      f c = c
 
 markForDelete :: MonadClean m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk = insert x (junk p)})
@@ -197,7 +128,7 @@ doResult x@(Removed name) =
     do path <- modulePath name
        -- I think this event handler is redundant.
        removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-       modifyModuVerse (Set.delete name)
+       delName name
        return x
 
 doResult x@(Modified name text) =
@@ -213,11 +144,5 @@ doResult x@(Created name text) =
        (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
        replaceFile tildeBackup path text
-       modifyModuVerse (Set.insert name)
+       putName name
        return x
-
--- | Modify the set of modules whose imports will be updated when
--- modules are split or merged.  No default, it is an error to run
--- splitModules or catModules without first setting this.
-modifyModuVerse :: MonadClean m => (Set S.ModuleName -> Set S.ModuleName) -> m ()
-modifyModuVerse f = modifyParams (\ p -> p {moduVerse = Just (f (fromMaybe empty (moduVerse p)))})

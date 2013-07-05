@@ -4,20 +4,13 @@
 module Language.Haskell.Modules.Params
     ( MonadClean
     , runMonadClean
-    , modifyModuVerse
     , modifyRemoveEmptyImports
-    , modifySourceDirs
-    , modifyExtensions
     , modifyHsFlags
     , modifyDryRun
     , modifyTestMode
     ) where
 
-import Data.Maybe (fromMaybe)
-import Data.Set (empty, Set)
-import Language.Haskell.Exts.Extension (Extension)
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
-import Language.Haskell.Modules.Internal (modifyParams, modifyModuVerse, MonadClean, Params(dryRun, extensions, hsFlags, moduVerse, removeEmptyImports, sourceDirs, testMode), runMonadClean)
+import Language.Haskell.Modules.Internal (modifyParams, MonadClean, Params(dryRun, hsFlags, removeEmptyImports, testMode), runMonadClean)
 import Prelude hiding (writeFile)
 
 -- | If this flag is set, imports that become empty are removed.
@@ -30,18 +23,6 @@ import Prelude hiding (writeFile)
 -- it was placed there only to import instances.  Default is True.
 modifyRemoveEmptyImports :: MonadClean m => (Bool -> Bool) -> m ()
 modifyRemoveEmptyImports f = modifyParams (\ p -> p {removeEmptyImports = f (removeEmptyImports p)})
-
--- | Modify the list of directories that will be searched for source
--- files, in a similar way to the Hs-Source-Dirs field in a cabal
--- file.  Default is @[\".\"]@.
-modifySourceDirs :: MonadClean m => ([FilePath] -> [FilePath]) -> m ()
-modifySourceDirs f = modifyParams (\ p -> p {sourceDirs = f (sourceDirs p)})
-
--- | Modify the extra extensions passed to the compiler and the
--- parser.  Default value is the list in
--- 'Language.Haskell.Exts.Parser.defaultParseMode'.
-modifyExtensions :: MonadClean m => ([Extension] -> [Extension]) -> m ()
-modifyExtensions f = modifyParams (\ p -> p {extensions = f (extensions p)})
 
 -- | Modify the list of extra flags passed to GHC.  Default is @[]@.
 modifyHsFlags :: MonadClean m => ([String] -> [String]) -> m ()

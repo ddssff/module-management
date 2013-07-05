@@ -25,7 +25,8 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..), SrcLoc(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec, ImportDecl(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (doResult, modulePath, ModuleResult(..), MonadClean(getParams), Params(moduVerse, testMode), ModuleInfo, parseModule, moduleName)
+import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(testMode))
+import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, getNames, parseModule, modulePath)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
@@ -87,12 +88,11 @@ splitModuleBy :: MonadClean m =>
                  (DeclName -> S.ModuleName)
               -> ModuleInfo -> m ()
 splitModuleBy symbolToModule m =
-    do univ <- moduVerseCheck
+    do univ <- getNames
        changes <- doSplit symbolToModule univ m >>= return . collisionCheck univ
        setMapM_ doResult changes       -- Write the new modules
        setMapM_ doClean changes        -- Clean the new modules after all edits are finished
     where
-      moduVerseCheck = getParams >>= return . fromMaybe (error "moduVerse not set, use modifyModuVerse") . moduVerse
       collisionCheck univ s =
           if not (Set.null illegal)
           then error ("One or more module to be created by splitModule already exists: " ++ show (Set.toList illegal))

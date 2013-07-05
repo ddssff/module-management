@@ -22,7 +22,8 @@ import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPI
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo, SrcLoc(..))
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
-import Language.Haskell.Modules.Internal (markForDelete, modifyParams, ModuleResult(Modified, Unchanged), MonadClean(getParams), Params(extensions, hsFlags, removeEmptyImports, scratchDir, sourceDirs), parseModule, ModuleInfo, moduleName)
+import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(Modified, Unchanged), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir))
+import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, parseModule, getExtensions, modifyExtensions, getSourceDirs)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
@@ -77,8 +78,8 @@ dumpImports path =
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"
        args <- hsFlags <$> getParams
-       dirs <- sourceDirs <$> getParams
-       exts <- extensions <$> getParams
+       dirs <- getSourceDirs
+       exts <- getExtensions
        let args' = args ++ ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs, path] ++ map (("-X" ++) . show) exts
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
@@ -95,9 +96,9 @@ checkImports path name@(S.ModuleName name') m extraImports =
     do let importsPath = name' <.> ".imports"
        markForDelete importsPath
        (newImports, _, _) <-
-           bracket (getParams >>= return . extensions)
-                   (\ saved -> modifyParams (\ p -> p {extensions = saved}))
-                   (\ saved -> modifyParams (\ p -> p {extensions = PackageImports : saved}) >>
+           bracket (getExtensions)
+                   (modifyExtensions . const)
+                   (\ saved -> modifyExtensions (const (PackageImports : saved)) >>
                                parseModule importsPath `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here -> throw . userError $ here ++ ": " ++ show e)))
        updateSource path m newImports name extraImports
 

@@ -1,9 +1,11 @@
 module Tests.Merge where
 
+import Data.Set.Extra as Set
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Internal (modifyParams, Params(moduVerse, sourceDirs), runMonadClean)
+import Language.Haskell.Modules.Internal (runMonadClean)
 import Language.Haskell.Modules.Merge (mergeModules)
+import Language.Haskell.Modules.ModuVerse (putName, modifySourceDirs)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import System.Exit (ExitCode(ExitSuccess))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
@@ -16,7 +18,8 @@ test1 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
          _result <- runMonadClean $
-           do modifyParams (\ p -> p {sourceDirs = ["tmp"], moduVerse = Just repoModules})
+           do modifySourceDirs (const ["tmp"])
+              Set.mapM_ putName repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
                      (S.ModuleName "Debian.Repo.Cache")
@@ -28,7 +31,8 @@ test2 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
          _result <- runMonadClean $
-           do modifyParams (\ p -> p {sourceDirs = ["tmp"], moduVerse = Just repoModules})
+           do modifySourceDirs (const ["tmp"])
+              Set.mapM_ putName repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Common")
@@ -41,7 +45,7 @@ test3 =
       do _ <- rsync "testdata/debian" "tmp"
          _result <- withCurrentDirectory "tmp" $
                    runMonadClean $
-           do modifyParams (\ p -> p {moduVerse = Just repoModules})
+           do Set.mapM_ putName repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.Types.Slice",
                       S.ModuleName "Debian.Repo.Types.Repo",
