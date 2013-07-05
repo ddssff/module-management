@@ -8,6 +8,7 @@ module Language.Haskell.Modules.Internal
     , parseModule
     , runMonadClean
     , modifyParams
+    , modifyModuVerse
     -- , parseFileWithComments
     -- , parseFile
     , modulePath

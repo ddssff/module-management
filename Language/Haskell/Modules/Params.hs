@@ -17,14 +17,8 @@ import Data.Maybe (fromMaybe)
 import Data.Set (empty, Set)
 import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
-import Language.Haskell.Modules.Internal (modifyParams, MonadClean, Params(dryRun, extensions, hsFlags, moduVerse, removeEmptyImports, sourceDirs, testMode), runMonadClean)
+import Language.Haskell.Modules.Internal (modifyParams, modifyModuVerse, MonadClean, Params(dryRun, extensions, hsFlags, moduVerse, removeEmptyImports, sourceDirs, testMode), runMonadClean)
 import Prelude hiding (writeFile)
-
--- | Modify the set of modules whose imports will be updated when
--- modules are split or merged.  No default, it is an error to run
--- splitModules or catModules without first setting this.
-modifyModuVerse :: MonadClean m => (Set S.ModuleName -> Set S.ModuleName) -> m ()
-modifyModuVerse f = modifyParams (\ p -> p {moduVerse = Just (f (fromMaybe empty (moduVerse p)))})
 
 -- | If this flag is set, imports that become empty are removed.
 -- Sometimes this will lead to errors, specifically when an instance
