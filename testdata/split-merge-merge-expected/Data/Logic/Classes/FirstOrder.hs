@@ -9,7 +9,7 @@ import Data.Logic.Classes.Apply (apply, Apply(..), apply0, apply1, apply2, apply
 import Data.Logic.Classes.Combine (binop, BinOp((:&:), (:<=>:), (:=>:), (:|:)), Combinable, Combination(..), combine)
 import Data.Logic.Classes.Constants (Constants(fromBool), ifElse)
 import Data.Logic.Classes.Formula (Formula(atomic))
-import Data.Logic.Classes.Literal (Literal, Literal(foldLiteral))
+import Data.Logic.Classes.Literal (Literal(foldLiteral))
 import Data.Logic.Classes.Negate ((.~.))
 import Data.Logic.Classes.Pretty (Fixity(..), FixityDirection(..), HasFixity(..), Pretty(pretty))
 import qualified Data.Logic.Classes.Propositional as P (PropositionalFormula)

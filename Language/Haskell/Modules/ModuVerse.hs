@@ -26,7 +26,7 @@ import Control.Applicative ((<$>))
 import Control.Monad as List (mapM)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.Map as Map (Map, empty, fromList)
+import Data.Map as Map (Map, empty, fromList, insert, lookup)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (Set, insert, empty, delete)
 import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
@@ -51,8 +51,8 @@ moduleName _ = S.ModuleName "Main"
 -- | A FilePath that can be assumed to be unique.
 newtype PathKey = PathKey {unPathKey :: FilePath} deriving (Eq, Ord, Show)
 
-pathKey :: FilePath -> IO PathKey
-pathKey path = PathKey <$> canonicalizePath path
+pathKey :: (MonadIO m, Functor m) => FilePath -> m PathKey
+pathKey path = PathKey <$> liftIO (canonicalizePath path)
 
 data ModuVerseState =
     ModuVerseState { moduleNames_ :: Maybe (Set S.ModuleName)
@@ -79,7 +79,8 @@ putName :: ModuVerse m => S.ModuleName -> m ()
 putName name = modifyModuVerse (\ s -> s {moduleNames_ = Just (Set.insert name (fromMaybe Set.empty (moduleNames_ s)))})
 
 delName :: ModuVerse m => S.ModuleName -> m ()
-delName name = modifyModuVerse (\ s -> s {moduleNames_ = Just (Set.delete name (fromMaybe Set.empty (moduleNames_ s)))})
+delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Set.delete name (fromMaybe Set.empty (moduleNames_ s)))
+                                         , moduleInfo_ = Map.empty })
 
 class (MonadIO m, MonadCatchIO m, Functor m) => ModuVerse m where
     getModuVerse :: m ModuVerseState
@@ -102,9 +103,15 @@ modifySourceDirs f = modifyModuVerse (\ p -> p {sourceDirs_ = f (sourceDirs_ p)}
 
 parseModule :: ModuVerse m => FilePath -> m ModuleInfo
 parseModule path =
-    do text <- liftIO $ readFile path
-       (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
-       return (parsed, text, comments)
+    do key <- pathKey path
+       verse <- getModuVerse
+       case Map.lookup key (moduleInfo_ verse) of
+         Just info -> return info
+         Nothing ->
+             do text <- liftIO $ readFile path
+                (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
+                modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ x)})
+                return (parsed, text, comments)
 
 -- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))
@@ -120,7 +127,7 @@ loadModule name = modulePath name >>= parseModule
 
 #if 0
     do verse <- getModuVerse
-       key <- liftIO $ pathKey path
+       key <- pathKey path
        case Map.lookoup key (moduleInfo_ verse) of
          Just x -> return x
          Nothing ->

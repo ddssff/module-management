@@ -52,7 +52,7 @@ mergeModules inputs output =
 -- The output module may not (yet) be an element of the moduVerse, in
 -- that case choose the first input modules to convert into the output
 -- module.
-doModule :: MonadClean m => Map S.ModuleName (A.Module SrcSpanInfo, String, [Comment]) -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
+doModule :: MonadClean m => Map S.ModuleName ModuleInfo -> [S.ModuleName] -> S.ModuleName -> S.ModuleName -> m ModuleResult
 doModule inputInfo inputs@(first : _) output name =
     do -- The new module will be based on the existing module, unless
        -- name equals output and output does not exist
@@ -103,7 +103,7 @@ fixModuleImport inputs output x =
                 | elem y inputs -> Just (prettyPrint (x {S.importModule = output}))
             _ -> Nothing
 
-mergeExports :: Map S.ModuleName (A.Module SrcSpanInfo, String, [Comment]) -> S.ModuleName -> Maybe [S.ExportSpec]
+mergeExports :: Map S.ModuleName ModuleInfo -> S.ModuleName -> Maybe [S.ExportSpec]
 mergeExports old new =
     Just (concatMap mergeExports' (Map.toAscList old))
     where
@@ -112,7 +112,7 @@ mergeExports old new =
       mergeExports' (_, (A.Module _ (Just (A.ModuleHead _ _ _ (Just (A.ExportSpecList _ e)))) _ _ _, _, _)) = updateModuleContentsExports old new (List.map sExportSpec e)
       mergeExports' (_, _) = error "mergeExports'"
 
-updateModuleContentsExports :: Map S.ModuleName (A.Module SrcSpanInfo, String, [Comment]) -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
+updateModuleContentsExports :: Map S.ModuleName ModuleInfo -> S.ModuleName -> [S.ExportSpec] -> [S.ExportSpec]
 updateModuleContentsExports old new es =
     foldl f [] es
     where
