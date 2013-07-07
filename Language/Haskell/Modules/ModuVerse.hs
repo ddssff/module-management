@@ -9,6 +9,7 @@ module Language.Haskell.Modules.ModuVerse
     , moduVerseInit
     , ModuVerse(..)
     , getNames
+    , getInfo
     , putName
     , delName
     , getExtensions
@@ -16,8 +17,9 @@ module Language.Haskell.Modules.ModuVerse
     , getSourceDirs
     , modifySourceDirs
     , parseModule
-    , loadModules
-    , loadModule
+    , parseModule'
+    -- , loadModules
+    -- , loadModule
     , modulePath
     , modulePathBase
     ) where
@@ -26,9 +28,9 @@ import Control.Applicative ((<$>))
 import Control.Monad as List (mapM)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.Map as Map (Map, empty, fromList, insert, lookup)
+import Data.Map as Map (Map, empty, fromList, insert, lookup, keys, delete)
 import Data.Maybe (fromMaybe)
-import Data.Set as Set (Set, insert, empty, delete)
+import Data.Set as Set (Set, fromList)
 import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
 import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
 import Language.Haskell.Exts.Comments (Comment(..))
@@ -38,6 +40,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (canonicalizePath, doesFileExist, getCurrentDirectory)
 import System.FilePath ((</>), (<.>))
+import System.IO.Error (isDoesNotExistError)
 
 deriving instance Ord Comment
 
@@ -55,7 +58,7 @@ pathKey :: (MonadIO m, Functor m) => FilePath -> m PathKey
 pathKey path = PathKey <$> liftIO (canonicalizePath path)
 
 data ModuVerseState =
-    ModuVerseState { moduleNames_ :: Maybe (Set S.ModuleName)
+    ModuVerseState { moduleNames_ :: Maybe (Map S.ModuleName ModuleInfo)
                    , moduleInfo_ :: Map PathKey ModuleInfo
                    , extensions_ :: [Extension]
                    , sourceDirs_ :: [FilePath]
@@ -73,13 +76,16 @@ moduVerseInit =
                    , sourceDirs_ = ["."] }
 
 getNames :: ModuVerse m => m (Set S.ModuleName)
-getNames = getModuVerse >>= return . fromMaybe (error "No modules in ModuVerse, use putName") . moduleNames_
+getNames = getModuVerse >>= return . Set.fromList . keys . fromMaybe (error "No modules in ModuVerse, use putName") . moduleNames_
 
-putName :: ModuVerse m => S.ModuleName -> m ()
-putName name = modifyModuVerse (\ s -> s {moduleNames_ = Just (Set.insert name (fromMaybe Set.empty (moduleNames_ s)))})
+getInfo :: ModuVerse m => S.ModuleName -> m (Maybe ModuleInfo)
+getInfo name = getModuVerse >>= return . Map.lookup name . fromMaybe (error "No modules in ModuVerse, use putName") . moduleNames_
+
+putName :: ModuVerse m => S.ModuleName -> ModuleInfo -> m ()
+putName name info = modifyModuVerse (\ s -> s {moduleNames_ = Just (Map.insert name info (fromMaybe Map.empty (moduleNames_ s)))})
 
 delName :: ModuVerse m => S.ModuleName -> m ()
-delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Set.delete name (fromMaybe Set.empty (moduleNames_ s)))
+delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Map.delete name (fromMaybe Map.empty (moduleNames_ s)))
                                          , moduleInfo_ = Map.empty })
 
 class (MonadIO m, MonadCatchIO m, Functor m) => ModuVerse m where
@@ -102,16 +108,23 @@ modifySourceDirs :: ModuVerse m => ([FilePath] -> [FilePath]) -> m ()
 modifySourceDirs f = modifyModuVerse (\ p -> p {sourceDirs_ = f (sourceDirs_ p)})
 
 parseModule :: ModuVerse m => FilePath -> m ModuleInfo
-parseModule path =
-    do key <- pathKey path
-       verse <- getModuVerse
-       case Map.lookup key (moduleInfo_ verse) of
-         Just info -> return info
-         Nothing ->
-             do text <- liftIO $ readFile path
-                (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
-                modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ x)})
-                return (parsed, text, comments)
+parseModule path = parseModule' path >>= maybe (error $ "parseModule - not found: " ++ path) return
+
+parseModule' :: ModuVerse m => FilePath -> m (Maybe ModuleInfo)
+parseModule' path =
+    (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return Nothing else throw e)
+    where
+      look =
+          do key <- pathKey path
+             verse <- getModuVerse
+             return $ Map.lookup key (moduleInfo_ verse)
+      load (Just x) = return (Just x)
+      load Nothing =
+          do key <- pathKey path
+             text <- liftIO $ readFile path
+             (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
+             modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ x)})
+             return (Just (parsed, text, comments))
 
 -- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))

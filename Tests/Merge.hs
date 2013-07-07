@@ -5,7 +5,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (runMonadClean)
 import Language.Haskell.Modules.Merge (mergeModules)
-import Language.Haskell.Modules.ModuVerse (putName, modifySourceDirs)
+import Language.Haskell.Modules.ModuVerse (putName, modifySourceDirs, parseModule, modulePath)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import System.Exit (ExitCode(ExitSuccess))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
@@ -19,7 +19,7 @@ test1 =
       do _ <- rsync "testdata/debian" "tmp"
          _result <- runMonadClean $
            do modifySourceDirs (const ["tmp"])
-              Set.mapM_ putName repoModules
+              Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
                      (S.ModuleName "Debian.Repo.Cache")
@@ -32,7 +32,7 @@ test2 =
       do _ <- rsync "testdata/debian" "tmp"
          _result <- runMonadClean $
            do modifySourceDirs (const ["tmp"])
-              Set.mapM_ putName repoModules
+              Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Common")
@@ -45,7 +45,7 @@ test3 =
       do _ <- rsync "testdata/debian" "tmp"
          _result <- withCurrentDirectory "tmp" $
                    runMonadClean $
-           do Set.mapM_ putName repoModules
+           do Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.Types.Slice",
                       S.ModuleName "Debian.Repo.Types.Repo",

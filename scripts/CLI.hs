@@ -7,8 +7,7 @@ import Data.List (intercalate, isPrefixOf)
 import Data.Set.Extra as Set (Set, toList, size, singleton, mapM_)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules (runMonadClean, cleanImports, splitModuleDecls, mergeModules, modifySourceDirs)
-import Language.Haskell.Modules.Internal (getParams, Params(..))
-import Language.Haskell.Modules.ModuVerse (getNames, putName, getSourceDirs)
+import Language.Haskell.Modules.ModuVerse (getNames, putName, getSourceDirs, modulePath, parseModule)
 import Language.Haskell.Modules.Params (MonadClean)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
 import Language.Haskell.Modules.Util.Test (findModules)
@@ -56,7 +55,7 @@ verse [] =
                                   "Currently:\n  " ++ showVerse modules)
 verse args =
     do new <- mapM (liftIO . find) args
-       List.mapM_ (Set.mapM_ putName) new
+       List.mapM_ (Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name)) new
        modules <- getNames
        liftIO (hPutStrLn stderr $ "moduVerse updated:\n  " ++ showVerse modules)
     where
