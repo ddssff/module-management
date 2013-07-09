@@ -47,15 +47,15 @@ withTestData f path = withCurrentDirectory "testdata/debian" $
          (_, Left (e :: SomeException)) -> error $ "failure: " ++ show e
 
 tests :: Test
-tests = TestList [ -- Main.test1
-                 -- , TestLabel "Fold" Fold.tests
-                 -- , TestLabel "Imports" Imports.tests
-                 -- , TestLabel "Split" Split.tests
-                 -- , TestLabel "Merge" Merge.tests
-                 -- -- If split-merge-merge fails try split and split-merge.
-                 -- , Main.logictest "split" test2a
-                 -- , Main.logictest "split-merge" test2b
-                 Main.logictest "split-merge-merge" test2c
+tests = TestList [ Main.test1
+                 , TestLabel "Fold" Fold.tests
+                 , TestLabel "Imports" Imports.tests
+                 , TestLabel "Split" Split.tests
+                 , TestLabel "Merge" Merge.tests
+                 -- If split-merge-merge fails try split and split-merge.
+                 , Main.logictest "split" test2a
+                 , Main.logictest "split-merge" test2b
+                 , Main.logictest "split-merge-merge" test2c
                  ]
 
 test1 :: Test
