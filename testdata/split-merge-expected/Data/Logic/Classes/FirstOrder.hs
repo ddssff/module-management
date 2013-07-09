@@ -53,6 +53,7 @@ import Data.SafeCopy (base, deriveSafeCopy)
 import qualified Data.Set as Set (empty, Set, union)
 import Text.PrettyPrint ((<+>), (<>), Doc, nest, parens, text)
 
+
 -- |The 'FirstOrderFormula' type class.  Minimal implementation:
 -- @for_all, exists, foldFirstOrder, foldTerm, (.=.), pApp0-pApp7, fApp, var@.  The
 -- functional dependencies are necessary here so we can write

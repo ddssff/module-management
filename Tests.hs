@@ -73,7 +73,7 @@ logictest :: String -> (Set ModuleName -> StateT Params IO ()) -> Test
 logictest s f =
     TestLabel s $ TestCase $
     do _ <- rsync "testdata/logic" "tmp"
-       _ <- withCurrentDirectory "tmp" $ runMonadClean $ f logicModules
+       _ <- withCurrentDirectory "tmp" $ runMonadClean $ noisily $ f logicModules
        (code, out, err) <- diff' ("testdata/" ++ s ++ "-expected") "tmp"
        let out' = unlines (filter (not . isPrefixOf "Binary files") . map (takeWhile (/= '\t')) $ (lines out))
        assertEqual s (ExitSuccess, "", "") (code, out', err)

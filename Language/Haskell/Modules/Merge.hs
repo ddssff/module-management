@@ -86,9 +86,9 @@ doModule inNames@(baseName : _) outName thisName =
                imports =
                    if thisName == outName
                    then let pre = fold (foldImports (\ _ pref s suff r -> if Seq.null r then r |> pref else r) baseInfo mempty)
-                            newImports = unlines (List.map (\ info -> fold (foldImports (moduleImports' inNames) info mempty)) inInfo) in
+                            newImports = unlines (List.map (\ info -> fold (foldImports (moduleImports inNames outName thisName) info mempty)) inInfo) in
                         pre <> newImports
-                   else fold (foldImports (\ x pref s suff r -> r |> pref <> fromMaybe s (fixModuleImport inNames outName (sImportDecl x)) <> suff) baseInfo mempty)
+                   else fold (foldImports (moduleImports inNames outName thisName) baseInfo mempty)
                decls =
                    if thisName == outName
                    then fromMaybe "" (foldDecls (\ _ _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls inNames outName) inInfo)) r)) (\ s r -> Just (maybe s (<> s) r)) baseInfo Nothing)
@@ -112,19 +112,12 @@ fixExport inNames outName thisName e pref s suff r =
           -- Anything else is unchanged
       _ -> r |> pref <> s <> suff
 
-fixModuleImport :: [S.ModuleName] -> S.ModuleName -> S.ImportDecl -> Maybe String
-fixModuleImport inputs output x =
-          case x of
-            S.ImportDecl {S.importModule = y}
-                | elem y inputs -> Just (prettyPrint (x {S.importModule = output}))
-            _ -> Nothing
-
-moduleImports' :: [S.ModuleName] -> A.ImportDecl l -> String -> String -> String -> Seq String -> Seq String
-moduleImports' inNames i pref s suff r =
-    let name = sModuleName (A.importModule i) in
-    -- If we are building an output module, imports of input modules
-    -- should be omitted.
-    r |> if elem name inNames then "" else (pref <> s <> suff)
+moduleImports inNames outName thisName x pref s suff r =
+    case sImportDecl x of
+      (S.ImportDecl {S.importModule = name})
+          | notElem name inNames -> r |> pref <> s <> suff
+          | thisName == outName -> r
+      x' -> r |> pref <> prettyPrint (x' {S.importModule = outName}) <> suff
 
 -- | Grab the declarations out of the old modules, fix any
 -- qualified symbol references, prettyprint and return.

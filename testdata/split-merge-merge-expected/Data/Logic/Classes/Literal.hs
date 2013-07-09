@@ -20,6 +20,8 @@ import Data.Logic.Classes.Pretty (Fixity(Fixity), FixityDirection(InfixN), HasFi
 import qualified Data.Logic.Classes.Propositional as P (PropositionalFormula)
 import Text.PrettyPrint ((<>), Doc, nest, parens, text)
 
+
+
 -- |Literals are the building blocks of the clause and implicative normal
 -- |forms.  They support negation and must include True and False elements.
 class (Negatable lit, Constants lit, HasFixity atom, Formula lit atom, Ord lit) => Literal lit atom | lit -> atom where
