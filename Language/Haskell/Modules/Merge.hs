@@ -4,20 +4,15 @@ module Language.Haskell.Modules.Merge
     ( mergeModules
     ) where
 
-import Debug.Trace
-
 import Control.Monad as List (mapM, when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
-import Control.Monad.Trans (liftIO)
 import Data.Foldable (fold)
 import Data.Generics (Data, everywhere, mkT, Typeable)
-import Data.List as List (intercalate, map, nub)
-import Data.Map as Map (insert, lookup, Map, member, fromList, keys)
-import Data.Maybe (fromMaybe, isNothing, isJust, mapMaybe)
+import Data.List as List (intercalate, map)
+import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.Monoid ((<>), mempty)
-import Data.Sequence (Seq, (|>), (<|))
-import Data.Set as Set (Set, fromList, toList, union)
-import Data.Set.Extra as Set (mapM)
+import Data.Sequence as Seq (Seq, (|>), (<|), null)
+import Data.Set as Set (fromList, toList, union)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sImportDecl, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpec, ExportSpecList(ExportSpecList), ImportDecl(..), Module(Module), ModuleHead(ModuleHead))
 import Language.Haskell.Exts.Pretty (prettyPrint)
@@ -90,8 +85,9 @@ doModule inNames@(baseName : _) outName thisName =
                    lparen <> newExports <> rparen
                imports =
                    if thisName == outName
-                   then let newImports = unlines (List.map (moduleImports inNames) inInfo) in
-                        foldImports (\ _i pref s suff r -> r <> pref <> (if r == "" then newImports else "") <> s <> suff) baseInfo ""
+                   then let pre = fold (foldImports (\ _ pref s suff r -> if Seq.null r then r |> pref else r) baseInfo mempty)
+                            newImports = unlines (List.map (\ info -> fold (foldImports (moduleImports' inNames) info mempty)) inInfo) in
+                        pre <> newImports
                    else fold (foldImports (\ x pref s suff r -> r |> pref <> fromMaybe s (fixModuleImport inNames outName (sImportDecl x)) <> suff) baseInfo mempty)
                decls =
                    if thisName == outName
@@ -101,10 +97,8 @@ doModule inNames@(baseName : _) outName thisName =
            return $ if text' /= text then Modified thisName text' else Unchanged thisName
 doModule [] _ _ = error "doModule: no inputs"
 
--- | Update an export spec from input module @name@ for inclusion in
--- the output module.  If it is a re-export of one of the input modules,
--- it should be omitted if we are building the output module, or changed
--- to the output module if we are building some other module.
+-- | Update an export spec.  The only thing we might need to change is
+-- re-exports, of the form "module Foo".
 fixExport :: [S.ModuleName] -> S.ModuleName -> S.ModuleName
           -> A.ExportSpec l -> String -> String -> String -> Seq String -> Seq String
 fixExport inNames outName thisName e pref s suff r =
@@ -112,7 +106,8 @@ fixExport inNames outName thisName e pref s suff r =
       S.EModuleContents name
           -- when building the output module, omit re-exports of input modules
           | thisName == outName && elem name inNames -> r
-          -- when building other modules, update re-exports of input modules
+          -- when building other modules, update re-exports of input
+          -- modules to be a re-export of the output module.
           | elem name inNames -> r |> pref <> prettyPrint (S.EModuleContents outName) <> suff
           -- Anything else is unchanged
       _ -> r |> pref <> s <> suff
@@ -124,14 +119,12 @@ fixModuleImport inputs output x =
                 | elem y inputs -> Just (prettyPrint (x {S.importModule = output}))
             _ -> Nothing
 
-moduleImports :: [S.ModuleName] -> ModuleInfo -> String
-moduleImports inNames info =
-    foldImports (\ x pref s suff r ->
-                    r
-                    -- If this is the first import, omit the prefix, it includes the ") where" text.
-                    <> (if r == "" then "" else pref)
-                    <> if elem (sModuleName (A.importModule x)) inNames then "" else (s <> suff))
-                info "" <> "\n"
+moduleImports' :: [S.ModuleName] -> A.ImportDecl l -> String -> String -> String -> Seq String -> Seq String
+moduleImports' inNames i pref s suff r =
+    let name = sModuleName (A.importModule i) in
+    -- If we are building an output module, imports of input modules
+    -- should be omitted.
+    r |> if elem name inNames then "" else (pref <> s <> suff)
 
 -- | Grab the declarations out of the old modules, fix any
 -- qualified symbol references, prettyprint and return.

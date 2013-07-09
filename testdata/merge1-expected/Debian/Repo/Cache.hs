@@ -33,6 +33,8 @@ module Debian.Repo.Cache {-# WARNING "this is a warning" #-}
     , updateAptEnv
     ) where
 
+
+
 import Control.DeepSeq (force, NFData)
 import "mtl" Control.Monad.Trans (MonadIO(..))
 import qualified Data.ByteString.Lazy as L (empty)
@@ -68,6 +70,7 @@ import System.Process.Progress (ePutStr, ePutStrLn, qPutStrLn, runProcessF)
 import System.Unix.Chroot (useEnv)
 import System.Unix.Directory (removeRecursiveSafely)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
+
 
 
 import Control.Monad.Trans (liftIO)
@@ -87,42 +90,6 @@ import System.Process (shell)
 import System.Process.Progress (qPutStrLn, quieter, runProcessF)
 import Text.PrettyPrint.ANSI.Leijen (pretty)
 
-
-import Control.DeepSeq (force, NFData)
-import "mtl" Control.Monad.Trans (MonadIO(..))
-import qualified Data.ByteString.Lazy as L (empty)
-import Data.Data (Data)
-import Data.List (intercalate, sortBy)
-import Data.Typeable (Typeable)
-import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..), prettyArch)
-import Debian.Relation (BinPkgName, PkgName, SrcPkgName(..))
-import Debian.Release (ReleaseName(relName), releaseName', sectionName')
-import Debian.Repo.Monads.Apt (MonadApt)
-import Debian.Repo.Package (binaryPackagesOfCachedIndex, sourcePackagesOfCachedIndex)
-import Debian.Repo.Slice (binarySlices, sourceSlices, verifySourcesList)
-import Debian.Repo.SourcesList (parseSourcesList)
-import Debian.Repo.Types.AptBuildCache (AptBuildCache(aptSliceList))
-import Debian.Repo.Types.AptCache (AptCache(..), AptCache(aptArch, aptBaseSliceList, aptBinaryPackages, aptReleaseName, aptSourcePackages, globalCacheDir))
-import Debian.Repo.Types.EnvPath (EnvRoot(..), EnvRoot(EnvRoot))
-import Debian.Repo.Types.PackageIndex (BinaryPackage(packageID), binaryPackageName, PackageID(packageVersion), PackageIndex(..), SourcePackage(sourcePackageID), sourcePackageName)
-import Debian.Repo.Types.Release (Release(releaseName))
-import Debian.Repo.Types.Repo (Repo(repoReleaseInfo), repoKey, RepoKey)
-import Debian.Repo.Types.Repository (MonadRepoCache, prepareRepository)
-import Debian.Repo.Types.Slice (Slice(..), SliceList(slices))
-import Debian.Sources (DebSource(..), SourceType(..))
-import Debian.Version (DebianVersion, prettyDebianVersion)
-import Extra.Files (replaceFile)
-import Network.URI (escapeURIString, URI(uriAuthority, uriPath, uriScheme), URIAuth(uriPort, uriRegName, uriUserInfo))
-import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
-import System.Exit (ExitCode(ExitSuccess))
-import System.FilePath ((</>))
-import System.IO (hGetLine, stdin)
-import System.Posix.Env (setEnv)
-import System.Process (readProcessWithExitCode, shell)
-import System.Process.Progress (ePutStr, ePutStrLn, qPutStrLn, runProcessF)
-import System.Unix.Chroot (useEnv)
-import System.Unix.Directory (removeRecursiveSafely)
-import Text.PrettyPrint.ANSI.Leijen (pretty)
 
 instance NFData ExitCode
 

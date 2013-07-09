@@ -32,7 +32,7 @@ split2a :: Test
 split2a =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
-       runMonadClean $
+       runMonadClean $ noisily $ noisily $
          do modifyParams (\ p -> p {testMode = True})
             modifySourceDirs (const ["tmp"])
             modulePath (S.ModuleName "Split") >>= parseModule >>= putName (S.ModuleName "Split")
@@ -44,7 +44,7 @@ split2b :: Test
 split2b =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
-       runMonadClean $
+       runMonadClean $ noisily $ noisily $
          do modifySourceDirs (const ["tmp"])
             modulePath (S.ModuleName "Split") >>= parseModule >>= putName (S.ModuleName "Split")
             splitModuleDecls "tmp/Split.hs"
@@ -60,7 +60,7 @@ split4 =
     TestLabel "Split4" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        withCurrentDirectory "tmp" $
-         runMonadClean $ modifyTestMode (const True) >> modulePath (S.ModuleName "Split4") >>= parseModule >>= putName (S.ModuleName "Split4") >> splitModuleDecls "Split4.hs"
+         runMonadClean $ noisily $ noisily $ modifyTestMode (const True) >> modulePath (S.ModuleName "Split4") >>= parseModule >>= putName (S.ModuleName "Split4") >> splitModuleDecls "Split4.hs"
        result <- diff "testdata/split4-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
 
@@ -69,7 +69,7 @@ split4b =
     TestLabel "Split4b" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        withCurrentDirectory "tmp" $
-         runMonadClean $ modifyTestMode (const True) >> modulePath (S.ModuleName "Split4") >>= parseModule >>= putName (S.ModuleName "Split4") >> splitModule f "Split4.hs"
+         runMonadClean $ noisily $ noisily $ modifyTestMode (const True) >> modulePath (S.ModuleName "Split4") >>= parseModule >>= putName (S.ModuleName "Split4") >> splitModule f "Split4.hs"
        result <- diff "testdata/split4b-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
     where
@@ -83,7 +83,7 @@ split4c =
     TestLabel "Split4b" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        withCurrentDirectory "tmp" $
-         runMonadClean $ modifyTestMode (const True) >> modulePath (S.ModuleName "Split4") >>= parseModule >>= putName (S.ModuleName "Split4") >> splitModule f "Split4.hs"
+         runMonadClean $ noisily $ noisily $ modifyTestMode (const True) >> modulePath (S.ModuleName "Split4") >>= parseModule >>= putName (S.ModuleName "Split4") >> splitModule f "Split4.hs"
        result <- diff "testdata/split4c-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
     where

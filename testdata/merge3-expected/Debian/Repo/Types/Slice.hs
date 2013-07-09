@@ -21,6 +21,7 @@ import Debian.Sources (DebSource(..), SliceName(..), SourceType(..))
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
 
 
+
 import Control.Exception (throw)
 import Data.Char (isDigit)
 import Data.Maybe (fromJust)
@@ -32,11 +33,6 @@ import Network.URI (parseURI, URI(uriPath))
 import System.FilePath ((</>))
 
 
-
-
-import qualified Debian.Repo.Types.Repo as R (RepoKey)
-import Debian.Sources (DebSource(..), SliceName(..), SourceType(..))
-import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
 
  
 data Slice = Slice{sliceRepoKey :: Debian.Repo.Types.Slice.RepoKey,

@@ -36,6 +36,8 @@ module Data.Logic.Classes.FirstOrder
     , fromLiteral
     ) where
 
+
+
 import Data.Generics (Data, Typeable)
 import Data.Logic.Classes.Apply (apply, Apply(..), apply0, apply1, apply2, apply3, apply4, apply5, apply6, apply7)
 import Data.Logic.Classes.Combine (binop, BinOp((:&:), (:<=>:), (:=>:), (:|:)), Combinable, Combination(..), combine)

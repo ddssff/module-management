@@ -10,6 +10,9 @@ module Data.Logic.Classes.Literal
     ) where
 
 
+
+
+
 import Data.Logic.Classes.Constants (Constants, Constants(fromBool))
 import Data.Logic.Classes.Formula (Formula, Formula(atomic))
 import Data.Logic.Classes.Negate ((.~.), Negatable, negated)
