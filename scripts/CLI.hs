@@ -81,7 +81,7 @@ clean [] = liftIO $ hPutStrLn stderr "Usage: clean <modulepath1> <modulepath2> .
 clean args = List.mapM_ cleanImports args
 
 split :: MonadClean m => [FilePath] -> m ()
-split [arg] = splitModuleDecls arg
+split [arg] = splitModuleDecls arg >> return ()
 split _ = liftIO $ hPutStrLn stderr "Usage: split <modulepath>"
 
 merge :: MonadClean m => [String] -> m ()
