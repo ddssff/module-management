@@ -5,8 +5,8 @@ module Data.Logic.Failing
     , failing
     ) where
 
-import Control.Applicative.Error
-import Data.Generics
+import Control.Applicative.Error (Failing(..))
+import Data.Generics (Data, Typeable1)
 
 failing :: ([String] -> b) -> (a -> b) -> Failing a -> b
 failing f _ (Failure errs) = f errs

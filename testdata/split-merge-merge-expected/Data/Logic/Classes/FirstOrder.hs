@@ -1,7 +1,39 @@
 {-# LANGUAGE DeriveDataTypeable, FlexibleContexts, FlexibleInstances, FunctionalDependencies,
              MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, TemplateHaskell, UndecidableInstances #-}
 module Data.Logic.Classes.FirstOrder
-    ( FirstOrderFormula(..), Quant(..), zipFirstOrder, pApp, pApp0, pApp1, pApp2, pApp3, pApp4, pApp5, pApp6, pApp7, for_all', exists', quant, (!), (?), (∀), (∃), quant', convertFOF, toPropositional, withUnivQuants, showFirstOrder, prettyFirstOrder, fixityFirstOrder, foldAtomsFirstOrder, mapAtomsFirstOrder, onatoms, overatoms, atom_union, fromFirstOrder, fromLiteral
+    ( FirstOrderFormula(..)
+    , Quant(..)
+    , zipFirstOrder
+    , pApp
+    , pApp0
+    , pApp1
+    , pApp2
+    , pApp3
+    , pApp4
+    , pApp5
+    , pApp6
+    , pApp7
+    , for_all'
+    , exists'
+    , quant
+    , (!)
+    , (?)
+    , (∀)
+    , (∃)
+    , quant'
+    , convertFOF
+    , toPropositional
+    , withUnivQuants
+    , showFirstOrder
+    , prettyFirstOrder
+    , fixityFirstOrder
+    , foldAtomsFirstOrder
+    , mapAtomsFirstOrder
+    , onatoms
+    , overatoms
+    , atom_union
+    , fromFirstOrder
+    , fromLiteral
     ) where
 
 import Data.Generics (Data, Typeable)
@@ -9,7 +41,7 @@ import Data.Logic.Classes.Apply (apply, Apply(..), apply0, apply1, apply2, apply
 import Data.Logic.Classes.Combine (binop, BinOp((:&:), (:<=>:), (:=>:), (:|:)), Combinable, Combination(..), combine)
 import Data.Logic.Classes.Constants (Constants(fromBool), ifElse)
 import Data.Logic.Classes.Formula (Formula(atomic))
-import Data.Logic.Classes.Literal (Literal(foldLiteral))
+import Data.Logic.Classes.Literal (Literal, Literal(foldLiteral))
 import Data.Logic.Classes.Negate ((.~.))
 import Data.Logic.Classes.Pretty (Fixity(..), FixityDirection(..), HasFixity(..), Pretty(pretty))
 import qualified Data.Logic.Classes.Propositional as P (PropositionalFormula)

@@ -12,16 +12,15 @@ module Data.Logic.Harrison.Equal
 -- ========================================================================= 
 
 import Data.Logic.Classes.Arity (Arity(..))
-import Data.Logic.Classes.Combine ((∧), (⇒))
+import Data.Logic.Classes.Combine ((⇒), (∧))
 import Data.Logic.Classes.Constants (Constants(fromBool))
-import Data.Logic.Classes.Equals (AtomEq(..), applyEq, (.=.), PredicateName(..), funcsAtomEq)
+import Data.Logic.Classes.Equals ((.=.), applyEq, AtomEq(..), funcsAtomEq, PredicateName(..))
 import Data.Logic.Classes.FirstOrder (FirstOrderFormula(..), (∀))
 import Data.Logic.Classes.Formula (Formula(atomic, foldAtoms))
 import Data.Logic.Classes.Term (Term(..))
 import Data.Logic.Harrison.Formulas.FirstOrder (atom_union)
 import Data.Logic.Harrison.Lib ((∅))
--- import Data.Logic.Harrison.Skolem (functions)
-import qualified Data.Set as Set
+import qualified Data.Set as Set (delete, empty, fold, fromList, member, Set, singleton, toList, union)
 import Data.String (IsString(fromString))
 
 -- is_eq :: (FirstOrderFormula fof atom v, AtomEq atom p term) => fof -> Bool

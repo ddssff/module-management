@@ -8,7 +8,7 @@ module Data.Logic.Classes.Pretty
     , botFixity
     ) where
 
-import qualified Language.Haskell.TH.Syntax as TH
+import qualified Language.Haskell.TH.Syntax as TH (Fixity(..), FixityDirection(..))
 import Text.PrettyPrint (Doc, text)
 
 -- | The intent of this class is to be similar to Show, but only one

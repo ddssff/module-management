@@ -7,8 +7,8 @@ module Data.Logic.Harrison.Unif
     ) where
 
 import Data.Logic.Classes.Term (Term(..), tsubst)
-import Data.Logic.Failing (Failing(..), failing)
-import qualified Data.Map as Map
+import Data.Logic.Failing (failing, Failing(..))
+import qualified Data.Map as Map (empty, insert, lookup, map, Map)
 {-
 (* ========================================================================= *)
 (* Unification for first order terms.                                        *)

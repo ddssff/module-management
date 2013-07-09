@@ -5,10 +5,10 @@ module Data.Logic.Harrison.Prolog where
 import Data.Logic.Classes.Atom (Atom)
 import Data.Logic.Classes.FirstOrder (FirstOrderFormula)
 import Data.Logic.Classes.Term (Term(vt))
-import Data.String (IsString (fromString))
-import Data.Logic.Harrison.FOL (fv, subst, list_conj)
-import qualified Data.Map as Map
-import qualified Data.Set as Set
+import Data.Logic.Harrison.FOL (fv, list_conj, subst)
+import qualified Data.Map as Map (fromList, Map)
+import qualified Data.Set as Set (insert, map, Set, size, toList)
+import Data.String (IsString(fromString))
 
 -- ========================================================================= 
 -- Backchaining procedure for Horn clauses, and toy Prolog implementation.   

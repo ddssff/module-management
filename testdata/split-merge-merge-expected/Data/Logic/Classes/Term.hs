@@ -13,12 +13,12 @@ module Data.Logic.Classes.Term
 import Data.Generics (Data)
 import Data.List (intercalate, intersperse)
 import Data.Logic.Classes.Pretty (Pretty)
-import Data.Logic.Classes.Skolem
-import Data.Logic.Classes.Variable
-import qualified Data.Map as Map
+import Data.Logic.Classes.Skolem (Skolem)
+import Data.Logic.Classes.Variable (Variable)
+import qualified Data.Map as Map (lookup, Map)
 import Data.Maybe (fromMaybe)
-import qualified Data.Set as Set
-import Text.PrettyPrint (Doc, (<>), brackets, hcat, text)
+import qualified Data.Set as Set (empty, Set, singleton, union, unions)
+import Text.PrettyPrint ((<>), brackets, Doc, hcat, text)
 
 class (Eq f, Ord f, Skolem f v, Data f, Pretty f) => Function f v
 

@@ -6,7 +6,7 @@ module Data.Logic.Types.Harrison.Prop
     ) where
 
 import Data.Generics (Data, Typeable)
-import Data.Logic.Classes.Pretty
+import Data.Logic.Classes.Pretty (botFixity, HasFixity(..), Pretty(..))
 import Data.Logic.Classes.Propositional (showPropositional)
 import Data.Logic.Types.Harrison.Formulas.Propositional (Formula(..))
 import Prelude hiding (negate)

@@ -2,7 +2,7 @@
 module Data.Logic.Types.Common where
 
 import Data.Logic.Classes.Variable (Variable(..))
-import qualified Data.Set as Set
+import qualified Data.Set as Set (member)
 import Text.PrettyPrint (text)
 
 instance Variable String where

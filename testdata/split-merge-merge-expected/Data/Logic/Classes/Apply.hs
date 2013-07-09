@@ -14,15 +14,15 @@ module Data.Logic.Classes.Apply
     ) where
 
 import Data.Data (Data)
-import Data.Logic.Classes.Arity
-import Data.Logic.Classes.Constants
-import Data.Logic.Classes.Pretty (Pretty)
-import Data.Logic.Classes.Term (Term, showTerm, prettyTerm, fvt, tsubst)
 import Data.List (intercalate, intersperse)
+import Data.Logic.Classes.Arity (Arity(..))
+import Data.Logic.Classes.Constants (Constants(fromBool))
+import Data.Logic.Classes.Pretty (Pretty)
+import Data.Logic.Classes.Term (fvt, prettyTerm, showTerm, Term, tsubst)
+import qualified Data.Map as Map (Map)
 import Data.Maybe (fromMaybe)
-import qualified Data.Map as Map
-import qualified Data.Set as Set
-import Text.PrettyPrint (Doc, (<>), text, empty, parens, cat)
+import qualified Data.Set as Set (empty, Set, unions)
+import Text.PrettyPrint ((<>), cat, Doc, empty, parens, text)
 
 class (Arity p, Constants p, Eq p, Ord p, Data p, Pretty p) => Predicate p
 

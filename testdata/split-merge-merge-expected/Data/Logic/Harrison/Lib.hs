@@ -34,11 +34,11 @@ module Data.Logic.Harrison.Lib
     , (∅)
     ) where
 
-import Data.Logic.Failing (Failing(..), failing)
-import qualified Data.Map as Map
-import Data.Maybe
-import qualified Data.Set as Set
-import Test.HUnit (Test(TestCase, TestList, TestLabel), assertEqual)
+import Data.Logic.Failing (failing, Failing(..))
+import qualified Data.Map as Map (findMin, fromList, insert, lookup, Map, member)
+import Data.Maybe (catMaybes, fromMaybe)
+import qualified Data.Set as Set (delete, empty, fold, fromList, insert, map, member, minView, Set, singleton, toList, union)
+import Test.HUnit (assertEqual, Test(TestCase, TestList, TestLabel))
 
 (∅) :: Set.Set a
 (∅) = Set.empty

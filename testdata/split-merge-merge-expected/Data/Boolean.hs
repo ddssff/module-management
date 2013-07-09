@@ -25,10 +25,9 @@ module Data.Boolean (
 
   ) where
 
-import Data.Maybe ( mapMaybe )
-import qualified Data.IntMap as IM
-
-import Control.Monad ( guard, liftM )
+import Control.Monad (guard, liftM)
+import qualified Data.IntMap as IM (empty, insert, lookup, toList)
+import Data.Maybe (mapMaybe)
 
 -- | Boolean formulas are represented as values of type @Boolean@.
 -- 

@@ -8,10 +8,10 @@ module Data.Logic.Harrison.Formulas.FirstOrder
     , atom_union
     ) where
 
-import qualified Data.Set as Set
-import Data.Logic.Classes.Combine (Combination(..), BinOp(..), binop)
+import Data.Logic.Classes.Combine (binop, BinOp(..), Combination(..))
 import Data.Logic.Classes.FirstOrder (FirstOrderFormula(..), quant)
 import Data.Logic.Classes.Negate ((.~.))
+import qualified Data.Set as Set (empty, Set, union)
 
 -- ------------------------------------------------------------------------- 
 -- General parsing of iterated infixes.                                      

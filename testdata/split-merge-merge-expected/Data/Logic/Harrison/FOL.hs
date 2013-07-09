@@ -12,21 +12,21 @@ module Data.Logic.Harrison.FOL
     , generalize
     ) where
 
-import Data.Logic.Classes.Apply (Apply(..), apply)
+import Data.Logic.Classes.Apply (apply, Apply(..))
 import Data.Logic.Classes.Atom (Atom(allVariables, substitute))
-import Data.Logic.Classes.Combine (Combinable(..), Combination(..), BinOp(..), binop)
-import Data.Logic.Classes.Constants (Constants (fromBool), true, false)
+import Data.Logic.Classes.Combine (binop, BinOp(..), Combinable(..), Combination(..))
+import Data.Logic.Classes.Constants (Constants(fromBool), false, true)
 import Data.Logic.Classes.FirstOrder (FirstOrderFormula(..), quant)
 import Data.Logic.Classes.Formula (Formula(atomic))
 import Data.Logic.Classes.Negate ((.~.))
 import Data.Logic.Classes.Propositional (PropositionalFormula(..))
-import Data.Logic.Classes.Term (Term(vt), fvt)
+import Data.Logic.Classes.Term (fvt, Term(vt))
 import Data.Logic.Classes.Variable (Variable(..))
 import Data.Logic.Harrison.Formulas.FirstOrder (on_atoms)
-import Data.Logic.Harrison.Lib ((|->), setAny)
-import qualified Data.Map as Map
+import Data.Logic.Harrison.Lib (setAny, (|->))
+import qualified Data.Map as Map (delete, lookup, Map)
 import Data.Maybe (fromMaybe)
-import qualified Data.Set as Set
+import qualified Data.Set as Set (delete, empty, fold, insert, map, member, minView, Set, union)
 import Prelude hiding (pred)
 
 -- =========================================================================
