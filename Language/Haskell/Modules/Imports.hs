@@ -21,7 +21,7 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), I
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo, SrcLoc(..))
-import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
+import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ImportSpec(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(..), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
 import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, parseModule, getExtensions, modifyExtensions, getSourceDirs, modulePath, loadModule)
@@ -150,12 +150,10 @@ fixNewImports remove m oldImports imports =
       mergeDecls xs@(x : _) = x {A.importSpecs = mergeSpecLists (catMaybes (map A.importSpecs xs))}
           where
             -- Merge a list of specs for the same module
-            -- mergeSpecLists :: [ImportSpecList] -> Maybe ImportSpecList
+            mergeSpecLists :: [A.ImportSpecList SrcSpanInfo] -> Maybe (A.ImportSpecList SrcSpanInfo)
             mergeSpecLists (A.ImportSpecList loc flag specs : ys) =
                 Just (A.ImportSpecList loc flag (mergeSpecs (sortBy compareSpecs (nub (concat (specs : map (\ (A.ImportSpecList _ _ specs') -> specs') ys))))))
             mergeSpecLists [] = error "mergeSpecLists"
-            -- unimplemented, should merge Foo and Foo(..) into Foo(..), and the like
-            mergeSpecs ys = nubBy equalSpecs ys
       expandSDTypes :: A.ImportDecl SrcSpanInfo -> A.ImportDecl SrcSpanInfo
       expandSDTypes i@(A.ImportDecl {A.importSpecs = Just (A.ImportSpecList l f specs)}) =
           i {A.importSpecs = Just (A.ImportSpecList l f (map (expandSpec i) specs))}
@@ -255,6 +253,31 @@ compareSpecs a b =
 
 equalSpecs :: A.ImportSpec SrcSpanInfo -> A.ImportSpec SrcSpanInfo -> Bool
 equalSpecs a b = compareSpecs a b == EQ
+
+-- Merge elements of a sorted spec list as possible
+-- unimplemented, should merge Foo and Foo(..) into Foo(..), and the like
+mergeSpecs :: [A.ImportSpec SrcSpanInfo] -> [A.ImportSpec SrcSpanInfo]
+mergeSpecs [] = []
+mergeSpecs [x] = [x]
+{-
+-- We need to do this using the simplified syntax
+mergeSpecs (x : y : zs) =
+    case (name x' == name y', x, y) of
+      (True, S.IThingAll _ _, _) -> mergeSpecs (x : zs)
+      (True, _, S.IThingAll _ _) -> mergeSpecs (y : zs)
+      (True, S.IThingWith _ n xs, S.IThingWith _ ys) -> mergeSpecs (S.IThingWith n (nub (xs ++ ys)))
+      (True, S.IThingWith _ _, _) -> mergeSpecs (x' : zs)
+      (True, _, S.IThingWith _ _) -> mergeSpecs (y' : zs)
+      _ -> x : mergeSpecs (y : zs)
+    where
+      x' = sImportSpec x
+      y' = sImportSpec y
+      name (S.IVar n) = n
+      name (S.IAbs n) = n
+      name (S.IThingAll n) = n
+      name (S.IThingWith n _) = n
+-}
+mergeSpecs xs = xs
 
 -- dropSuffix :: Eq a => [a] -> [a] -> [a]
 -- dropSuffix suf x = if isSuffixOf suf x then take (length x - length suf) x else x
