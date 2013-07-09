@@ -15,7 +15,7 @@ import Data.List as List (intercalate, map, nub)
 import Data.Map as Map (insert, lookup, Map, member, fromList, keys)
 import Data.Maybe (fromMaybe, isNothing, isJust, mapMaybe)
 import Data.Monoid ((<>), mempty)
-import Data.Sequence ((|>), (<|))
+import Data.Sequence (Seq, (|>), (<|))
 import Data.Set as Set (Set, fromList, toList, union)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sImportDecl, sModuleName)
@@ -75,13 +75,19 @@ doModule inNames@(baseName : _) outName thisName =
                                                 else echo)
                                                echo baseInfo mempty)
                exports =
-                   if thisName == outName
-                   then let lparen = fold (foldExports (<|) ignore ignore2 baseInfo mempty)
-                            sep = map (\ c -> if c == '(' then ',' else c) lparen -- this should be a reasonable string to join two export lists
-                            newExports = intercalate sep $ List.map (\ (mergeName, info) -> foldExports ignore2 (fixExport inNames outName thisName) ignore2 info "") (zip inNames inInfo)
-                            rparen = fold (foldExports ignore2 ignore (<|) baseInfo mempty) in
-                        lparen <> newExports <> rparen
-                   else fold (foldExports echo2 (fixExport' inNames outName) echo2 baseInfo mempty)
+                   let lparen = fold (foldExports (<|) ignore ignore2 baseInfo mempty)
+                       newExports =
+                           if thisName == outName
+                           then -- This should be a reasonable string
+                                -- to join two export lists.
+                                let sep = map (\ c -> if c == '(' then ',' else c) lparen in
+                                -- The output module gets modified
+                                -- copies of all the input module
+                                -- export lists.
+                                intercalate sep $ List.map (\ (mergeName, info) -> fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 info mempty)) (zip inNames inInfo)
+                           else fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 baseInfo mempty)
+                       rparen = fold (foldExports ignore2 ignore (<|) baseInfo mempty) in
+                   lparen <> newExports <> rparen
                imports =
                    if thisName == outName
                    then let newImports = unlines (List.map (moduleImports inNames) inInfo) in
@@ -100,22 +106,16 @@ doModule [] _ _ = error "doModule: no inputs"
 -- it should be omitted if we are building the output module, or changed
 -- to the output module if we are building some other module.
 fixExport :: [S.ModuleName] -> S.ModuleName -> S.ModuleName
-          -> A.ExportSpec l -> String -> String -> String -> String -> String
+          -> A.ExportSpec l -> String -> String -> String -> Seq String -> Seq String
 fixExport inNames outName thisName e pref s suff r =
     case sExportSpec e of
       S.EModuleContents name
           -- when building the output module, omit re-exports of input modules
           | thisName == outName && elem name inNames -> r
           -- when building other modules, update re-exports of input modules
-          | elem name inNames -> r <> pref <> prettyPrint (S.EModuleContents outName) <> suff
+          | elem name inNames -> r |> pref <> prettyPrint (S.EModuleContents outName) <> suff
           -- Anything else is unchanged
-      _ -> r <> pref <> s <> suff
-
-fixExport' inNames outName x pref s suff r =
-    r |> pref <> fromMaybe s (case sExportSpec x of
-                                S.EModuleContents name
-                                    | elem name inNames -> Just (prettyPrint (S.EModuleContents outName))
-                                _ -> Nothing) <> suff
+      _ -> r |> pref <> s <> suff
 
 fixModuleImport :: [S.ModuleName] -> S.ModuleName -> S.ImportDecl -> Maybe String
 fixModuleImport inputs output x =
