@@ -1,19 +1,41 @@
 {-# LANGUAGE FlexibleInstances, PackageImports, StandaloneDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Debian.Repo.Types.Common
-    ( EnvRoot(..), EnvPath(..), outsidePath, appendPath, rootEnvPath, Repo(..), RepoKey(..), repoURI, repoKeyURI, libraryCompatibilityLevel, compatibilityFile, Slice(..), SliceList(..), NamedSliceList(..)
+    ( Slice(..)
+    , SliceList(..)
+    , NamedSliceList(..)
+    , Repo(..)
+    , RepoKey(..)
+    , repoURI
+    , repoKeyURI
+    , libraryCompatibilityLevel
+    , compatibilityFile
+    , EnvRoot(..)
+    , EnvPath(..)
+    , outsidePath
+    , appendPath
+    , rootEnvPath
     ) where
+
+import Debian.Sources (DebSource(..), SliceName(..), SourceType(..))
+import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
+
 
 import Control.Exception (throw)
 import Data.Char (isDigit)
 import Data.Maybe (fromJust)
 import Data.Text (unpack)
 import Debian.Repo.Types.Release (Release)
-import Debian.Sources (DebSource(..), SliceName(..), SourceType(..))
 import Debian.URI (fileFromURI, fromURI', URI')
 import qualified Debian.UTF8 as Deb (decode)
 import Network.URI (parseURI, URI(uriPath))
 import System.FilePath ((</>))
+
+
+
+
+import qualified Debian.Repo.Types.Repo as R (RepoKey)
+import Debian.Sources (DebSource(..), SliceName(..), SourceType(..))
 import Text.PrettyPrint.ANSI.Leijen (Pretty(pretty), vcat)
 
  

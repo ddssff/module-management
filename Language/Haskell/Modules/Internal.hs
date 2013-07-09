@@ -27,7 +27,7 @@ import Data.Set as Set (empty, insert, Set, toList)
 --import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import Language.Haskell.Modules.ModuVerse (ModuleInfo, ModuVerse(..), ModuVerseState, moduVerseInit,
-                                           putName, delName, modulePath, parseModule)
+                                           putName, delName, modulePath, parseModule, loadModule, unloadModule)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qLnPutStr, qPutStr, quietly)
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
@@ -126,6 +126,7 @@ doResult x@(Unchanged _name) =
        return x
 doResult x@(Removed name) =
     do path <- modulePath name
+       unloadModule path
        -- I think this event handler is redundant.
        removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
        delName name
@@ -136,7 +137,7 @@ doResult x@(Modified name text) =
        qLnPutStr ("modifying " ++ show path)
        (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
-       info <- parseModule path
+       info <- loadModule path
        putName name info
        return x
 
@@ -146,6 +147,6 @@ doResult x@(Created name text) =
        (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
        replaceFile tildeBackup path text
-       info <- parseModule path
+       info <- loadModule path
        putName name info
        return x

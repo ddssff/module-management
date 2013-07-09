@@ -8,8 +8,8 @@ import Debian.Arch (Arch(..))
 import Debian.Release (ReleaseName(..))
 import Debian.Repo.Types.AptCache (AptCache(..))
 import Debian.Repo.Types.Common (EnvRoot)
-import qualified Debian.Repo.Types.Common as T (SliceList)
 import Debian.Repo.Types.PackageIndex (BinaryPackage, SourcePackage)
+import qualified Debian.Repo.Types.Common as T (SliceList)
 
 {-
 instance Show FileStatus where

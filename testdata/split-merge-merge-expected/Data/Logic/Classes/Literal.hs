@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, FunctionalDependencies, MultiParamTypeClasses, RankNTypes, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS -Wwarn #-}
 module Data.Logic.Classes.Literal
-    ( foldAtomsLiteral, fixityLiteral, Literal(foldLiteral), prettyLit, toPropositional, zipLiterals
+    ( Literal(foldLiteral), zipLiterals, toPropositional, prettyLit, fixityLiteral, foldAtomsLiteral
     ) where
 
 

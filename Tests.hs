@@ -15,6 +15,7 @@ import Language.Haskell.Modules (mergeModules, splitModuleDecls)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (Params, MonadClean, runMonadClean)
 import Language.Haskell.Modules.ModuVerse (putName, modifyExtensions, modulePath, parseModule)
+import Language.Haskell.Modules.Params (modifyTestMode)
 import Language.Haskell.Modules.Util.QIO (noisily, qLnPutStr)
 import Language.Haskell.Modules.Util.Test (diff', logicModules, rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
@@ -46,15 +47,15 @@ withTestData f path = withCurrentDirectory "testdata/debian" $
          (_, Left (e :: SomeException)) -> error $ "failure: " ++ show e
 
 tests :: Test
-tests = TestList [ Main.test1
-                 , TestLabel "Fold" Fold.tests
-                 , TestLabel "Imports" Imports.tests
-                 , TestLabel "Split" Split.tests
-                 , TestLabel "Merge" Merge.tests
-                 -- If split-merge-merge fails try split and split-merge.
-                 , Main.logictest "split" test2a
-                 , Main.logictest "split-merge" test2b
-                 , Main.logictest "split-merge-merge" test2c
+tests = TestList [ -- Main.test1
+                 -- , TestLabel "Fold" Fold.tests
+                 -- , TestLabel "Imports" Imports.tests
+                 -- , TestLabel "Split" Split.tests
+                 -- , TestLabel "Merge" Merge.tests
+                 -- -- If split-merge-merge fails try split and split-merge.
+                 -- , Main.logictest "split" test2a
+                 -- , Main.logictest "split-merge" test2b
+                 Main.logictest "split-merge-merge" test2c
                  ]
 
 test1 :: Test
@@ -80,6 +81,8 @@ logictest s f =
 test2a :: MonadClean m => Set ModuleName -> m ()
 test2a u =
          do modifyExtensions (++ [MultiParamTypeClasses])
+            -- We *must* clean the split results, or there will be
+            -- circular imports created when we merge.
             Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) u
             qLnPutStr "Splitting module Literal"
             splitModuleDecls "Data/Logic/Classes/Literal.hs"
@@ -89,10 +92,7 @@ test2b :: MonadClean m => Set ModuleName -> m ()
 test2b u =
          do modifyExtensions (++ [MultiParamTypeClasses])
             Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) u
-            qLnPutStr "Splitting module Literal"
             splitModuleDecls "Data/Logic/Classes/Literal.hs"
-            qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
-            -- modifyParams (\ p -> p {testMode = True})
             _ <- mergeModules
                    [ModuleName "Data.Logic.Classes.FirstOrder",
                     ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
@@ -105,16 +105,13 @@ test2c :: MonadClean m => Set ModuleName -> m ()
 test2c u =
          do modifyExtensions (++ [MultiParamTypeClasses])
             Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) u
-            qLnPutStr "Splitting module Literal"
             splitModuleDecls "Data/Logic/Classes/Literal.hs"
-            qLnPutStr "Merging FirstOrder, fromFirstOrder, fromLiteral into FirstOrder"
             _ <- mergeModules
                    [ModuleName "Data.Logic.Classes.FirstOrder",
                     ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
                     ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
                    (ModuleName "Data.Logic.Classes.FirstOrder")
             noisily (qLnPutStr "Merging remaining split modules into Literal")
-            -- modifyParams (\ p -> p {testMode = True})
             _ <- mergeModules
                    [ModuleName "Data.Logic.Classes.Literal.Literal",
                     ModuleName "Data.Logic.Classes.Literal.ZipLiterals",

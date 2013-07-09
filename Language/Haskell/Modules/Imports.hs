@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Imports
     ( cleanImports
+    , cleanResult
     ) where
 
 import Control.Applicative ((<$>))
@@ -22,8 +23,8 @@ import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPI
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo, SrcLoc(..))
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
-import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(Modified, Unchanged), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir))
-import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, parseModule, getExtensions, modifyExtensions, getSourceDirs)
+import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(..), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
+import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, parseModule, getExtensions, modifyExtensions, getSourceDirs, modulePath, loadModule)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
@@ -264,3 +265,37 @@ equalSpecs a b = compareSpecs a b == EQ
 nameString :: S.Name -> String
 nameString (S.Ident s) = s
 nameString (S.Symbol s) = s
+
+cleanResult :: MonadClean m => ModuleResult -> m ModuleResult
+cleanResult x =
+    case x of
+      (Removed _) -> return x
+      (Unchanged _) -> return x
+      (Modified name text) -> cleanResult' name text >>= return . Modified name
+      (Created name text) -> cleanResult' name text >>= return . Created name
+    where
+      cleanResult' name text =
+          do mode <- getParams >>= return . testMode
+             case mode of
+               True -> return text
+               False -> do path <- modulePath name
+                           cleanImports path
+                           (_, text', _) <- loadModule path
+                           return text'
+{-
+      -- Make sure this isn't trying to clobber a module that exists (other than 'old'.)
+      doClean :: MonadClean m => ModuleResult -> m ()
+      doClean (Created m' _) = doClean' m'
+      doClean (Modified m' _) = doClean' m'
+      doClean (Removed _) = return ()
+      doClean (Unchanged _) = return ()
+      doClean' m' =
+          do flag <- getParams >>= return . not . testMode
+             when flag (modulePath m' >>= cleanImports >> return ())
+-}
+{-
+    where
+      clean (Modified name _) = modulePath name >>= \ path -> cleanImports path >> liftIO (readFile path) >>= return . Modified name
+      clean (Created name _) = modulePath name >>= \ path -> cleanImports path >> liftIO (readFile path) >>= return . Created name
+      clean x = return x
+-}

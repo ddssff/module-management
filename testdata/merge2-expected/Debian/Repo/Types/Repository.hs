@@ -34,8 +34,12 @@ import qualified Debian.Control.Text as T (Control'(Control), ControlFunctions(p
 import Debian.Release (parseReleaseName, ReleaseName(..), releaseName', Section, sectionName', SubSection(section))
 import Debian.Repo.Monads.Top (MonadTop, sub)
 import Debian.Repo.Sync (rsync)
-import Debian.Repo.Types.Common (compatibilityFile, EnvPath(EnvPath), EnvRoot(EnvRoot), libraryCompatibilityLevel, outsidePath, Repo(..), RepoKey(..))
+import Debian.Repo.Types.Common
+       (EnvPath(EnvPath), EnvRoot(EnvRoot), outsidePath)
 import Debian.Repo.Types.Release (makeReleaseInfo, Release(releaseName))
+import Debian.Repo.Types.Common
+       (compatibilityFile, libraryCompatibilityLevel, Repo(..),
+        RepoKey(..))
 import Debian.URI (dirFromURI, fileFromURI, fromURI', toURI', URI(uriScheme, uriPath), URI', uriToString')
 import Debian.UTF8 as Deb (decode)
 import Extra.Files (maybeWriteFile)

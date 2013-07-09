@@ -18,8 +18,8 @@ module Language.Haskell.Modules.ModuVerse
     , modifySourceDirs
     , parseModule
     , parseModule'
-    -- , loadModules
-    -- , loadModule
+    , loadModule
+    , unloadModule
     , modulePath
     , modulePathBase
     ) where
@@ -38,6 +38,7 @@ import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
+import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.Directory (canonicalizePath, doesFileExist, getCurrentDirectory)
 import System.FilePath ((</>), (<.>))
 import System.IO.Error (isDoesNotExistError)
@@ -107,10 +108,10 @@ getSourceDirs = getModuVerse >>= return . sourceDirs_
 modifySourceDirs :: ModuVerse m => ([FilePath] -> [FilePath]) -> m ()
 modifySourceDirs f = modifyModuVerse (\ p -> p {sourceDirs_ = f (sourceDirs_ p)})
 
-parseModule :: ModuVerse m => FilePath -> m ModuleInfo
+parseModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
 parseModule path = parseModule' path >>= maybe (error $ "parseModule - not found: " ++ path) return
 
-parseModule' :: ModuVerse m => FilePath -> m (Maybe ModuleInfo)
+parseModule' :: (ModuVerse m, MonadVerbosity m) => FilePath -> m (Maybe ModuleInfo)
 parseModule' path =
     (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return Nothing else throw e)
     where
@@ -119,24 +120,28 @@ parseModule' path =
              verse <- getModuVerse
              return $ Map.lookup key (moduleInfo_ verse)
       load (Just x) = return (Just x)
-      load Nothing =
-          do key <- pathKey path
-             text <- liftIO $ readFile path
-             (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
-             modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ x)})
-             return (Just (parsed, text, comments))
+      load Nothing = Just <$> loadModule path
+
+-- | Force a possibly cached module to be reloaded.
+loadModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
+loadModule path =
+    do key <- pathKey path
+       text <- liftIO $ readFile path
+       qLnPutStr ("parsing " ++ unPathKey key ++ ", size=" ++ show (length text))
+       (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
+       modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ x)})
+       return (parsed, text, comments)
+
+unloadModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ()
+unloadModule path =
+    do key <- pathKey path
+       modifyModuVerse (\ x -> x {moduleInfo_ = Map.delete key (moduleInfo_ x)})
 
 -- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))
 parseFileWithComments path =
     do exts <- getExtensions
        liftIO (A.parseFileWithComments (Exts.defaultParseMode {Exts.extensions = exts, Exts.parseFilename = path}) path)
-
-loadModules :: ModuVerse m => [S.ModuleName] -> m (Map S.ModuleName ModuleInfo)
-loadModules names = List.mapM loadModule names >>= return . Map.fromList . zip names
-
-loadModule :: ModuVerse m => S.ModuleName -> m ModuleInfo
-loadModule name = modulePath name >>= parseModule
 
 #if 0
     do verse <- getModuVerse

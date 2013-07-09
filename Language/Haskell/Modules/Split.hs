@@ -24,7 +24,7 @@ import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMo
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..), SrcLoc(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec, ImportDecl(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
-import Language.Haskell.Modules.Imports (cleanImports)
+import Language.Haskell.Modules.Imports (cleanResult)
 import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(testMode))
 import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, getNames, parseModule, modulePath)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
@@ -91,7 +91,7 @@ splitModuleBy symbolToModule m =
     do univ <- getNames
        changes <- doSplit symbolToModule univ m >>= return . collisionCheck univ
        setMapM_ doResult changes       -- Write the new modules
-       setMapM_ doClean changes        -- Clean the new modules after all edits are finished
+       setMapM_ cleanResult changes        -- Clean the new modules after all edits are finished
     where
       collisionCheck univ s =
           if not (Set.null illegal)
@@ -101,15 +101,6 @@ splitModuleBy symbolToModule m =
             illegal = Set.intersection univ (created s)
       created :: Set ModuleResult -> Set S.ModuleName
       created = setMapMaybe (\ x -> case x of Created m' _ -> Just m'; _ -> Nothing)
-      -- Make sure this isn't trying to clobber a module that exists (other than 'old'.)
-      doClean :: MonadClean m => ModuleResult -> m ()
-      doClean (Created m' _) = doClean' m'
-      doClean (Modified m' _) = doClean' m'
-      doClean (Removed _) = return ()
-      doClean (Unchanged _) = return ()
-      doClean' m' =
-          do flag <- getParams >>= return . not . testMode
-             when flag (modulePath m' >>= cleanImports >> return ())
 
 -- This returns a set of maybe because there may be instance
 -- declarations, in which case we want an Instances module to
@@ -163,7 +154,7 @@ doSplit _ _ (A.Module _ _ _ _ [], _, _) = return Set.empty -- No declarations - 
 doSplit _ _ (A.Module _ _ _ _ [_], _, _) = return Set.empty -- One declaration - nothing to split (but maybe we should anyway?)
 doSplit _ _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
 doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _ _, _, _) =
-    do qLnPutStr ("Splitting " ++ show parent)
+    do qLnPutStr ("Splitting " ++ parentName)
        importChanges <- Set.mapM (updateImports m (sModuleName parent) symbolToModule) (Set.delete parent' univ)
        return $ unions [ -- The changes required to existing imports
                          importChanges
@@ -174,7 +165,7 @@ doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _
     where
       moduleNames = newModuleNames symbolToModule m
       -- The name of the module to be split
-      parent' = sModuleName parent
+      parent'@(S.ModuleName parentName) = sModuleName parent
 
       -- Build a map from module name to the list of declarations that
       -- will be in that module.  All of these declarations used to be
@@ -237,7 +228,7 @@ doSeps ((_, hd) : tl) = hd <> concatMap (\ (a, b) -> a <> b) tl
 updateImports :: MonadClean m => ModuleInfo -> S.ModuleName -> (DeclName -> S.ModuleName) -> S.ModuleName -> m ModuleResult
 updateImports m old symbolToModule name =
     do path <- modulePath name
-       quietly $ qLnPutStr $ "updateImports " ++ show name
+       qLnPutStr $ "updateImports " ++ show name
        (m', text', comments') <- parseModule path
        let text'' = Foldable.fold (foldModule echo2 echo echo echo echo2 echo echo2
                                                   (\ i pref s suff r -> r |> pref <> updateImportDecl s i <> suff)

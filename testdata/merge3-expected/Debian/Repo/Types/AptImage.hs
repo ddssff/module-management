@@ -7,8 +7,8 @@ module Debian.Repo.Types.AptImage
 import Debian.Arch (Arch(..))
 import Debian.Release (ReleaseName(..))
 import Debian.Repo.Types.AptCache (AptCache(..))
-import Debian.Repo.Types.PackageIndex (BinaryPackage, SourcePackage)
 import Debian.Repo.Types.Slice (EnvRoot)
+import Debian.Repo.Types.PackageIndex (BinaryPackage, SourcePackage)
 import qualified Debian.Repo.Types.Slice as T (SliceList)
 
 {-
