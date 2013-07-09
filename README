@@ -33,3 +33,4 @@ To Do:
   1. Make sure original file is left as backup, not some intermediate
   5. Do global check whether export symbols are imported anywhere, and
      if not remove them.
+  6. Make cleanImports do a list of modules all at once, to avoid repeat compiles

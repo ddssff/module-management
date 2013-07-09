@@ -33,14 +33,14 @@ import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 -- reflect the change.  It *is* permissable to use one of the input
 -- modules as the output module.  Note that circular imports can be
 -- created by this operation.
-mergeModules :: MonadClean m => [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
+mergeModules :: MonadClean m => [S.ModuleName] -> S.ModuleName -> m [ModuleResult]
 mergeModules inNames outName =
     do qLnPutStr ("mergeModules: [" ++ intercalate ", " (map prettyPrint inNames) ++ "] -> " ++ prettyPrint outName)
        quietly $
          do univ <- getNames
-            let allNames = union univ (Set.fromList (outName : inNames))
-            results <- Set.mapM (doModule inNames outName) allNames >>= Set.mapM doResult >>= Set.mapM reportResult
-            Set.mapM cleanResult results
+            let allNames = toList $ union univ (Set.fromList (outName : inNames))
+            results <- List.mapM (doModule inNames outName) allNames >>= List.mapM doResult >>= List.mapM reportResult
+            List.mapM cleanResult results
     where
       reportResult x@(Modified (S.ModuleName name) _) = qLnPutStr ("mergeModules: modifying " ++ name) >> return x
       reportResult x@(Created (S.ModuleName name) _) = qLnPutStr ("mergeModules: creating " ++ name) >> return x

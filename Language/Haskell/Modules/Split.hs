@@ -72,13 +72,13 @@ isReExported _ = False
 splitModule :: MonadClean m =>
                (S.ModuleName -> DeclName -> S.ModuleName) -- ^ Map declaration to new module name
             -> FilePath
-            -> m (Set ModuleResult)
+            -> m [ModuleResult]
 splitModule symbolToModule path =
     do info@(m, _, _) <- parseModule path
        splitModuleBy (symbolToModule (moduleName m)) info
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
-splitModuleDecls :: MonadClean m => FilePath -> m (Set ModuleResult)
+splitModuleDecls :: MonadClean m => FilePath -> m [ModuleResult]
 splitModuleDecls path =
     do info@(m, _, _) <- parseModule path
        let name = moduleName m
@@ -86,15 +86,17 @@ splitModuleDecls path =
 
 splitModuleBy :: MonadClean m =>
                  (DeclName -> S.ModuleName)
-              -> ModuleInfo -> m (Set ModuleResult)
+              -> ModuleInfo -> m [ModuleResult]
 splitModuleBy symbolToModule info@(m, _, _) =
     do qLnPutStr ("Splitting " ++ prettyPrint (moduleName m))
        quietly $
          do univ <- getNames
+            -- No good reason to use sets here
             changes <- doSplit symbolToModule univ info >>= return . collisionCheck univ
             Set.mapM_ doResult changes           -- Write the new modules
             Set.mapM_ reportResult changes
-            Set.mapM cleanResult changes   -- Clean the new modules after all edits are finished
+            -- Clean the new modules after all edits are finished
+            Set.mapM cleanResult changes >>= return . toList
     where
 
       collisionCheck univ s =
