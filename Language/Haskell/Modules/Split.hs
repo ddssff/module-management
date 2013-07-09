@@ -17,7 +17,7 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((<|), (|>))
 import Data.Set as Set (delete, difference, empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
-import Data.Set.Extra as Set (gFind, mapM)
+import Data.Set.Extra as Set (gFind, mapM, mapM_)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, ImportDecl(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
 import Language.Haskell.Exts.Annotated.Simplify (sImportDecl, sImportSpec, sModuleName, sName)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
@@ -72,13 +72,13 @@ isReExported _ = False
 splitModule :: MonadClean m =>
                (S.ModuleName -> DeclName -> S.ModuleName) -- ^ Map declaration to new module name
             -> FilePath
-            -> m ()
+            -> m (Set ModuleResult)
 splitModule symbolToModule path =
     do info@(m, _, _) <- parseModule path
        splitModuleBy (symbolToModule (moduleName m)) info
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
-splitModuleDecls :: MonadClean m => FilePath -> m ()
+splitModuleDecls :: MonadClean m => FilePath -> m (Set ModuleResult)
 splitModuleDecls path =
     do info@(m, _, _) <- parseModule path
        let name = moduleName m
@@ -86,13 +86,17 @@ splitModuleDecls path =
 
 splitModuleBy :: MonadClean m =>
                  (DeclName -> S.ModuleName)
-              -> ModuleInfo -> m ()
-splitModuleBy symbolToModule m =
-    do univ <- getNames
-       changes <- doSplit symbolToModule univ m >>= return . collisionCheck univ
-       setMapM_ doResult changes       -- Write the new modules
-       setMapM_ cleanResult changes        -- Clean the new modules after all edits are finished
+              -> ModuleInfo -> m (Set ModuleResult)
+splitModuleBy symbolToModule info@(m, _, _) =
+    do qLnPutStr ("Splitting " ++ prettyPrint (moduleName m))
+       quietly $
+         do univ <- getNames
+            changes <- doSplit symbolToModule univ info >>= return . collisionCheck univ
+            Set.mapM_ doResult changes           -- Write the new modules
+            Set.mapM_ reportResult changes
+            Set.mapM cleanResult changes   -- Clean the new modules after all edits are finished
     where
+
       collisionCheck univ s =
           if not (Set.null illegal)
           then error ("One or more module to be created by splitModule already exists: " ++ show (Set.toList illegal))
@@ -101,6 +105,11 @@ splitModuleBy symbolToModule m =
             illegal = Set.intersection univ (created s)
       created :: Set ModuleResult -> Set S.ModuleName
       created = setMapMaybe (\ x -> case x of Created m' _ -> Just m'; _ -> Nothing)
+
+      reportResult x@(Modified (S.ModuleName name) _) = qLnPutStr ("splitModule: modifying " ++ name) >> return x
+      reportResult x@(Created (S.ModuleName name) _) = qLnPutStr ("splitModule: creating " ++ name) >> return x
+      reportResult x@(Removed (S.ModuleName name)) = qLnPutStr ("splitModule: removing " ++ name) >> return x
+      reportResult x = return x
 
 -- This returns a set of maybe because there may be instance
 -- declarations, in which case we want an Instances module to
@@ -154,8 +163,7 @@ doSplit _ _ (A.Module _ _ _ _ [], _, _) = return Set.empty -- No declarations - 
 doSplit _ _ (A.Module _ _ _ _ [_], _, _) = return Set.empty -- One declaration - nothing to split (but maybe we should anyway?)
 doSplit _ _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
 doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _ _, _, _) =
-    do qLnPutStr ("Splitting " ++ parentName)
-       importChanges <- Set.mapM (updateImports m (sModuleName parent) symbolToModule) (Set.delete parent' univ)
+    do importChanges <- Set.mapM (updateImports m (sModuleName parent) symbolToModule) (Set.delete parent' univ)
        return $ unions [ -- The changes required to existing imports
                          importChanges
                          -- Compute the result of splitting the parent module
@@ -228,7 +236,7 @@ doSeps ((_, hd) : tl) = hd <> concatMap (\ (a, b) -> a <> b) tl
 updateImports :: MonadClean m => ModuleInfo -> S.ModuleName -> (DeclName -> S.ModuleName) -> S.ModuleName -> m ModuleResult
 updateImports m old symbolToModule name =
     do path <- modulePath name
-       qLnPutStr $ "updateImports " ++ show name
+       -- qLnPutStr $ "updateImports " ++ show name
        (m', text', comments') <- parseModule path
        let text'' = Foldable.fold (foldModule echo2 echo echo echo echo2 echo echo2
                                                   (\ i pref s suff r -> r |> pref <> updateImportDecl s i <> suff)
@@ -304,7 +312,3 @@ setAny f s = not (Set.null (Set.filter f s))
 setMapMaybe :: Ord b => (a -> Maybe b) -> Set a -> Set b
 setMapMaybe p s = Set.fold f Set.empty s
     where f x s' = maybe s' (\ y -> Set.insert y s') (p x)
-
-setMapM_ :: (Monad m, Ord b) => (a -> m b) -> Set a -> m ()
-setMapM_ f s = do _ <- Set.mapM f s
-                  return ()

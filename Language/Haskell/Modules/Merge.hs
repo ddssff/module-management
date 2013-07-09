@@ -16,7 +16,7 @@ import Data.Map as Map (insert, lookup, Map, member, fromList, keys)
 import Data.Maybe (fromMaybe, isNothing, isJust, mapMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((|>), (<|))
-import Data.Set as Set (fromList, Set, union)
+import Data.Set as Set (Set, fromList, toList, union)
 import Data.Set.Extra as Set (mapM)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sImportDecl, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpec, ExportSpecList(ExportSpecList), ImportDecl(..), Module(Module), ModuleHead(ModuleHead))
@@ -26,7 +26,7 @@ import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldH
 import Language.Haskell.Modules.Imports (cleanImports, cleanResult)
 import Language.Haskell.Modules.Internal (doResult, ModuleResult(Modified, Created, Removed, Unchanged), MonadClean(getParams), Params(testMode))
 import Language.Haskell.Modules.ModuVerse (ModuVerse, ModuleInfo, getNames, getInfo, modulePath, parseModule, parseModule', moduleName)
-import Language.Haskell.Modules.Util.QIO (qLnPutStr)
+import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 
 -- | Merge the declarations from several modules into a single new
 -- one, updating the imports of the modules in the moduVerse to
@@ -36,10 +36,16 @@ import Language.Haskell.Modules.Util.QIO (qLnPutStr)
 mergeModules :: MonadClean m => [S.ModuleName] -> S.ModuleName -> m (Set ModuleResult)
 mergeModules inNames outName =
     do qLnPutStr ("mergeModules: [" ++ intercalate ", " (map prettyPrint inNames) ++ "] -> " ++ prettyPrint outName)
-       univ <- getNames
-       let allNames = union univ (Set.fromList (outName : inNames))
-       results <- Set.mapM (doModule inNames outName) allNames >>= Set.mapM doResult
-       Set.mapM cleanResult results
+       quietly $
+         do univ <- getNames
+            let allNames = union univ (Set.fromList (outName : inNames))
+            results <- Set.mapM (doModule inNames outName) allNames >>= Set.mapM doResult >>= Set.mapM reportResult
+            Set.mapM cleanResult results
+    where
+      reportResult x@(Modified (S.ModuleName name) _) = qLnPutStr ("mergeModules: modifying " ++ name) >> return x
+      reportResult x@(Created (S.ModuleName name) _) = qLnPutStr ("mergeModules: creating " ++ name) >> return x
+      reportResult x@(Removed (S.ModuleName name)) = qLnPutStr ("mergeModules: removing " ++ name) >> return x
+      reportResult x = return x
 
 -- Process one of the modules in the moduVerse and return the result.
 -- The output module may not (yet) be an element of the moduVerse, in

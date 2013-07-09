@@ -13,7 +13,6 @@ module Language.Haskell.Modules.Internal
     , doResult
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Exception (SomeException, try)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
@@ -26,13 +25,13 @@ import Data.Set as Set (empty, insert, Set, toList)
 --import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
 --import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import Language.Haskell.Modules.ModuVerse (ModuleInfo, ModuVerse(..), ModuVerseState, moduVerseInit,
-                                           putName, delName, modulePath, parseModule, loadModule, unloadModule)
+import Language.Haskell.Modules.ModuVerse (ModuVerse(..), ModuVerseState, moduVerseInit,
+                                           putName, delName, modulePath, loadModule, unloadModule)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
-import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qLnPutStr, qPutStr, quietly)
+import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import Prelude hiding (writeFile)
-import System.Directory (doesFileExist, getCurrentDirectory, removeFile)
+import System.Directory (removeFile)
 import System.FilePath (dropExtension, takeDirectory)
 import System.IO.Error (isDoesNotExistError)
 
@@ -122,7 +121,7 @@ data ModuleResult
 -- the other hand, we might be able to maintain the moduVerse here.
 doResult :: (ModuVerse m, MonadDryRun m, MonadVerbosity m) => ModuleResult -> m ModuleResult
 doResult x@(Unchanged _name) =
-    do quietly (qLnPutStr ("unchanged: " ++ show _name))
+    do -- quietly (qLnPutStr ("unchanged: " ++ show _name))
        return x
 doResult x@(Removed name) =
     do path <- modulePath name
@@ -134,8 +133,8 @@ doResult x@(Removed name) =
 
 doResult x@(Modified name text) =
     do path <- modulePath name
-       qLnPutStr ("modifying " ++ show path)
-       (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
+       -- qLnPutStr ("modifying " ++ show path)
+       -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
        info <- loadModule path
        putName name info
@@ -143,8 +142,8 @@ doResult x@(Modified name text) =
 
 doResult x@(Created name text) =
     do path <- modulePath name
-       qLnPutStr ("creating " ++ show path)
-       (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
+       -- qLnPutStr ("creating " ++ show path)
+       -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
        replaceFile tildeBackup path text
        info <- loadModule path

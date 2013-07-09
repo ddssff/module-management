@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, PackageImports, ScopedTypeVariables, StandaloneDeriving #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
     ( ModuleInfo
     , moduleName
@@ -25,10 +25,9 @@ module Language.Haskell.Modules.ModuVerse
     ) where
 
 import Control.Applicative ((<$>))
-import Control.Monad as List (mapM)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.Trans (MonadIO, liftIO)
-import Data.Map as Map (Map, empty, fromList, insert, lookup, keys, delete)
+import Data.Map as Map (Map, empty, insert, lookup, keys, delete)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (Set, fromList)
 import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
@@ -127,7 +126,7 @@ loadModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
 loadModule path =
     do key <- pathKey path
        text <- liftIO $ readFile path
-       qLnPutStr ("parsing " ++ unPathKey key ++ ", size=" ++ show (length text))
+       quietly $ qLnPutStr ("parsing " ++ unPathKey key)
        (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
        modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ x)})
        return (parsed, text, comments)
