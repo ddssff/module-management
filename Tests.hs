@@ -50,12 +50,12 @@ tests :: Test
 tests = TestList [ Main.test1
                  , TestLabel "Fold" Fold.tests
                  , TestLabel "Imports" Imports.tests
+                 -- If split-merge-merge fails try split and split-merge.
+                 , Main.logictest "split-merge-merge" test2c
+                 , Main.logictest "split-merge" test2b
+                 , Main.logictest "split" test2a
                  , TestLabel "Split" Split.tests
                  , TestLabel "Merge" Merge.tests
-                 -- If split-merge-merge fails try split and split-merge.
-                 , Main.logictest "split" test2a
-                 , Main.logictest "split-merge" test2b
-                 , Main.logictest "split-merge-merge" test2c
                  ]
 
 test1 :: Test

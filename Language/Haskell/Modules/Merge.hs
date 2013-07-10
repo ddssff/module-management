@@ -14,7 +14,7 @@ import Data.Monoid ((<>), mempty)
 import Data.Sequence as Seq (Seq, (|>), (<|), null)
 import Data.Set as Set (fromList, toList, union)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sImportDecl, sModuleName)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ExportSpec, ExportSpecList(ExportSpecList), ImportDecl(..), Module(Module), ModuleHead(ModuleHead))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpecList(ExportSpecList), ImportDecl(..), Module(Module), ModuleHead(ModuleHead))
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(..), ModuleName(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
@@ -91,8 +91,8 @@ doModule inNames@(baseName : _) outName thisName =
                    else fold (foldImports (moduleImports inNames outName thisName) baseInfo mempty)
                decls =
                    if thisName == outName
-                   then fromMaybe "" (foldDecls (\ _ _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls inNames outName) inInfo)) r)) (\ s r -> Just (maybe s (<> s) r)) baseInfo Nothing)
-                   else fold (foldDecls echo echo2 baseInfo mempty)
+                   then fromMaybe "" (foldDecls (\ _ _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls inNames outName thisName) inInfo)) r)) (\ s r -> Just (maybe s (<> s) r)) baseInfo Nothing)
+                   else moduleDecls inNames outName thisName baseInfo
                text' = header <> exports <> imports <> decls in
            return $ if text' /= text then Modified thisName text' else Unchanged thisName
 doModule [] _ _ = error "doModule: no inputs"
@@ -129,13 +129,13 @@ moduleImports inNames outName thisName x pref s suff r =
 -- In terms of what is going on right here, if m imports any of the
 -- modules in oldmap with an "as" qualifier, identifiers using the
 -- module name in the "as" qualifier must use new instead.
-moduleDecls :: [S.ModuleName] -> S.ModuleName -> ModuleInfo -> String
-moduleDecls oldNames new info@(A.Module _ _ _ imports _, _, _) =
+moduleDecls :: [S.ModuleName] -> S.ModuleName -> S.ModuleName -> ModuleInfo -> String
+moduleDecls inNames outName thisName info@(A.Module _ _ _ imports _, _, _) =
     -- Get the import list for this module
-    let oldNames' = oldNames ++ mapMaybe qualifiedImportName imports in
+    let inNames' = inNames ++ if thisName == outName then mapMaybe qualifiedImportName imports else [] in
     fold (foldDecls (\ d pref s suff r ->
                          let d' = sDecl d
-                             d'' = fixReferences oldNames' new d' in
+                             d'' = fixReferences inNames' outName d' in
                          r |> pref <> (if d'' /= d' then prettyPrint d'' else s) <> suff)
                     echo2 info mempty)
     where
@@ -143,7 +143,7 @@ moduleDecls oldNames new info@(A.Module _ _ _ imports _, _, _) =
       -- qualified import.  module and that module's info.
       qualifiedImportName :: A.ImportDecl l -> Maybe S.ModuleName
       qualifiedImportName (A.ImportDecl _ m _ _ _ (Just a) _specs) =
-          case elem (sModuleName m) oldNames of
+          case elem (sModuleName m) inNames of
             True -> Just (sModuleName a)
             _ -> Nothing
       qualifiedImportName _ = Nothing
