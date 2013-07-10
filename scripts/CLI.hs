@@ -6,9 +6,10 @@ import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (intercalate, isPrefixOf)
 import Data.Set.Extra as Set (Set, toList, size, singleton, mapM_)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
-import Language.Haskell.Modules (runMonadClean, cleanImports, splitModuleDecls, mergeModules, modifySourceDirs)
-import Language.Haskell.Modules.ModuVerse (getNames, putName, getSourceDirs, modulePath, parseModule)
+import Language.Haskell.Modules (runMonadClean, cleanImports, splitModuleDecls, mergeModules)
+import Language.Haskell.Modules.ModuVerse (getNames, putName, parseModule)
 import Language.Haskell.Modules.Params (MonadClean)
+import Language.Haskell.Modules.SourceDirs (SourceDirs (putDirs, getDirs), modifyDirs, modulePath)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
 import Language.Haskell.Modules.Util.Test (findModules)
 import System.IO (stdin, stderr, hGetLine, hPutStr, hPutStrLn)
@@ -70,10 +71,10 @@ showVerse :: Set ModuleName -> String
 showVerse modules = "[ " ++ intercalate "\n  , " (map unModuleName (toList modules)) ++ " ]"
 
 dir :: MonadClean m => [FilePath] -> m ()
-dir [] = modifySourceDirs (const [])
+dir [] = putDirs []
 dir xs =
-    do modifySourceDirs (++ xs)
-       xs' <- getSourceDirs
+    do modifyDirs (++ xs)
+       xs' <- getDirs
        liftIO (hPutStrLn stderr $ "sourceDirs updated:\n  [ " ++ intercalate "\n  , " xs' ++ " ]")
 
 clean :: MonadClean m => [FilePath] -> m ()

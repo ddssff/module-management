@@ -1,5 +1,5 @@
 Name:               module-management
-Version:            0.12
+Version:            0.12.1
 Synopsis:           Clean up module imports, split and merge modules
 Description:        Clean up module imports, split and merge modules.
 Homepage:           http://src.seereason.com/module-management
@@ -26,6 +26,7 @@ Library
     Language.Haskell.Modules.Merge,
     Language.Haskell.Modules.ModuVerse,
     Language.Haskell.Modules.Params,
+    Language.Haskell.Modules.SourceDirs,
     Language.Haskell.Modules.Split,
     Language.Haskell.Modules.Util.DryIO,
     Language.Haskell.Modules.Util.QIO,

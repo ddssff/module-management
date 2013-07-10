@@ -1,10 +1,8 @@
-{-# LANGUAGE CPP, PackageImports, ScopedTypeVariables, StandaloneDeriving #-}
+{-# LANGUAGE CPP, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
     ( ModuleInfo
     , moduleName
-    , PathKey(..)
-    , pathKey
     , ModuVerseState
     , moduVerseInit
     , ModuVerse(..)
@@ -14,14 +12,12 @@ module Language.Haskell.Modules.ModuVerse
     , delName
     , getExtensions
     , modifyExtensions
-    , getSourceDirs
-    , modifySourceDirs
+    -- , getSourceDirs
+    -- , modifySourceDirs
     , parseModule
     , parseModule'
     , loadModule
     , unloadModule
-    , modulePath
-    , modulePathBase
     ) where
 
 import Control.Applicative ((<$>))
@@ -37,6 +33,7 @@ import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
+import Language.Haskell.Modules.SourceDirs (SourceDirs(..), PathKey(..), pathKey)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.Directory (canonicalizePath, doesFileExist, getCurrentDirectory)
 import System.FilePath ((</>), (<.>))
@@ -50,12 +47,6 @@ type ModuleInfo = (A.Module SrcSpanInfo, String, [Comment])
 moduleName :: A.Module a -> S.ModuleName
 moduleName (A.Module _ (Just (A.ModuleHead _ x _ _)) _ _ _) = sModuleName x
 moduleName _ = S.ModuleName "Main"
-
--- | A FilePath that can be assumed to be unique.
-newtype PathKey = PathKey {unPathKey :: FilePath} deriving (Eq, Ord, Show)
-
-pathKey :: (MonadIO m, Functor m) => FilePath -> m PathKey
-pathKey path = PathKey <$> liftIO (canonicalizePath path)
 
 data ModuVerseState =
     ModuVerseState { moduleNames_ :: Maybe (Map S.ModuleName ModuleInfo)
@@ -98,6 +89,11 @@ getExtensions = getModuVerse >>= return . extensions_
 modifyExtensions :: ModuVerse m => ([Extension] -> [Extension]) -> m ()
 modifyExtensions f = modifyModuVerse (\ s -> s {extensions_ = f (extensions_ s)})
 
+instance ModuVerse m => SourceDirs m where
+    putDirs xs = modifyModuVerse (\ s -> s {sourceDirs_ = xs})
+    getDirs = getModuVerse >>= return . sourceDirs_
+
+{-
 getSourceDirs :: ModuVerse m => m [FilePath]
 getSourceDirs = getModuVerse >>= return . sourceDirs_
 
@@ -106,6 +102,7 @@ getSourceDirs = getModuVerse >>= return . sourceDirs_
 -- file.  Default is @[\".\"]@.
 modifySourceDirs :: ModuVerse m => ([FilePath] -> [FilePath]) -> m ()
 modifySourceDirs f = modifyModuVerse (\ p -> p {sourceDirs_ = f (sourceDirs_ p)})
+-}
 
 parseModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
 parseModule path = parseModule' path >>= maybe (error $ "parseModule - not found: " ++ path) return
@@ -154,38 +151,3 @@ parseFileWithComments path =
                                                   , moduleNameMap_ = Map.insertWith union (moduleName parsed) (singleton key) (moduleNameMap_ verse) })
                 return (parsed, text, comments)
 #endif
-
--- | Search the path directory list, preferring an already existing file, but
--- if there is none construct one using the first element of the directory list.
-modulePath :: ModuVerse m => S.ModuleName -> m FilePath
-modulePath name =
-    findSourcePath (modulePathBase name) `IO.catch` (\ (_ :: IOError) -> makePath)
-    where
-      makePath =
-          do dirs <- sourceDirs_ <$> getModuVerse
-             case dirs of
-               [] -> return (modulePathBase name) -- should this be an error?
-               (d : _) -> return $ d </> modulePathBase name
-
--- | Construct the base of a module path.
-modulePathBase :: S.ModuleName -> FilePath
-modulePathBase (S.ModuleName name) =
-    map f name <.> "hs"
-    where
-      f '.' = '/'
-      f c = c
-
--- | Search the path directory list for a source file that already exists.
-findSourcePath :: ModuVerse m => FilePath -> m FilePath
-findSourcePath path =
-    findFile =<< (sourceDirs_ <$> getModuVerse)
-    where
-      findFile (dir : dirs) =
-          do let x = dir </> path
-             exists <- liftIO $ doesFileExist x
-             if exists then return x else findFile dirs
-      findFile [] =
-          do -- Just building an error message here
-             here <- liftIO getCurrentDirectory
-             dirs <- sourceDirs_ <$> getModuVerse
-             liftIO . throw . userError $ "findSourcePath failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ path

@@ -4,8 +4,9 @@ import Data.Set.Extra as Set (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (modifyParams, Params(testMode), runMonadClean)
-import Language.Haskell.Modules.ModuVerse (putName, modifySourceDirs, modulePath, parseModule)
+import Language.Haskell.Modules.ModuVerse (putName, parseModule)
 import Language.Haskell.Modules.Params (modifyTestMode)
+import Language.Haskell.Modules.SourceDirs (putDirs, modulePath)
 import Language.Haskell.Modules.Split (DeclName(..), splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
@@ -22,7 +23,7 @@ split1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/debian/ tmp"
          runMonadClean $ noisily $ noisily $
-           do modifySourceDirs (const ["tmp"])
+           do putDirs ["tmp"]
               Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) repoModules
               splitModuleDecls "tmp/Debian/Repo/Package.hs"
          (code, out, err) <- diff "testdata/split1-expected" "tmp"
@@ -34,7 +35,7 @@ split2a =
     do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
        runMonadClean $ noisily $ noisily $
          do modifyParams (\ p -> p {testMode = True})
-            modifySourceDirs (const ["tmp"])
+            putDirs ["tmp"]
             modulePath (S.ModuleName "Split") >>= parseModule >>= putName (S.ModuleName "Split")
             splitModuleDecls "tmp/Split.hs"
        (code, out, err) <- diff "testdata/split2-expected" "tmp"
@@ -45,7 +46,7 @@ split2b =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
        runMonadClean $ noisily $ noisily $
-         do modifySourceDirs (const ["tmp"])
+         do putDirs ["tmp"]
             modulePath (S.ModuleName "Split") >>= parseModule >>= putName (S.ModuleName "Split")
             splitModuleDecls "tmp/Split.hs"
        (code, out, err) <- diff "testdata/split2-clean-expected" "tmp"

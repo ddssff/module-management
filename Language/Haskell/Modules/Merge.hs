@@ -20,7 +20,8 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents),
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports, cleanResult)
 import Language.Haskell.Modules.Internal (doResult, ModuleResult(Modified, Created, Removed, Unchanged), MonadClean(getParams), Params(testMode))
-import Language.Haskell.Modules.ModuVerse (ModuVerse, ModuleInfo, getNames, getInfo, modulePath, parseModule, parseModule', moduleName)
+import Language.Haskell.Modules.ModuVerse (ModuVerse, ModuleInfo, getNames, getInfo, parseModule, parseModule', moduleName)
+import Language.Haskell.Modules.SourceDirs (modulePath)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 
 -- | Merge the declarations from several modules into a single new

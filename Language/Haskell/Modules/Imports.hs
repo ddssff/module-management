@@ -24,7 +24,8 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo, SrcLoc(..))
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ImportSpec(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(..), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
-import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, parseModule, getExtensions, modifyExtensions, getSourceDirs, modulePath, loadModule)
+import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, parseModule, getExtensions, modifyExtensions, loadModule)
+import Language.Haskell.Modules.SourceDirs (getDirs, modulePath)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
@@ -79,7 +80,7 @@ dumpImports path =
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"
        args <- hsFlags <$> getParams
-       dirs <- getSourceDirs
+       dirs <- getDirs
        exts <- getExtensions
        let args' = args ++ ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs, path] ++ map (("-X" ++) . show) exts
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""

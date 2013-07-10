@@ -1,3 +1,9 @@
+haskell-module-management (0.12.1) unstable; urgency=low
+
+  * Have pathKey and modulePath search the SourceDirs list for files.
+
+ -- David Fox <dsf@seereason.com>  Wed, 10 Jul 2013 15:07:28 -0700
+
 haskell-module-management (0.12) unstable; urgency=low
 
   * splitModule and splitModuleDecls now take a FilePath instead of

@@ -6,8 +6,9 @@ import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Internal (runMonadClean)
-import Language.Haskell.Modules.ModuVerse (modifyExtensions, modifySourceDirs, modulePathBase)
+import Language.Haskell.Modules.ModuVerse (modifyExtensions)
 import Language.Haskell.Modules.Params (modifyTestMode)
+import Language.Haskell.Modules.SourceDirs (putDirs, modulePathBase)
 import Language.Haskell.Modules.Util.Test (diff, rsync)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
@@ -61,7 +62,7 @@ test3 :: Test
 test3 =
     TestLabel "imports3" $ TestCase
       (rsync "testdata/imports3" "tmp" >>
-       runMonadClean (modifySourceDirs (const ["tmp"]) >> cleanImports "tmp/NotMain.hs") >>
+       runMonadClean (putDirs ["tmp"] >> cleanImports "tmp/NotMain.hs") >>
        assertEqual "module name" () ())
 
 -- | Preserve imports with a "hiding" clause
@@ -69,7 +70,7 @@ test4 :: Test
 test4 =
     TestLabel "imports4" $ TestCase
       (rsync "testdata/imports4" "tmp" >>
-       runMonadClean (modifySourceDirs (const ["tmp"]) >> cleanImports "tmp/Hiding.hs") >>
+       runMonadClean (putDirs ["tmp"] >> cleanImports "tmp/Hiding.hs") >>
        -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
        assertEqual "module name" () ())
 
@@ -79,7 +80,7 @@ test5 =
     TestLabel "imports5" $ TestCase
       (do _ <- rsync "testdata/imports5" "tmp"
           _ <- runMonadClean
-                 (modifySourceDirs (const ["tmp"]) >>
+                 (putDirs ["tmp"] >>
                   modifyExtensions (++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
                   cleanImports "tmp/Deriving.hs")
           (code, out, err) <- diff "testdata/imports5" "tmp"

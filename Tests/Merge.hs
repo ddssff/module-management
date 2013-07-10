@@ -8,8 +8,9 @@ import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (runMonadClean)
 import Language.Haskell.Modules.Merge (mergeModules)
-import Language.Haskell.Modules.ModuVerse (putName, modifySourceDirs, parseModule, modulePath, modifyExtensions)
+import Language.Haskell.Modules.ModuVerse (putName, parseModule, modifyExtensions)
 import Language.Haskell.Modules.Params (modifyTestMode)
+import Language.Haskell.Modules.SourceDirs (putDirs, modulePath)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync, findModules)
 import System.Exit (ExitCode(ExitSuccess))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
@@ -22,7 +23,7 @@ test1 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
          _result <- runMonadClean $
-           do modifySourceDirs (const ["tmp"])
+           do putDirs ["tmp"]
               modifyTestMode (const True)
               Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) repoModules
               mergeModules
@@ -36,7 +37,7 @@ test2 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
          _result <- runMonadClean $
-           do modifySourceDirs (const ["tmp"])
+           do putDirs ["tmp"]
               modifyTestMode (const True)
               Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) repoModules
               mergeModules
