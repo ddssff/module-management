@@ -10,6 +10,7 @@ module Language.Haskell.Modules.Split
 import Control.Exception (throw)
 import Control.Monad (when)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
+import Data.Default (Default(def))
 import Data.Foldable as Foldable (fold)
 import Data.List as List (filter, intercalate, map, nub)
 import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, lookup, Map, mapWithKey, fromSet)
@@ -25,7 +26,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..), SrcLoc(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec, ImportDecl(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResult)
-import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(testMode))
+import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(testMode, extraImports))
 import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, getNames, parseModule)
 import Language.Haskell.Modules.SourceDirs (RelPath(..), modulePath, modulePathBase)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
@@ -175,11 +176,12 @@ doSplit _ _ (A.Module _ _ _ _ [], _, _) = return Set.empty -- No declarations - 
 doSplit _ _ (A.Module _ _ _ _ [_], _, _) = return Set.empty -- One declaration - nothing to split (but maybe we should anyway?)
 doSplit _ _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
 doSplit symClassToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _ _, _, _) =
-    do importChanges <- Set.mapM (updateImports m (sModuleName parent) symClassToModule) (Set.delete parent' univ)
+    do eiMap <- getParams >>= return . extraImports
+       importChanges <- Set.mapM (updateImports m (sModuleName parent) symClassToModule) (Set.delete parent' univ)
        return $ unions [ -- The changes required to existing imports
                          importChanges
                          -- Compute the result of splitting the parent module
-                       , Set.map newModule moduleNames
+                       , Set.map (newModule eiMap) moduleNames
                          -- Did the parent module disappear, or was it replaced?
                        , if member parent' moduleNames then Set.empty else singleton (Removed parent') ]
     where
@@ -195,8 +197,8 @@ doSplit symClassToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _
 
       -- Build a new module given its name and the list of
       -- declarations it should contain.
-      newModule :: S.ModuleName -> ModuleResult
-      newModule name'@(S.ModuleName modName) =
+      newModule :: Map S.ModuleName (Set S.ImportDecl) -> S.ModuleName -> ModuleResult
+      newModule eiMap name'@(S.ModuleName modName) =
           (if member name' univ then Modified else Created) name' $
           case Map.lookup name' moduleDeclMap of
             Nothing ->
@@ -218,7 +220,7 @@ doSplit symClassToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _
                  maybe "    ) where\n" (\ _ -> Foldable.fold $ foldExports ignore2 ignore (<|) m mempty) me) <>
                 -- The prefix of the imports section
                 fromMaybe "" (foldImports (\ _i pref _ _ r -> maybe (Just pref) Just r) m Nothing) <>
-                unlines (List.map (prettyPrintWithMode defaultMode) (elems (newImports modDecls))) <> "\n" <>
+                unlines (List.map (prettyPrintWithMode defaultMode) (elems (newImports modDecls) ++ instanceImports name' eiMap)) <> "\n" <>
                 -- Grab the old imports
                 fromMaybe "" (foldImports (\ _i pref s suff r -> Just (maybe (s <> suff) (\ l -> l <> pref <> s <> suff) r)) m Nothing) <>
                 -- fromMaybe "" (foldDecls (\ _d pref _ _ r -> maybe (Just pref) Just r) ignore2 m text Nothing) <>
@@ -247,18 +249,19 @@ doSeps ((_, hd) : tl) = hd <> concatMap (\ (a, b) -> a <> b) tl
 -- | Update the imports to reflect the changed module names in symClassToModule.
 updateImports :: MonadClean m => ModuleInfo -> S.ModuleName -> (DeclClass -> S.ModuleName) -> S.ModuleName -> m ModuleResult
 updateImports m old symClassToModule name =
-    do let base = modulePathBase "hs" name
+    do eiMap <- getParams >>= return . extraImports
+       let base = modulePathBase "hs" name
        -- qLnPutStr $ "updateImports " ++ show name
        (m', text', comments') <- parseModule base
        let text'' = Foldable.fold (foldModule echo2 echo echo echo echo2 echo echo2
-                                                  (\ i pref s suff r -> r |> pref <> updateImportDecl s i <> suff)
+                                                  (\ i pref s suff r -> r |> pref <> updateImportDecl eiMap s i <> suff)
                                                   echo echo2 (m', text', comments') mempty)
        return $ if text' /= text'' then Modified name text'' else Unchanged name
     where
-      updateImportDecl :: String -> A.ImportDecl SrcSpanInfo -> String
-      updateImportDecl s i =
+      updateImportDecl :: Map S.ModuleName (Set S.ImportDecl) -> String -> A.ImportDecl SrcSpanInfo -> String
+      updateImportDecl eiMap s i =
           if sModuleName (A.importModule i) == old
-          then intercalate "\n" (List.map prettyPrint (updateImportSpecs i (A.importSpecs i)))
+          then intercalate "\n" (List.map prettyPrint (updateImportSpecs i (A.importSpecs i) ++ instanceImports name eiMap))
           else s
 
       updateImportSpecs :: A.ImportDecl SrcSpanInfo -> Maybe (A.ImportSpecList SrcSpanInfo) -> [S.ImportDecl]
@@ -270,6 +273,9 @@ updateImports m old symClassToModule name =
                                List.map (\ x -> (sImportDecl i) {S.importModule = x, S.importSpecs = Just (flag, [sImportSpec spec])}) xs) specs
 
       moduleMap = symClassToModuleMap symClassToModule m
+
+instanceImports :: S.ModuleName -> Map S.ModuleName (Set S.ImportDecl) -> [S.ImportDecl]
+instanceImports name eiMap = maybe [] toList (Map.lookup name eiMap)
 
 symClassToModuleMap :: (DeclClass -> S.ModuleName) -> ModuleInfo -> Map DeclClass S.ModuleName
 symClassToModuleMap symClassToModule m =
@@ -301,19 +307,21 @@ defaultSymbolToModule (S.ModuleName parentModuleName) name =
       g (c : s) | isAlpha c = toUpper c : List.filter isAlphaNum s
       g _ = "OtherSymbols"
 
+-- Default is "import Main ()"
+instance Default S.ImportDecl where
+    def = S.ImportDecl {S.importLoc = SrcLoc "<unknown>.hs" 1 1,
+                        S.importModule = S.ModuleName "Main",
+                        S.importQualified = False,
+                        S.importSrc = False,
+                        S.importPkg = Nothing,
+                        S.importAs = Nothing,
+                        S.importSpecs = Just (False, [])}
+
 -- | Build an import of the symbols created by a declaration.
 toImportDecl :: S.ModuleName -> [(A.Decl SrcSpanInfo, String)] -> S.ImportDecl
-toImportDecl _ [] = error "toImportDecl: missing declaration"
-toImportDecl (S.ModuleName modName) decls@((d, _) : _) =
-    S.ImportDecl {S.importLoc = SrcLoc path 1 1,  -- can we just use srcLoc d?
-                  S.importModule = S.ModuleName modName,
-                  S.importQualified = False,
-                  S.importSrc = False,
-                  S.importPkg = Nothing,
-                  S.importAs = Nothing,
-                  S.importSpecs = Just (False, nub (concatMap (imports . fst) decls))}
-    where
-      SrcLoc path _ _ = srcLoc d
+toImportDecl (S.ModuleName modName) decls =
+    def { S.importModule = S.ModuleName modName
+        , S.importSpecs = Just (False, nub (concatMap (imports . fst) decls)) }
 
 justs :: Ord a => Set (Maybe a) -> Set a
 justs = Set.fold (\ mx s -> maybe s (`Set.insert` s) mx) Set.empty

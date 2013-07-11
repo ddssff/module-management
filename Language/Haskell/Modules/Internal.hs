@@ -17,6 +17,7 @@ import Control.Exception (SomeException, try)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
+import Data.Map as Map (Map, empty)
 import Data.Set as Set (empty, insert, Set, toList)
 --import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
 --import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
@@ -24,7 +25,7 @@ import Data.Set as Set (empty, insert, Set, toList)
 --import Language.Haskell.Exts.Extension (Extension)
 --import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
 --import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), ImportDecl)
 import Language.Haskell.Modules.ModuVerse (ModuVerse(..), ModuVerseState, moduVerseInit,
                                            putName, delName, loadModule, unloadModule)
 import Language.Haskell.Modules.SourceDirs (modulePath, modulePathBase)
@@ -61,6 +62,10 @@ data Params
       -- instances it contains, but usually it is not.  Note that this
       -- option does not affect imports that started empty and end
       -- empty.
+      , extraImports :: Map S.ModuleName (Set S.ImportDecl)
+      -- ^ Deciding whether a module needs to be imported can be
+      -- difficult when instances are involved, this is a cheat to force
+      -- keys of the map to import the corresponding elements.
       , testMode :: Bool
       -- ^ For testing, do not run cleanImports on the results of the
       -- splitModule and catModules operations.
@@ -100,8 +105,9 @@ runMonadClean action =
                                                      verbosity = 1,
                                                      hsFlags = [],
                                                      moduVerse = moduVerseInit,
-                                                     junk = empty,
+                                                     junk = Set.empty,
                                                      removeEmptyImports = True,
+                                                     extraImports = Map.empty,
                                                      testMode = False})
        mapM_ (\ x -> liftIO (try (removeFile x)) >>= \ (_ :: Either SomeException ()) -> return ()) (toList (junk params))
        return result
