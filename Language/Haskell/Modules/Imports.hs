@@ -25,7 +25,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, import
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(..), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
 import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, parseModule, getExtensions, modifyExtensions, loadModule)
-import Language.Haskell.Modules.SourceDirs (getDirs, modulePath)
+import Language.Haskell.Modules.SourceDirs (getDirs, putDirs, modifyDirs, modulePath, modulePathBase, RelPath(..), PathKey(..), pathKey)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
@@ -60,8 +60,9 @@ cleanBuildImports lbi =
 
 -- | Clean up the imports of a source file.
 cleanImports :: MonadClean m => FilePath -> m ModuleResult
-cleanImports path =
-    do source <- parseModule path
+cleanImports relpath =
+    do let path = RelPath relpath
+       source <- parseModule path
        case source of
          mi@(m@(A.Module _ _ _ imports _decls), _, _) ->
              do let name = moduleName m
@@ -74,15 +75,16 @@ cleanImports path =
       isHiddenImport _ = False
 
 -- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
-dumpImports :: MonadClean m => FilePath -> m ()
+dumpImports :: MonadClean m => RelPath -> m ()
 dumpImports path =
-    do scratch <- scratchDir <$> getParams
+    do key <- pathKey path
+       scratch <- scratchDir <$> getParams
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"
        args <- hsFlags <$> getParams
        dirs <- getDirs
        exts <- getExtensions
-       let args' = args ++ ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs, path] ++ map (("-X" ++) . show) exts
+       let args' = args ++ ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs, unPathKey key] ++ map (("-X" ++) . show) exts
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
          ExitSuccess -> quietly (qLnPutStr (showCommandForUser cmd args' ++ " -> Ok")) >> return ()
@@ -93,26 +95,41 @@ dumpImports path =
 -- source file.  We also need to modify the imports of any names
 -- that are types that appear in standalone instance derivations so
 -- their members are imported too.
-checkImports :: MonadClean m => FilePath -> S.ModuleName -> ModuleInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
+checkImports :: MonadClean m => RelPath -> S.ModuleName -> ModuleInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
 checkImports path name@(S.ModuleName name') m extraImports =
-    do let importsPath = name' <.> ".imports"
-       markForDelete importsPath
+    do let importsPath = modulePathBase "imports" name
+       -- The .imports file will appear in the real current directory,
+       -- ignore the source dir path.  This may change in future
+       -- versions of GHC, see http://ghc.haskell.org/trac/ghc/ticket/7957
+       markForDelete (unRelPath importsPath)
        (newImports, _, _) <-
-           bracket (getExtensions)
-                   (modifyExtensions . const)
-                   (\ saved -> modifyExtensions (const (PackageImports : saved)) >>
-                               parseModule importsPath `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here -> throw . userError $ here ++ ": " ++ show e)))
+           withDot $
+             withPackageImportsExtension $
+               (parseModule importsPath
+                  `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here ->
+                                                          throw . userError $ here ++ ": " ++ show e)))
        updateSource path m newImports name extraImports
+
+withPackageImportsExtension a =
+    bracket (getExtensions)
+            (modifyExtensions . const)
+            (\ saved -> modifyExtensions (const (PackageImports : saved)) >> a)
+
+withDot a =
+    bracket (getDirs)
+            (modifyDirs . const)
+            (\ _ -> putDirs ["."] >> a)
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: MonadClean m => FilePath -> ModuleInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
+updateSource :: MonadClean m => RelPath -> ModuleInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
 updateSource path m@(A.Module _ _ _ oldImports _, _, _) (A.Module _ _ _ newImports _) name extraImports =
     do remove <- removeEmptyImports <$> getParams
-       maybe (qLnPutStr ("cleanImports: no changes to " ++ path) >> return (Unchanged name))
+       key <- pathKey path
+       maybe (qLnPutStr ("cleanImports: no changes to " ++ unRelPath path) >> return (Unchanged name))
              (\ text' ->
-                  qLnPutStr ("cleanImports: modifying " ++ path) >>
-                  replaceFile tildeBackup path text' >>
+                  qLnPutStr ("cleanImports: modifying " ++ unRelPath path) >>
+                  replaceFile tildeBackup (unPathKey key) text' >>
                   return (Modified name text'))
              (replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m)
 updateSource _ _ _ _ _ = error "updateSource"
@@ -302,9 +319,9 @@ cleanResult x =
           do mode <- getParams >>= return . testMode
              case mode of
                True -> return text
-               False -> do path <- modulePath name
-                           cleanImports path
-                           (_, text', _) <- loadModule path
+               False -> do let base = modulePathBase "hs" name
+                           cleanImports (unRelPath base)
+                           (_, text', _) <- loadModule base
                            return text'
 {-
       -- Make sure this isn't trying to clobber a module that exists (other than 'old'.)

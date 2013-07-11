@@ -10,7 +10,7 @@ import Language.Haskell.Modules.Internal (runMonadClean)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.ModuVerse (putName, parseModule, modifyExtensions)
 import Language.Haskell.Modules.Params (modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (putDirs, modulePath)
+import Language.Haskell.Modules.SourceDirs (putDirs, modulePath, modulePathBase)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync, findModules)
 import System.Exit (ExitCode(ExitSuccess))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
@@ -25,7 +25,7 @@ test1 =
          _result <- runMonadClean $
            do putDirs ["tmp"]
               modifyTestMode (const True)
-              Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) repoModules
+              Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
                      (S.ModuleName "Debian.Repo.Cache")
@@ -39,7 +39,7 @@ test2 =
          _result <- runMonadClean $
            do putDirs ["tmp"]
               modifyTestMode (const True)
-              Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) repoModules
+              Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Common")
@@ -53,7 +53,7 @@ test3 =
          _result <- withCurrentDirectory "tmp" $
                    runMonadClean $
            do modifyTestMode (const True)
-              Set.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) repoModules
+              Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.Types.Slice",
                       S.ModuleName "Debian.Repo.Types.Repo",
@@ -67,7 +67,7 @@ test4 =
     TestCase $
       do _ <- rsync "testdata/merge4" "tmp"
          _ <- withCurrentDirectory "tmp" $ runMonadClean $
-              do List.mapM_ (\ name -> modulePath name >>= parseModule >>= putName name) [S.ModuleName "In1", S.ModuleName "In2", S.ModuleName "M1"]
+              do List.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) [S.ModuleName "In1", S.ModuleName "In2", S.ModuleName "M1"]
                  mergeModules [S.ModuleName "In1", S.ModuleName "In2"] (S.ModuleName "Out")
          (code, out, err) <- diff "testdata/merge4-expected" "tmp"
          assertEqual "mergeModules4" (ExitSuccess, "", "") (code, out, err)

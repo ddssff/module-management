@@ -8,7 +8,7 @@ import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Internal (runMonadClean)
 import Language.Haskell.Modules.ModuVerse (modifyExtensions)
 import Language.Haskell.Modules.Params (modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (putDirs, modulePathBase)
+import Language.Haskell.Modules.SourceDirs (RelPath(unRelPath), putDirs, modulePathBase)
 import Language.Haskell.Modules.Util.Test (diff, rsync)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
@@ -23,9 +23,9 @@ test1 =
     TestLabel "imports1" $ TestCase
       (do rsync "testdata/debian" "tmp"
           let name = S.ModuleName "Debian.Repo.Types.PackageIndex"
-          let base = modulePathBase name
-          _ <- withCurrentDirectory "tmp" (runMonadClean (cleanImports base))
-          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> base, "tmp" </> base] ""
+          let base = modulePathBase "hs" name
+          _ <- withCurrentDirectory "tmp" (runMonadClean (cleanImports (unRelPath base)))
+          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> unRelPath base, "tmp" </> unRelPath base] ""
           assertEqual "cleanImports"
                          (ExitFailure 1,
                           ["@@ -22,13 +22,13 @@",
@@ -52,9 +52,9 @@ test2 =
     TestLabel "Imports.test2" $ TestCase
       (do rsync "testdata/debian" "tmp"
           let name = S.ModuleName "Debian.Repo.PackageIndex"
-              base = modulePathBase name
-          _ <- withCurrentDirectory "tmp" (runMonadClean (cleanImports base))
-          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> base, "tmp" </> base] ""
+              base = modulePathBase "hs" name
+          _ <- withCurrentDirectory "tmp" (runMonadClean (cleanImports (unRelPath base)))
+          (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> unRelPath base, "tmp" </> unRelPath base] ""
           assertEqual "cleanImports" (ExitSuccess, "", "") (code, out, err))
 
 -- | Can we handle a Main module in a file named something other than Main.hs?
@@ -62,7 +62,7 @@ test3 :: Test
 test3 =
     TestLabel "imports3" $ TestCase
       (rsync "testdata/imports3" "tmp" >>
-       runMonadClean (putDirs ["tmp"] >> cleanImports "tmp/NotMain.hs") >>
+       runMonadClean (putDirs ["tmp"] >> cleanImports "NotMain.hs") >>
        assertEqual "module name" () ())
 
 -- | Preserve imports with a "hiding" clause
@@ -70,7 +70,7 @@ test4 :: Test
 test4 =
     TestLabel "imports4" $ TestCase
       (rsync "testdata/imports4" "tmp" >>
-       runMonadClean (putDirs ["tmp"] >> cleanImports "tmp/Hiding.hs") >>
+       runMonadClean (putDirs ["tmp"] >> cleanImports "Hiding.hs") >>
        -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
        assertEqual "module name" () ())
 
@@ -82,7 +82,7 @@ test5 =
           _ <- runMonadClean
                  (putDirs ["tmp"] >>
                   modifyExtensions (++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
-                  cleanImports "tmp/Deriving.hs")
+                  cleanImports "Deriving.hs")
           (code, out, err) <- diff "testdata/imports5" "tmp"
           assertEqual "standalone deriving"
                       (ExitFailure 1,

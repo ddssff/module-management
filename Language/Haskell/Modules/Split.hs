@@ -27,7 +27,7 @@ import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldH
 import Language.Haskell.Modules.Imports (cleanResult)
 import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(testMode))
 import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, getNames, parseModule)
-import Language.Haskell.Modules.SourceDirs (modulePath)
+import Language.Haskell.Modules.SourceDirs (RelPath(..), modulePath, modulePathBase)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
@@ -75,13 +75,13 @@ splitModule :: MonadClean m =>
             -> FilePath
             -> m [ModuleResult]
 splitModule symbolToModule path =
-    do info@(m, _, _) <- parseModule path
+    do info@(m, _, _) <- parseModule (RelPath path)
        splitModuleBy (symbolToModule (moduleName m)) info
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
 splitModuleDecls :: MonadClean m => FilePath -> m [ModuleResult]
 splitModuleDecls path =
-    do info@(m, _, _) <- parseModule path
+    do info@(m, _, _) <- parseModule (RelPath path)
        let name = moduleName m
        splitModuleBy (defaultSymbolToModule name) info
 
@@ -238,9 +238,9 @@ doSeps ((_, hd) : tl) = hd <> concatMap (\ (a, b) -> a <> b) tl
 -- | Update the imports to reflect the changed module names in symbolToModule.
 updateImports :: MonadClean m => ModuleInfo -> S.ModuleName -> (DeclClass -> S.ModuleName) -> S.ModuleName -> m ModuleResult
 updateImports m old symbolToModule name =
-    do path <- modulePath name
+    do let base = modulePathBase "hs" name
        -- qLnPutStr $ "updateImports " ++ show name
-       (m', text', comments') <- parseModule path
+       (m', text', comments') <- parseModule base
        let text'' = Foldable.fold (foldModule echo2 echo echo echo echo2 echo echo2
                                                   (\ i pref s suff r -> r |> pref <> updateImportDecl s i <> suff)
                                                   echo echo2 (m', text', comments') mempty)

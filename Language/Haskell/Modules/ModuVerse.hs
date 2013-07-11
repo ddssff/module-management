@@ -20,6 +20,8 @@ module Language.Haskell.Modules.ModuVerse
     , unloadModule
     ) where
 
+import Debug.Trace
+
 import Control.Applicative ((<$>))
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -33,11 +35,11 @@ import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import Language.Haskell.Modules.SourceDirs (SourceDirs(..), PathKey(..), pathKey)
+import Language.Haskell.Modules.SourceDirs (SourceDirs(..), RelPath(..), PathKey(..), pathKey)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.Directory (canonicalizePath, doesFileExist, getCurrentDirectory)
 import System.FilePath ((</>), (<.>))
-import System.IO.Error (isDoesNotExistError)
+import System.IO.Error (isDoesNotExistError, isUserError)
 
 deriving instance Ord Comment
 
@@ -104,12 +106,12 @@ modifySourceDirs :: ModuVerse m => ([FilePath] -> [FilePath]) -> m ()
 modifySourceDirs f = modifyModuVerse (\ p -> p {sourceDirs_ = f (sourceDirs_ p)})
 -}
 
-parseModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
-parseModule path = parseModule' path >>= maybe (error $ "parseModule - not found: " ++ path) return
+parseModule :: (ModuVerse m, MonadVerbosity m) => RelPath -> m ModuleInfo
+parseModule path = parseModule' path >>= maybe (error $ "parseModule - not found: " ++ show path) return
 
-parseModule' :: (ModuVerse m, MonadVerbosity m) => FilePath -> m (Maybe ModuleInfo)
+parseModule' :: (ModuVerse m, MonadVerbosity m) => RelPath -> m (Maybe ModuleInfo)
 parseModule' path =
-    (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return Nothing else throw e)
+    (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e || isUserError e then return Nothing else throw e)
     where
       look =
           do key <- pathKey path
@@ -119,16 +121,16 @@ parseModule' path =
       load Nothing = Just <$> loadModule path
 
 -- | Force a possibly cached module to be reloaded.
-loadModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
+loadModule :: (ModuVerse m, MonadVerbosity m) => RelPath -> m ModuleInfo
 loadModule path =
     do key <- pathKey path
-       text <- liftIO $ readFile path
+       text <- liftIO $ readFile (unPathKey key)
        quietly $ qLnPutStr ("parsing " ++ unPathKey key)
-       (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
+       (parsed, comments) <- parseFileWithComments (unPathKey key) >>= return . Exts.fromParseResult
        modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ x)})
        return (parsed, text, comments)
 
-unloadModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ()
+unloadModule :: (ModuVerse m, MonadVerbosity m) => RelPath -> m ()
 unloadModule path =
     do key <- pathKey path
        modifyModuVerse (\ x -> x {moduleInfo_ = Map.delete key (moduleInfo_ x)})

@@ -7,6 +7,7 @@ module Language.Haskell.Modules.SourceDirs
     , pathKey
     , modulePath
     , modulePathBase
+    , RelPath(..)
     , findSourcePath
     ) where
 
@@ -26,7 +27,7 @@ import Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.Directory (canonicalizePath, doesFileExist, getCurrentDirectory)
 import System.FilePath ((</>), (<.>))
-import System.IO.Error (isDoesNotExistError)
+import System.IO.Error (isDoesNotExistError, isUserError)
 
 class MonadCatchIO m => SourceDirs m where
     putDirs :: [FilePath] -> m ()
@@ -38,33 +39,41 @@ modifyDirs f = getDirs >>= putDirs . f
 -- | A FilePath that can be assumed to be unique.
 newtype PathKey = PathKey {unPathKey :: FilePath} deriving (Eq, Ord, Show)
 
-pathKey :: SourceDirs m => FilePath -> m PathKey
+pathKey :: SourceDirs m => RelPath -> m PathKey
 -- pathKey path = PathKey <$> liftIO (canonicalizePath path)
 pathKey path = findSourcePath path >>= liftIO . canonicalizePath >>= return . PathKey
 
 -- | Search the path directory list, preferring an already existing file, but
 -- if there is none construct one using the first element of the directory list.
-modulePath :: SourceDirs m => S.ModuleName -> m FilePath
-modulePath name =
-    findSourcePath (modulePathBase name) `IO.catch` (\ (_ :: IOError) -> makePath)
+modulePath :: SourceDirs m => String -> S.ModuleName -> m FilePath
+modulePath ext name =
+    findSourcePath relPath `IO.catch` (\ (_ :: IOError) -> makePath)
     where
       makePath =
           do dirs <- getDirs
              case dirs of
-               [] -> return (modulePathBase name) -- should this be an error?
-               (d : _) -> return $ d </> modulePathBase name
+               [] -> return path -- should this be an error?
+               (d : _) -> return $ d </> path
+      relPath@(RelPath path) = modulePathBase ext name
 
 -- | Construct the base of a module path.
-modulePathBase :: S.ModuleName -> FilePath
-modulePathBase (S.ModuleName name) =
-    map f name <.> "hs"
-    where
-      f '.' = '/'
-      f c = c
+modulePathBase :: String -> S.ModuleName -> RelPath
+modulePathBase ext (S.ModuleName name) =
+    RelPath (base <.> ext)
+    where base = case ext of
+                   "hs" -> map f name
+                   "lhs" -> map f name
+                   "imports" -> name
+                   _ -> error $ "Unsupported extension: " ++ show ext
+          f '.' = '/'
+          f c = c
+
+newtype RelPath = RelPath {unRelPath :: FilePath} deriving (Eq, Ord, Show)
 
 -- | Search the path directory list for a source file that already exists.
-findSourcePath :: SourceDirs m => FilePath -> m FilePath
-findSourcePath path =
+-- FIXME: this should return a Maybe.
+findSourcePath :: SourceDirs m => RelPath -> m FilePath
+findSourcePath (RelPath path) =
     findFile =<< getDirs
     where
       findFile (dir : dirs) =

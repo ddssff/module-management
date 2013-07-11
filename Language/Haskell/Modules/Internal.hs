@@ -27,7 +27,7 @@ import Data.Set as Set (empty, insert, Set, toList)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import Language.Haskell.Modules.ModuVerse (ModuVerse(..), ModuVerseState, moduVerseInit,
                                            putName, delName, loadModule, unloadModule)
-import Language.Haskell.Modules.SourceDirs (modulePath)
+import Language.Haskell.Modules.SourceDirs (modulePath, modulePathBase)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
@@ -125,28 +125,31 @@ doResult x@(Unchanged _name) =
     do -- quietly (qLnPutStr ("unchanged: " ++ show _name))
        return x
 doResult x@(Removed name) =
-    do path <- modulePath name
-       unloadModule path
+    do let rel = modulePathBase "hs" name
+       path <- modulePath "hs" name
+       unloadModule rel
        -- I think this event handler is redundant.
        removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
        delName name
        return x
 
 doResult x@(Modified name text) =
-    do path <- modulePath name
+    do let rel = modulePathBase "hs" name
+       path <- modulePath "hs" name
        -- qLnPutStr ("modifying " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
-       info <- loadModule path
+       info <- loadModule rel
        putName name info
        return x
 
 doResult x@(Created name text) =
-    do path <- modulePath name
+    do let rel = modulePathBase "hs" name
+       path <- modulePath "hs" name
        -- qLnPutStr ("creating " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
        replaceFile tildeBackup path text
-       info <- loadModule path
+       info <- loadModule rel
        putName name info
        return x
