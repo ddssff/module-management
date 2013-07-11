@@ -12,7 +12,7 @@ import Control.Monad (when)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Foldable as Foldable (fold)
 import Data.List as List (filter, intercalate, map, nub)
-import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, lookup, Map, mapWithKey)
+import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, lookup, Map, mapWithKey, fromSet)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((<|), (|>))
@@ -35,11 +35,42 @@ import Prelude hiding (writeFile)
 import System.FilePath ((<.>))
 
 data DeclClass
-    = Exported S.Name -- Maybe because...?
+    = Exported S.Name
     | Internal S.Name
     | ReExported S.Name
     | Instance
+    | Unknown S.Name
     deriving (Eq, Ord, Show)
+
+-- | Classify the symbols in a module.
+declClass :: ModuleInfo -> Maybe S.Name -> DeclClass
+declClass m mName =
+    unknown mName $ Map.lookup mName mp
+    where
+      unknown :: Maybe S.Name -> Maybe DeclClass -> DeclClass
+      unknown _ (Just x) = x
+      unknown Nothing _ = error "declClass Nothing"
+      unknown (Just x) _ = Unknown x
+      mp = Map.fromSet declClass' (union declared exported)
+      declClass' Nothing = Instance
+      declClass' x@(Just name) =
+          if member x exported
+          then if member x declared
+               then Exported name
+               else ReExported name -- Exported but not declared - must come from an import
+          else Internal name        -- Not exported
+      declared = foldDecls (\ d _pref _s _suff r -> Set.union (symbols d) r) ignore2 m Set.empty
+      exported =
+        case hasExportList m of
+          False -> declared
+          True -> union (foldExports ignore2 (\ e _pref _s _suff r -> Set.union (symbols e) r) ignore2 m Set.empty)
+                        -- Any instances declared are exported regardless of the export list
+                        (if member Nothing declared then singleton Nothing else Set.empty)
+        where
+          hasExportList :: ModuleInfo -> Bool
+          hasExportList (A.Module _ Nothing _ _ _, _, _) = False
+          hasExportList (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _, _) = False
+          hasExportList _ = True
 
 isReExported :: DeclClass -> Bool
 isReExported (ReExported _) = True
@@ -114,12 +145,13 @@ splitModuleBy symbolToModule info@(m, _, _) =
       reportResult x@(Removed (S.ModuleName name)) = qLnPutStr ("splitModule: removing " ++ name) >> return x
       reportResult x = return x
 
--- This returns a set of maybe because there may be instance
--- declarations, in which case we want an Instances module to
--- appear in newModuleNames below.
+-- | Return a list of the names declared in this module, Nothing
+-- denotes one or more instances.
 declared :: ModuleInfo -> Set (Maybe S.Name)
 declared m = foldDecls (\ d _pref _s _suff r -> Set.union (symbols d) r) ignore2 m Set.empty
 
+-- | Return a list of the names expored by this module, Nothing
+-- denotes instances.
 exported :: ModuleInfo -> Set (Maybe S.Name)
 exported m =
     case hasExportList m of
@@ -132,29 +164,6 @@ exported m =
       hasExportList (A.Module _ Nothing _ _ _, _, _) = False
       hasExportList (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _, _) = False
       hasExportList _ = True
-
-newModuleNames :: (DeclClass -> S.ModuleName) -> ModuleInfo -> Set S.ModuleName
-newModuleNames symbolToModule m =
-    Set.map (symbolToModule . declClass m) (union (declared m) (exported m))
-
-declClass :: ModuleInfo -> Maybe S.Name -> DeclClass
-declClass m =
-    declClass
-    where
-      declClass :: Maybe S.Name -> DeclClass
-      declClass name =
-          case name of
-            Nothing -> Instance
-            Just name' ->
-                if reExported name'
-                then ReExported name'
-                else if internal name'
-                     then Internal name'
-                     else Exported name'
-      internal :: S.Name -> Bool
-      internal name = member (Just name) (difference (declared m) (exported m))
-      reExported :: S.Name -> Bool
-      reExported name = member (Just name) (difference (exported m) (declared m))
 
 -- | Create the set of module results implied by the split -
 -- creations, removals, and modifications.  This includes the changes
@@ -174,7 +183,7 @@ doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _
                          -- Did the parent module disappear, or was it replaced?
                        , if member parent' moduleNames then Set.empty else singleton (Removed parent') ]
     where
-      moduleNames = newModuleNames symbolToModule m
+      moduleNames = Set.map (symbolToModule . declClass m) (union (declared m) (exported m))
       -- The name of the module to be split
       parent'@(S.ModuleName parentName) = sModuleName parent
 
@@ -195,7 +204,7 @@ doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _
                 Foldable.fold (foldHeader echo2 echo (\ _n pref _ suff r -> r |> pref <> modName <> suff) echo m mempty) <>
                 Foldable.fold (foldExports echo2 ignore ignore2 m mempty) <>
                 doSeps (Foldable.fold (foldExports ignore2
-                                          (\ e pref s suff r -> if setAny isReExported  (Set.map (declClass m) (symbols e)) then r |> [(pref, s <> suff)] else r)
+                                          (\ e pref s suff r -> if setAny isReExported (Set.map (declClass m) (symbols e)) then r |> [(pref, s <> suff)] else r)
                                           (\ s r -> r |> [("", s)]) m mempty)) <>
                 Foldable.fold (foldImports (\ _i pref s suff r -> r |> pref <> s <> suff) m mempty)
             Just modDecls ->
