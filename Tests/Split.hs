@@ -7,7 +7,7 @@ import Language.Haskell.Modules.Internal (modifyParams, Params(testMode), runMon
 import Language.Haskell.Modules.ModuVerse (putName, parseModule)
 import Language.Haskell.Modules.Params (modifyTestMode)
 import Language.Haskell.Modules.SourceDirs (putDirs, modulePath)
-import Language.Haskell.Modules.Split (DeclName(..), splitModule, splitModuleDecls)
+import Language.Haskell.Modules.Split (DeclClass(..), splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
 import Prelude hiding (writeFile)
@@ -74,7 +74,7 @@ split4b =
        result <- diff "testdata/split4b-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
     where
-      f :: S.ModuleName -> DeclName -> S.ModuleName
+      f :: S.ModuleName -> DeclClass -> S.ModuleName
       f (S.ModuleName parent) (Exported (S.Ident "getPackages")) = S.ModuleName (parent ++ ".A")
       f (S.ModuleName parent) _ = S.ModuleName (parent ++ ".B")
 
@@ -88,6 +88,6 @@ split4c =
        result <- diff "testdata/split4c-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
     where
-      f :: S.ModuleName -> DeclName -> S.ModuleName
+      f :: S.ModuleName -> DeclClass -> S.ModuleName
       f (S.ModuleName parent) (Exported (S.Ident "getPackages")) = S.ModuleName (parent ++ ".A")
       f (S.ModuleName parent) _ = S.ModuleName parent
