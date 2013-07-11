@@ -105,9 +105,9 @@ splitModule :: MonadClean m =>
                (S.ModuleName -> DeclClass -> S.ModuleName) -- ^ Map declaration to new module name
             -> FilePath
             -> m [ModuleResult]
-splitModule symbolToModule path =
+splitModule symClassToModule path =
     do info@(m, _, _) <- parseModule (RelPath path)
-       splitModuleBy (symbolToModule (moduleName m)) info
+       splitModuleBy (symClassToModule (moduleName m)) info
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
 splitModuleDecls :: MonadClean m => FilePath -> m [ModuleResult]
@@ -119,12 +119,12 @@ splitModuleDecls path =
 splitModuleBy :: MonadClean m =>
                  (DeclClass -> S.ModuleName)
               -> ModuleInfo -> m [ModuleResult]
-splitModuleBy symbolToModule info@(m, _, _) =
+splitModuleBy symClassToModule info@(m, _, _) =
     do qLnPutStr ("Splitting " ++ prettyPrint (moduleName m))
        quietly $
          do univ <- getNames
             -- No good reason to use sets here
-            changes <- doSplit symbolToModule univ info >>= return . collisionCheck univ
+            changes <- doSplit symClassToModule univ info >>= return . collisionCheck univ
             Set.mapM_ doResult changes           -- Write the new modules
             Set.mapM_ reportResult changes
             -- Clean the new modules after all edits are finished
@@ -174,8 +174,8 @@ doSplit _ _ (A.XmlHybrid {}, _, _) = error "XmlPage"
 doSplit _ _ (A.Module _ _ _ _ [], _, _) = return Set.empty -- No declarations - nothing to split
 doSplit _ _ (A.Module _ _ _ _ [_], _, _) = return Set.empty -- One declaration - nothing to split (but maybe we should anyway?)
 doSplit _ _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
-doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _ _, _, _) =
-    do importChanges <- Set.mapM (updateImports m (sModuleName parent) symbolToModule) (Set.delete parent' univ)
+doSplit symClassToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _ _, _, _) =
+    do importChanges <- Set.mapM (updateImports m (sModuleName parent) symClassToModule) (Set.delete parent' univ)
        return $ unions [ -- The changes required to existing imports
                          importChanges
                          -- Compute the result of splitting the parent module
@@ -183,7 +183,7 @@ doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _
                          -- Did the parent module disappear, or was it replaced?
                        , if member parent' moduleNames then Set.empty else singleton (Removed parent') ]
     where
-      moduleNames = Set.map (symbolToModule . declClass m) (union (declared m) (exported m))
+      moduleNames = Set.map (symClassToModule . declClass m) (union (declared m) (exported m))
       -- The name of the module to be split
       parent'@(S.ModuleName parentName) = sModuleName parent
 
@@ -191,7 +191,7 @@ doSplit symbolToModule univ m@(A.Module _ (Just (A.ModuleHead _ parent _ _)) _ _
       -- will be in that module.  All of these declarations used to be
       -- in moduleName.
       moduleDeclMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
-      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (symbolToModule (declClass m sym)) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 m Map.empty
+      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (symClassToModule (declClass m sym)) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 m Map.empty
 
       -- Build a new module given its name and the list of
       -- declarations it should contain.
@@ -244,9 +244,9 @@ doSeps :: [(String, String)] -> String
 doSeps [] = ""
 doSeps ((_, hd) : tl) = hd <> concatMap (\ (a, b) -> a <> b) tl
 
--- | Update the imports to reflect the changed module names in symbolToModule.
+-- | Update the imports to reflect the changed module names in symClassToModule.
 updateImports :: MonadClean m => ModuleInfo -> S.ModuleName -> (DeclClass -> S.ModuleName) -> S.ModuleName -> m ModuleResult
-updateImports m old symbolToModule name =
+updateImports m old symClassToModule name =
     do let base = modulePathBase "hs" name
        -- qLnPutStr $ "updateImports " ++ show name
        (m', text', comments') <- parseModule base
@@ -269,10 +269,10 @@ updateImports m old symbolToModule name =
           concatMap (\ spec -> let xs = mapMaybe (\ sym -> Map.lookup (declClass m sym) moduleMap) (toList (symbols spec)) in
                                List.map (\ x -> (sImportDecl i) {S.importModule = x, S.importSpecs = Just (flag, [sImportSpec spec])}) xs) specs
 
-      moduleMap = symbolToModuleMap symbolToModule m
+      moduleMap = symClassToModuleMap symClassToModule m
 
-symbolToModuleMap :: (DeclClass -> S.ModuleName) -> ModuleInfo -> Map DeclClass S.ModuleName
-symbolToModuleMap symbolToModule m =
+symClassToModuleMap :: (DeclClass -> S.ModuleName) -> ModuleInfo -> Map DeclClass S.ModuleName
+symClassToModuleMap symClassToModule m =
     mp'
     where
       mp' = foldExports ignore2 (\ e _ _ _ r -> Set.fold f r (symbols e)) ignore2 m mp
@@ -280,7 +280,7 @@ symbolToModuleMap symbolToModule m =
       f sym mp'' =
           Map.insert
             (declClass m sym)
-            (symbolToModule (declClass m sym))
+            (symClassToModule (declClass m sym))
             mp''
 
 -- | What module should this symbol be moved to?
