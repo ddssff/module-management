@@ -22,7 +22,7 @@ import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 -- | Do a fold over the names that are declared in a declaration (not
 -- every name that appears, just the ones that the declaration is
--- causing to exist - what's the word for that?.  Reify!)
+-- causing to exist - what's the word for that?  Reify!)
 class FoldDeclared a where
     foldDeclared :: forall r. (Maybe S.Name -> r -> r) -> r -> a -> r
 

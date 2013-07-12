@@ -19,7 +19,7 @@ import Language.Haskell.Exts.Pretty (prettyPrint)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(..), ModuleName(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports, cleanResult)
-import Language.Haskell.Modules.Internal (doResult, ModuleResult(Modified, Created, Removed, Unchanged), MonadClean(getParams), Params(testMode))
+import Language.Haskell.Modules.Internal (doResult, ModuleResult(Modified, Created, Removed, Unchanged), MonadClean(getParams), Params(testMode), fixExport)
 import Language.Haskell.Modules.ModuVerse (ModuVerse, ModuleInfo, getNames, getInfo, parseModule, parseModule', moduleName)
 import Language.Haskell.Modules.SourceDirs (modulePath, modulePathBase)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
@@ -98,21 +98,6 @@ doModule inNames@(baseName : _) outName thisName =
            return $ if text' /= text then Modified thisName text' else Unchanged thisName
 doModule [] _ _ = error "doModule: no inputs"
 
--- | Update an export spec.  The only thing we might need to change is
--- re-exports, of the form "module Foo".
-fixExport :: [S.ModuleName] -> S.ModuleName -> S.ModuleName
-          -> A.ExportSpec l -> String -> String -> String -> Seq String -> Seq String
-fixExport inNames outName thisName e pref s suff r =
-    case sExportSpec e of
-      S.EModuleContents name
-          -- when building the output module, omit re-exports of input modules
-          | thisName == outName && elem name inNames -> r
-          -- when building other modules, update re-exports of input
-          -- modules to be a re-export of the output module.
-          | elem name inNames -> r |> pref <> prettyPrint (S.EModuleContents outName) <> suff
-          -- Anything else is unchanged
-      _ -> r |> pref <> s <> suff
-
 moduleImports inNames outName thisName x pref s suff r =
     case sImportDecl x of
       (S.ImportDecl {S.importModule = name})
@@ -156,6 +141,3 @@ fixReferences oldNames new x =
     where
       moveModuleName :: S.ModuleName -> S.ModuleName
       moveModuleName name@(S.ModuleName _) = if elem name oldNames then new else name
-
--- junk :: String -> Bool
--- junk s = isSuffixOf ".imports" s || isSuffixOf "~" s

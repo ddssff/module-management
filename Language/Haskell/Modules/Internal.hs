@@ -4,13 +4,12 @@
 module Language.Haskell.Modules.Internal
     ( runMonadClean
     , modifyParams
-    -- , parseFileWithComments
-    -- , parseFile
     , markForDelete
     , Params(..)
     , MonadClean(getParams, putParams)
     , ModuleResult(..)
     , doResult
+    , fixExport
     ) where
 
 import Control.Exception (SomeException, try)
@@ -18,14 +17,13 @@ import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, thro
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Map as Map (Map, empty)
+import Data.Monoid ((<>))
+import Data.Sequence as Seq (Seq, (|>))
 import Data.Set as Set (empty, insert, Set, toList)
---import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
---import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
---import Language.Haskell.Exts.Comments (Comment(..))
---import Language.Haskell.Exts.Extension (Extension)
---import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
---import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), ImportDecl)
+import qualified Language.Haskell.Exts.Annotated as A (ExportSpec, Module)
+import Language.Haskell.Exts.Annotated.Simplify (sExportSpec)
+import Language.Haskell.Exts.Pretty (prettyPrint)
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), ExportSpec(..), ImportDecl)
 import Language.Haskell.Modules.ModuVerse (ModuVerse(..), ModuVerseState, moduVerseInit,
                                            putName, delName, loadModule, unloadModule)
 import Language.Haskell.Modules.SourceDirs (modulePath, modulePathBase)
@@ -159,3 +157,18 @@ doResult x@(Created name text) =
        info <- loadModule rel
        putName name info
        return x
+
+-- | Update an export spec.  The only thing we might need to change is
+-- re-exports, of the form "module Foo".
+fixExport :: [S.ModuleName] -> S.ModuleName -> S.ModuleName
+          -> A.ExportSpec l -> String -> String -> String -> Seq String -> Seq String
+fixExport inNames outName thisName e pref s suff r =
+    case sExportSpec e of
+      S.EModuleContents name
+          -- when building the output module, omit re-exports of input modules
+          | thisName == outName && elem name inNames -> r
+          -- when building other modules, update re-exports of input
+          -- modules to be a re-export of the output module.
+          | elem name inNames -> r |> pref <> prettyPrint (S.EModuleContents outName) <> suff
+          -- Anything else is unchanged
+      _ -> r |> pref <> s <> suff
