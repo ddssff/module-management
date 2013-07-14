@@ -5,7 +5,7 @@ module Language.Haskell.Modules.Common
     , withCurrentDirectory
     ) where
 
-import "MonadCatchIO-mtl" Control.Monad.CatchIO (MonadCatchIO, bracket)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO (bracket, MonadCatchIO)
 import Control.Monad.Trans (liftIO)
 import Data.List (groupBy, sortBy)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)

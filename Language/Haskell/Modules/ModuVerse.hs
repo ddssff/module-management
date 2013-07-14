@@ -20,25 +20,21 @@ module Language.Haskell.Modules.ModuVerse
     , unloadModule
     ) where
 
-import Debug.Trace
-
 import Control.Applicative ((<$>))
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
-import Control.Monad.Trans (MonadIO, liftIO)
-import Data.Map as Map (Map, empty, insert, lookup, keys, delete)
+import Control.Monad.Trans (liftIO, MonadIO)
+import Data.Map as Map (delete, empty, insert, keys, lookup, Map)
 import Data.Maybe (fromMaybe)
-import Data.Set as Set (Set, fromList)
+import Data.Set as Set (fromList, Set)
 import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
 import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Extension (Extension)
-import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
+import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import Language.Haskell.Modules.SourceDirs (SourceDirs(..), RelPath(..), PathKey(..), pathKey)
+import Language.Haskell.Modules.SourceDirs (pathKey, PathKey(..), RelPath(..), SourceDirs(..))
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
-import System.Directory (canonicalizePath, doesFileExist, getCurrentDirectory)
-import System.FilePath ((</>), (<.>))
 import System.IO.Error (isDoesNotExistError, isUserError)
 
 deriving instance Ord Comment
@@ -140,16 +136,3 @@ parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Modul
 parseFileWithComments path =
     do exts <- getExtensions
        liftIO (A.parseFileWithComments (Exts.defaultParseMode {Exts.extensions = exts, Exts.parseFilename = path}) path)
-
-#if 0
-    do verse <- getModuVerse
-       key <- pathKey path
-       case Map.lookoup key (moduleInfo_ verse) of
-         Just x -> return x
-         Nothing ->
-             do text <- liftIO $ readFile path
-                (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
-                modifyModuVerse (\ verse -> verse { moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ verse)
-                                                  , moduleNameMap_ = Map.insertWith union (moduleName parsed) (singleton key) (moduleNameMap_ verse) })
-                return (parsed, text, comments)
-#endif

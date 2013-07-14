@@ -5,10 +5,10 @@ import Data.Set.Extra as Set (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (modifyParams, Params(testMode), runMonadClean)
-import Language.Haskell.Modules.ModuVerse (putName, parseModule)
+import Language.Haskell.Modules.ModuVerse (parseModule, putName)
 import Language.Haskell.Modules.Params (modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (putDirs, modulePath, modulePathBase)
-import Language.Haskell.Modules.Split (DeclClass(..), splitModule, splitModuleDecls, defaultSymbolToModule)
+import Language.Haskell.Modules.SourceDirs (modulePathBase, SourceDirs(putDirs))
+import Language.Haskell.Modules.Split (DeclClass(..), defaultSymbolToModule, splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
 import Prelude hiding (writeFile)
@@ -26,7 +26,7 @@ split1 :: Test
 split1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/debian/ tmp"
-         runMonadClean $ noisily $ noisily $
+         _ <- runMonadClean $ noisily $ noisily $
            do putDirs ["tmp"]
               Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) repoModules
               splitModuleDecls "Debian/Repo/Package.hs"
@@ -37,7 +37,7 @@ split2a :: Test
 split2a =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
-       runMonadClean $ noisily $ noisily $
+       _ <- runMonadClean $ noisily $ noisily $
          do modifyParams (\ p -> p {testMode = True})
             putDirs ["tmp"]
             parseModule (modulePathBase "hs" (S.ModuleName "Split")) >>= putName (S.ModuleName "Split")
@@ -49,7 +49,7 @@ split2b :: Test
 split2b =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
-       runMonadClean $ noisily $ noisily $
+       _ <- runMonadClean $ noisily $ noisily $
          do putDirs ["tmp"]
             parseModule (modulePathBase "hs" (S.ModuleName "Split")) >>= putName (S.ModuleName "Split")
             splitModuleDecls "Split.hs"
@@ -64,7 +64,7 @@ split4 :: Test
 split4 =
     TestLabel "Split4" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
-       withCurrentDirectory "tmp" $
+       _ <- withCurrentDirectory "tmp" $
          runMonadClean $ noisily $ noisily $ modifyTestMode (const True) >> parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>= putName (S.ModuleName "Split4") >> splitModuleDecls "Split4.hs"
        result <- diff "testdata/split4-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
@@ -73,7 +73,7 @@ split4b :: Test
 split4b =
     TestLabel "Split4b" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
-       withCurrentDirectory "tmp" $
+       _ <- withCurrentDirectory "tmp" $
          runMonadClean $ noisily $ noisily $ modifyTestMode (const True) >> parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>= putName (S.ModuleName "Split4") >> splitModule f "Split4.hs"
        result <- diff "testdata/split4b-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
@@ -87,7 +87,7 @@ split4c :: Test
 split4c =
     TestLabel "Split4b" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
-       withCurrentDirectory "tmp" $
+       _ <- withCurrentDirectory "tmp" $
          runMonadClean $ noisily $ noisily $ modifyTestMode (const True) >> parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>= putName (S.ModuleName "Split4") >> splitModule f "Split4.hs"
        result <- diff "testdata/split4c-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
@@ -101,7 +101,7 @@ split5 :: Test
 split5 =
     TestLabel "Split5" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split5/ tmp"
-       withCurrentDirectory "tmp" $
+       _ <- withCurrentDirectory "tmp" $
          runMonadClean $ noisily $ noisily $
            List.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name)
                       [S.ModuleName "A",

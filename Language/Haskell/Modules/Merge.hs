@@ -11,17 +11,18 @@ import Data.Generics (Data, everywhere, mkT, Typeable)
 import Data.List as List (intercalate, map)
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.Monoid ((<>), mempty)
-import Data.Sequence as Seq (Seq, (|>), (<|), null)
+import Data.Sequence as Seq (Seq, (<|), null, (|>))
 import Data.Set as Set (fromList, toList, union)
-import Language.Haskell.Exts.Annotated.Simplify (sDecl, sExportSpec, sImportDecl, sModuleName)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpecList(ExportSpecList), ImportDecl(..), Module(Module), ModuleHead(ModuleHead))
+import Language.Haskell.Exts.Annotated.Simplify (sDecl, sImportDecl, sModuleName)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl), Module(Module))
 import Language.Haskell.Exts.Pretty (prettyPrint)
-import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ImportDecl(..), ModuleName(..))
+import Language.Haskell.Exts.SrcLoc (SrcInfo)
+import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, importModule), ModuleName(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
-import Language.Haskell.Modules.Imports (cleanImports, cleanResult)
-import Language.Haskell.Modules.Internal (doResult, ModuleResult(Modified, Created, Removed, Unchanged), MonadClean(getParams), Params(testMode), fixExport)
-import Language.Haskell.Modules.ModuVerse (ModuVerse, ModuleInfo, getNames, getInfo, parseModule, parseModule', moduleName)
-import Language.Haskell.Modules.SourceDirs (modulePath, modulePathBase)
+import Language.Haskell.Modules.Imports (cleanResult)
+import Language.Haskell.Modules.Internal (doResult, fixExport, ModuleResult(..), MonadClean)
+import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo, parseModule, parseModule')
+import Language.Haskell.Modules.SourceDirs (modulePathBase)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 
 -- | Merge the declarations from several modules into a single new
@@ -52,12 +53,12 @@ doModule :: MonadClean m =>
          -> S.ModuleName    -- The name of the merge destination module
          -> S.ModuleName    -- The module we will work on
          -> m ModuleResult
-doModule inNames@(baseName : _) outName thisName =
+doModule inNames@(_ : _) outName thisName =
     do -- The new module will be based on the first input module,
        -- though its name will be changed to outModule.
-       inInfo@(firstInfo@(m, text, _) : _) <-
+       inInfo@(firstInfo@(_, text, _) : _) <-
            List.mapM (\ name -> parseModule (modulePathBase "hs" name)) inNames
-             `IO.catch` (\ (e :: IOError) -> error $ "mergeModules - failure reading input modules: " ++ show inNames)
+             `IO.catch` (\ (_ :: IOError) -> error $ "mergeModules - failure reading input modules: " ++ show inNames)
        outInfo <- parseModule' (modulePathBase "hs" outName)
        thisInfo <- parseModule' (modulePathBase "hs" thisName)
        let baseInfo = fromMaybe firstInfo thisInfo
@@ -80,13 +81,13 @@ doModule inNames@(baseName : _) outName thisName =
                                 -- The output module gets modified
                                 -- copies of all the input module
                                 -- export lists.
-                                intercalate sep $ List.map (\ (mergeName, info) -> fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 info mempty)) (zip inNames inInfo)
+                                intercalate sep $ List.map (\ (_, info) -> fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 info mempty)) (zip inNames inInfo)
                            else fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 baseInfo mempty)
                        rparen = fold (foldExports ignore2 ignore (<|) baseInfo mempty) in
                    lparen <> newExports <> rparen
                imports =
                    if thisName == outName
-                   then let pre = fold (foldImports (\ _ pref s suff r -> if Seq.null r then r |> pref else r) baseInfo mempty)
+                   then let pre = fold (foldImports (\ _ pref _ _ r -> if Seq.null r then r |> pref else r) baseInfo mempty)
                             newImports = unlines (List.map (\ info -> fold (foldImports (moduleImports inNames outName thisName) info mempty)) inInfo) in
                         pre <> newImports
                    else fold (foldImports (moduleImports inNames outName thisName) baseInfo mempty)
@@ -98,6 +99,9 @@ doModule inNames@(baseName : _) outName thisName =
            return $ if text' /= text then Modified thisName text' else Unchanged thisName
 doModule [] _ _ = error "doModule: no inputs"
 
+moduleImports :: SrcInfo loc =>
+                 [S.ModuleName] -> S.ModuleName -> S.ModuleName
+              -> A.ImportDecl loc -> String -> String -> String -> Seq String -> Seq String
 moduleImports inNames outName thisName x pref s suff r =
     case sImportDecl x of
       (S.ImportDecl {S.importModule = name})
@@ -133,6 +137,7 @@ moduleDecls inNames outName thisName info@(A.Module _ _ _ imports _, _, _) =
             True -> Just (sModuleName a)
             _ -> Nothing
       qualifiedImportName _ = Nothing
+moduleDecls _ _ _ (m, _, _) = error $ "Unsupported module type: " ++ show m
 
 -- | Change any ModuleName in 'old' to 'new'.
 fixReferences :: (Data a, Typeable a) => [S.ModuleName] -> S.ModuleName -> a -> a

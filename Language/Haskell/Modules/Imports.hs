@@ -11,7 +11,7 @@ import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
 import Data.Foldable (fold)
 import Data.Function (on)
-import Data.List (find, groupBy, intercalate, nub, nubBy, sortBy)
+import Data.List (find, groupBy, intercalate, nub, sortBy)
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((|>))
@@ -20,19 +20,18 @@ import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, 
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleName(ModuleName), QName(..), Type(..))
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo, SrcLoc(..))
-import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ImportSpec(..), ModuleName(..), Name(..))
+import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
+import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(..), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
-import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, parseModule, getExtensions, modifyExtensions, loadModule)
-import Language.Haskell.Modules.SourceDirs (getDirs, putDirs, modifyDirs, modulePath, modulePathBase, RelPath(..), PathKey(..), pathKey)
+import Language.Haskell.Modules.ModuVerse (getExtensions, loadModule, modifyExtensions, ModuleInfo, moduleName, parseModule)
+import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, pathKey, PathKey(unPathKey), RelPath(..), SourceDirs(getDirs, putDirs))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
 import Language.Haskell.Modules.Util.Symbols (symbols)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 import System.Exit (ExitCode(..))
-import System.FilePath ((<.>))
 import System.Process (readProcessWithExitCode, showCommandForUser)
 
 {-
@@ -96,7 +95,7 @@ dumpImports path =
 -- that are types that appear in standalone instance derivations so
 -- their members are imported too.
 checkImports :: MonadClean m => RelPath -> S.ModuleName -> ModuleInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
-checkImports path name@(S.ModuleName name') m extraImports =
+checkImports path name@(S.ModuleName _) m extraImports =
     do let importsPath = modulePathBase "imports" name
        -- The .imports file will appear in the real current directory,
        -- ignore the source dir path.  This may change in future
@@ -110,11 +109,13 @@ checkImports path name@(S.ModuleName name') m extraImports =
                                                           throw . userError $ here ++ ": " ++ show e)))
        updateSource path m newImports name extraImports
 
+withPackageImportsExtension :: MonadClean m => m a -> m a
 withPackageImportsExtension a =
     bracket (getExtensions)
             (modifyExtensions . const)
             (\ saved -> modifyExtensions (const (PackageImports : saved)) >> a)
 
+withDot :: MonadClean m => m a -> m a
 withDot a =
     bracket (getDirs)
             (modifyDirs . const)
@@ -320,7 +321,7 @@ cleanResult x =
              case mode of
                True -> return text
                False -> do let base = modulePathBase "hs" name
-                           cleanImports (unRelPath base)
+                           _cleanResult <- cleanImports (unRelPath base)
                            (_, text', _) <- loadModule base
                            return text'
 {-

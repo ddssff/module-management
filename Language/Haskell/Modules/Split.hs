@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables, TupleSections #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.Split
     ( DeclClass(..)
     , splitModule
@@ -8,29 +8,27 @@ module Language.Haskell.Modules.Split
     ) where
 
 import Control.Exception (throw)
-import Control.Monad (when)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
 import Data.Foldable as Foldable (fold)
-import Data.List as List (filter, intercalate, map, nub, group, sort)
-import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, lookup, Map, mapWithKey, fromSet)
+import Data.List as List (filter, group, intercalate, map, nub, sort)
+import Data.Map as Map (delete, elems, empty, filter, fromSet, insert, insertWith, lookup, Map, mapWithKey)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((<|), (|>))
-import Data.Set as Set (delete, difference, empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
+import Data.Set as Set (empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
 import Data.Set.Extra as Set (gFind, mapM, mapM_)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, ImportDecl(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
-import Language.Haskell.Exts.Annotated.Simplify (sImportDecl, sImportSpec, sExportSpec, sModuleName, sName)
+import Language.Haskell.Exts.Annotated.Simplify (sExportSpec, sImportDecl, sImportSpec, sModuleName, sName)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..), SrcLoc(..))
+import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResult)
-import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(testMode, extraImports))
-import Language.Haskell.Modules.ModuVerse (ModuleInfo, moduleName, getNames, parseModule)
-import Language.Haskell.Modules.SourceDirs (RelPath(..), modulePath, modulePathBase)
+import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(extraImports))
+import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo, moduleName, parseModule)
+import Language.Haskell.Modules.SourceDirs (modulePathBase, RelPath(RelPath))
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
-import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
 import Prelude hiding (writeFile)
 import System.FilePath ((<.>))
@@ -52,21 +50,21 @@ declClass m mName =
       unknown _ (Just x) = x
       unknown Nothing _ = error "declClass Nothing"
       unknown (Just x) _ = Unknown x
-      mp = Map.fromSet declClass' (union declared exported)
+      mp = Map.fromSet declClass' (union declaredSymbols exportedSymbols)
       declClass' Nothing = Instance
       declClass' x@(Just name) =
-          if member x exported
-          then if member x declared
+          if member x exportedSymbols
+          then if member x declaredSymbols
                then Exported name
                else ReExported name -- Exported but not declared - must come from an import
           else Internal name        -- Not exported
-      declared = foldDecls (\ d _pref _s _suff r -> Set.union (symbols d) r) ignore2 m Set.empty
-      exported =
+      declaredSymbols = foldDecls (\ d _pref _s _suff r -> Set.union (symbols d) r) ignore2 m Set.empty
+      exportedSymbols =
         case hasExportList m of
-          False -> declared
+          False -> declaredSymbols
           True -> union (foldExports ignore2 (\ e _pref _s _suff r -> Set.union (symbols e) r) ignore2 m Set.empty)
                         -- Any instances declared are exported regardless of the export list
-                        (if member Nothing declared then singleton Nothing else Set.empty)
+                        (if member Nothing declaredSymbols then singleton Nothing else Set.empty)
         where
           hasExportList :: ModuleInfo -> Bool
           hasExportList (A.Module _ Nothing _ _ _, _, _) = False
@@ -76,10 +74,6 @@ declClass m mName =
 isReExported :: DeclClass -> Bool
 isReExported (ReExported _) = True
 isReExported _ = False
-
-isCreated :: ModuleResult -> Bool
-isCreated (Created _ _) = True
-isCreated _ = False
 
 -- | Split each of a module's declarations into a new module.  Update
 -- the imports of all the modules in the moduVerse to reflect the split.
@@ -129,8 +123,7 @@ splitModuleBy _ (m@(A.Module _ _ _ _ []), _, _) = return [Unchanged (moduleName 
 splitModuleBy _ (m@(A.Module _ _ _ _ [_]), _, _) = return [Unchanged (moduleName m)] -- One declaration - nothing to split (but maybe we should anyway?)
 splitModuleBy _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
 splitModuleBy symClassToModule inInfo@(m, _, _) =
-    do let name = moduleName m
-       qLnPutStr ("Splitting " ++ prettyPrint (moduleName m))
+    do qLnPutStr ("Splitting " ++ prettyPrint (moduleName m))
        quietly $
          do eiMap <- getParams >>= return . extraImports
             -- The name of the module to be split
@@ -210,7 +203,7 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
           case (oldImportText, newImports'') of
             ([], "") -> "\n"
             ([], s) -> s
-            ((pref, s, suff) : more, i) -> pref <> i <> s <> suff ++ concatMap (\ (pref, s, suff) -> pref <> s <> suff) more
+            ((pref, s, suff) : more, i) -> pref <> i <> s <> suff ++ concatMap (\ (pref', s', suff') -> pref' <> s' <> suff') more
           where
             oldImportText = foldImports (\ _ pref s suff r -> r ++ [(pref, s, suff)]) inInfo []
             newImports'' =
@@ -237,6 +230,7 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
 
       moduleExports (A.Module _ Nothing _ _ _, _, _) = Nothing
       moduleExports (A.Module _ (Just (A.ModuleHead _ _ _ x)) _ _ _, _, _) = x
+      moduleExports (_, _, _) = error "Unsupported module type"
 
       -- Update the imports to reflect the changed module names in symClassToModule.
       -- Update re-exports of the split module.
@@ -244,12 +238,12 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
       updateImports oldInfo =
           Foldable.fold (foldModule echo2 echo echo echo echo2
                                     (\ e pref s suff r -> r |> pref <> fixExport s (sExportSpec e) <> suff) echo2
-                                    (\ i pref s suff r -> r |> pref <> updateImportDecl eiMap s i <> suff)
+                                    (\ i pref s suff r -> r |> pref <> updateImportDecl s i <> suff)
                                     echo echo2 oldInfo mempty)
           where
             -- If we see the input module re-exported, replace with all the output modules
             fixExport :: String -> S.ExportSpec -> String
-            fixExport s x@(S.EModuleContents m) | m == inName = intercalate sep (List.map (prettyPrint . S.EModuleContents) (toList outNames))
+            fixExport _ (S.EModuleContents m) | m == inName = intercalate sep (List.map (prettyPrint . S.EModuleContents) (toList outNames))
             fixExport s _ = s
 
             sep = exportSep "\n    , " oldInfo
@@ -265,8 +259,8 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
       moduleDeclMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
       moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (symClassToModule (declClass inInfo sym)) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 inInfo Map.empty
 
-      updateImportDecl :: Map S.ModuleName (Set S.ImportDecl) -> String -> A.ImportDecl SrcSpanInfo -> String
-      updateImportDecl eiMap s i =
+      updateImportDecl :: String -> A.ImportDecl SrcSpanInfo -> String
+      updateImportDecl s i =
           if sModuleName (A.importModule i) == inName
           then intercalate "\n" (List.map prettyPrint (updateImportSpecs i (A.importSpecs i) ++ instanceImports thisName eiMap))
           else s
@@ -286,15 +280,15 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
 -- prefix and the last suffix, if all the remaining separators are
 -- equal return it, otherwise return the default argument.
 exportSep :: String -> ModuleInfo -> String
-exportSep def info =
+exportSep defsep info =
     case seps of
-      [] -> def
-      (x : xs) -> case (group . sort) xs of
+      [] -> defsep
+      (_ : xs) -> case (group . sort) xs of
                     [[x]] -> x -- We could choose the most common one here
-                    _ -> def
+                    _ -> defsep
     where
       seps = foldModule ignore2 ignore ignore ignore ignore2
-                        (\ _ pref s suff r -> case r of
+                        (\ _ pref _ suff r -> case r of
                                                 [] -> [suff]
                                                 (suff' : xs) -> suff : (pref ++ suff') : xs)
                         ignore2 ignore ignore ignore2 info []
@@ -343,6 +337,7 @@ defaultSymbolToModule (S.ModuleName parentModuleName) name =
                                          Instance -> "Instances"
                                          ReExported _ -> "ReExported"
                                          Internal x -> "Internal" <.> f x
+                                         Unknown x -> "Unknown" <.> f x
                                          Exported x -> f x)
     where
       f (S.Symbol s) = g s
@@ -374,6 +369,6 @@ justs = Set.fold (\ mx s -> maybe s (`Set.insert` s) mx) Set.empty
 setAny :: Ord a => (a -> Bool) -> Set a -> Bool
 setAny f s = not (Set.null (Set.filter f s))
 
-setMapMaybe :: Ord b => (a -> Maybe b) -> Set a -> Set b
-setMapMaybe p s = Set.fold f Set.empty s
-    where f x s' = maybe s' (\ y -> Set.insert y s') (p x)
+-- setMapMaybe :: Ord b => (a -> Maybe b) -> Set a -> Set b
+-- setMapMaybe p s = Set.fold f Set.empty s
+--     where f x s' = maybe s' (\ y -> Set.insert y s') (p x)

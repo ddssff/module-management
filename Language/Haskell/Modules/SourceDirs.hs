@@ -11,23 +11,11 @@ module Language.Haskell.Modules.SourceDirs
     , findSourcePath
     ) where
 
-import Control.Applicative ((<$>))
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
-import Control.Monad.Trans (MonadIO, liftIO)
-import Data.Map as Map (Map, empty, insert, lookup, keys, delete)
-import Data.Maybe (fromMaybe)
-import Data.Set as Set (Set, fromList)
-import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
-import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
-import Language.Haskell.Exts.Comments (Comment(..))
-import Language.Haskell.Exts.Extension (Extension)
-import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, ParseMode(extensions, parseFilename), ParseResult, fromParseResult)
-import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
+import Control.Monad.Trans (liftIO, MonadIO)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.Directory (canonicalizePath, doesFileExist, getCurrentDirectory)
-import System.FilePath ((</>), (<.>))
-import System.IO.Error (isDoesNotExistError, isUserError)
+import System.FilePath ((<.>), (</>))
 
 class MonadCatchIO m => SourceDirs m where
     putDirs :: [FilePath] -> m ()

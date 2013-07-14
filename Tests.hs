@@ -4,7 +4,7 @@
 import Control.Exception (SomeException, try)
 import Control.Monad.State (StateT)
 import Data.List (isPrefixOf)
-import Data.Set.Extra as Set (Set, mapM_)
+import Data.Set.Extra as Set (mapM_, Set)
 import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
@@ -13,10 +13,9 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules (mergeModules, splitModuleDecls)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Internal (Params, MonadClean, runMonadClean)
-import Language.Haskell.Modules.ModuVerse (putName, modifyExtensions, parseModule)
-import Language.Haskell.Modules.Params (modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (modulePath, modulePathBase)
+import Language.Haskell.Modules.Internal (MonadClean, Params, runMonadClean)
+import Language.Haskell.Modules.ModuVerse (modifyExtensions, parseModule, putName)
+import Language.Haskell.Modules.SourceDirs (modulePathBase)
 import Language.Haskell.Modules.Util.QIO (noisily, qLnPutStr)
 import Language.Haskell.Modules.Util.Test (diff', logicModules, rsync)
 import System.Environment (getArgs)
@@ -26,7 +25,7 @@ import Test.HUnit (assertEqual, Counts(..), runTestTT, Test(TestList, TestCase, 
 import qualified Tests.Fold as Fold (tests)
 import qualified Tests.Imports as Imports (tests)
 import qualified Tests.Merge as Merge (tests)
-import qualified Tests.Split as Split (tests, slow)
+import qualified Tests.Split as Split (slow, tests)
 
 main :: IO ()
 main =
@@ -93,14 +92,14 @@ test2a u =
             -- circular imports created when we merge.
             Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) u
             qLnPutStr "Splitting module Literal"
-            splitModuleDecls "Data/Logic/Classes/Literal.hs"
+            _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
             return ()
 
 test2b :: MonadClean m => Set ModuleName -> m ()
 test2b u =
          do modifyExtensions (++ [MultiParamTypeClasses])
             Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) u
-            splitModuleDecls "Data/Logic/Classes/Literal.hs"
+            _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules
                    [ModuleName "Data.Logic.Classes.FirstOrder",
                     ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
@@ -113,7 +112,7 @@ test2c :: MonadClean m => Set ModuleName -> m ()
 test2c u =
          do modifyExtensions (++ [MultiParamTypeClasses])
             Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) u
-            splitModuleDecls "Data/Logic/Classes/Literal.hs"
+            _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules
                    [ModuleName "Data.Logic.Classes.FirstOrder",
                     ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
