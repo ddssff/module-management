@@ -26,6 +26,7 @@ import qualified Tests.Fold as Fold (tests)
 import qualified Tests.Imports as Imports (tests)
 import qualified Tests.Merge as Merge (tests)
 import qualified Tests.Split as Split (slow, tests)
+import qualified Tests.SrcLoc as SrcLoc (tests)
 
 main :: IO ()
 main =
@@ -51,6 +52,7 @@ withTestData f path = withCurrentDirectory "testdata/debian" $
 
 tests :: Test
 tests = TestList [ Main.test1
+                 , TestLabel "SrcLoc" SrcLoc.tests
                  , TestLabel "Fold" Fold.tests
                  , TestLabel "Imports" Imports.tests
                  -- If split-merge-merge fails try split and split-merge.

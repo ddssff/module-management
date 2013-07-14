@@ -16,7 +16,7 @@ import System.Process (readProcessWithExitCode)
 import Test.HUnit (assertEqual, Test(..))
 
 tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test2, test3, test4, test5, test6])
+tests = TestLabel "Clean" (TestList [test1, test2, test3, test4, test5, test6, test7])
 
 test1 :: Test
 test1 =
@@ -107,3 +107,12 @@ test6 =
           _ <- withCurrentDirectory "tmp" (runMonadClean (modifyTestMode (const True) >> cleanImports "EndComment.hs"))
           (_, out, _) <- readProcessWithExitCode "diff" ["-ru", "imports6-expected", "tmp"] ""
           assertEqual "comment at end" "" out)
+
+-- Clean a file with tabs
+test7 :: Test
+test7 =
+    TestLabel "imports7" $ TestCase
+      (do _ <- rsync "testdata/imports7" "tmp"
+          _ <- withCurrentDirectory "tmp" (runMonadClean (putDirs [".", ".."] >> modifyTestMode (const True) >> cleanImports "CLI.hs"))
+          (_, out, _) <- readProcessWithExitCode "diff" ["-ru", "imports7-expected", "tmp"] ""
+          assertEqual "CLI" "" out)

@@ -10,7 +10,6 @@ module Language.Haskell.Modules.Util.SrcLoc
     , textSpan
     , srcPairText
     , makeTree
-    , tests
     ) where
 
 import Control.Monad.State (get, put, runState, State)
@@ -20,7 +19,6 @@ import Data.Tree (Tree(Node), unfoldTree)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ModuleHead(..), ModuleName(..), ModulePragma(..), WarningText(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Prelude hiding (rem)
-import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 -- | A version of lines that preserves the presence or absence of a
 -- terminating newline
@@ -163,31 +161,13 @@ increaseSrcLoc "" l = l
 increaseSrcLoc ('\n' : s) (SrcLoc f y _) = increaseSrcLoc s (SrcLoc f (y + 1) 1)
 increaseSrcLoc (_ : s) (SrcLoc f y x) = increaseSrcLoc s (SrcLoc f y (x + 1))
 
-tests :: Test
-tests = TestList [test1, test2, test3, test4, test5]
-
-test1 :: Test
-test1 = TestCase (assertEqual "srcPairTextTail1" "hi\tjkl\n" (snd (srcPairText (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 2) "abc\tdef\nghi\tjkl\n")))
-test2 :: Test
-test2 = TestCase (assertEqual "srcPairTextTail2" "kl\n" (snd (srcPairText (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 9) "abc\tdef\nghi\tjkl\n")))
-test3 :: Test
-test3 = TestCase (assertEqual "srcPairTextHead1" "abc\tdef\ng" (fst (srcPairText (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 2) "abc\tdef\nghi\tjkl\n")))
-test4 :: Test
-test4 = TestCase (assertEqual "srcPairTextHead21" "abc\tdef\nghi\tj" (fst (srcPairText (SrcLoc "<unknown>.hs" 1 10) (SrcLoc "<unknown>.hs" 2 9) "abc\tdef\nghi\tjkl\n")))
-test5 :: Test
-test5 = TestCase (assertEqual "srcPairTextTail3"
-                              "{-# OPTIONS_GHC -fno-warn-orphans #-}\nmodule Debian.Repo.Orphans where\n\nimport Data.Text (Text)\nimport qualified Debian.Control.Text as T\n\nderiving instance Show (T.Field' Text)\nderiving instance Ord (T.Field' Text)\nderiving instance Show T.Paragraph\nderiving instance Ord T.Paragraph\n"
-                              (snd
-                               (srcPairText
-                                 (SrcLoc "<unknown>.hs" 1 77)
-                                 (SrcLoc "<unknown>.hs" 2 1)
-                                 "\n{-# OPTIONS_GHC -fno-warn-orphans #-}\nmodule Debian.Repo.Orphans where\n\nimport Data.Text (Text)\nimport qualified Debian.Control.Text as T\n\nderiving instance Show (T.Field' Text)\nderiving instance Ord (T.Field' Text)\nderiving instance Show T.Paragraph\nderiving instance Ord T.Paragraph\n")))
-
 textSpan :: FilePath -> String -> SrcSpanInfo
 textSpan path s =
     let end = textEndLoc path s in
     SrcSpanInfo (SrcSpan {srcSpanFilename = path, srcSpanStartLine = 1, srcSpanStartColumn = 1, srcSpanEndLine = srcLine end, srcSpanEndColumn = srcColumn end}) []
 
+-- | Given a beginning and end location, and a string which starts at
+-- the beginning location, return a (beforeend,afterend) pair.
 srcPairText :: SrcLoc -> SrcLoc -> String -> (String, String)
 srcPairText b0 e0 s0 =
     fst $ runState f (b0, e0, "", s0)
@@ -206,19 +186,16 @@ srcPairText b0 e0 s0 =
                         -- was present.
                         case s of
                           "" -> return (r, s)
-                          ('\t' : s') -> put (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}, e, r ++ "\t", s') >> f
                           (c : s') -> put (b {srcColumn = srcColumn b + 1}, e, r ++ [c], s') >> f
                      _ -> error "Impossible: span stopped at the wrong character"
                (_, True) ->
                    case s of
                      [] -> error $ "srcPairText: " ++ show (b0, e0, s0)
-                     ('\t' : s') -> put (b {srcColumn = ((srcColumn b + 7) `div` 8) * 8}, e, r ++ ['\t'], s') >> f
                      (c : s') -> put (b {srcColumn = srcColumn b + 1}, e, r ++ [c], s') >> f
                _ ->
                    return (r, s)
 
 -- | Build a tree of SrcSpanInfo 
-
 makeTree :: (HasSpanInfo a, Show a, Eq a, Ord a) => Set a -> Tree a
 makeTree s =
     case findRoots (toList s) of
