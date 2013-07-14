@@ -24,7 +24,7 @@ test1 =
       (do rsync "testdata/debian" "tmp"
           let name = S.ModuleName "Debian.Repo.Types.PackageIndex"
           let base = modulePathBase "hs" name
-          _ <- withCurrentDirectory "tmp" (runMonadClean (cleanImports (unRelPath base)))
+          _ <- withCurrentDirectory "tmp" (runMonadClean (cleanImports [unRelPath base]))
           (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> unRelPath base, "tmp" </> unRelPath base] ""
           assertEqual "cleanImports"
                          (ExitFailure 1,
@@ -53,7 +53,7 @@ test2 =
       (do rsync "testdata/debian" "tmp"
           let name = S.ModuleName "Debian.Repo.PackageIndex"
               base = modulePathBase "hs" name
-          _ <- withCurrentDirectory "tmp" (runMonadClean (cleanImports (unRelPath base)))
+          _ <- withCurrentDirectory "tmp" (runMonadClean (cleanImports [unRelPath base]))
           (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> unRelPath base, "tmp" </> unRelPath base] ""
           assertEqual "cleanImports" (ExitSuccess, "", "") (code, out, err))
 
@@ -62,7 +62,7 @@ test3 :: Test
 test3 =
     TestLabel "imports3" $ TestCase
       (rsync "testdata/imports3" "tmp" >>
-       runMonadClean (putDirs ["tmp"] >> cleanImports "NotMain.hs") >>
+       runMonadClean (putDirs ["tmp"] >> cleanImports ["NotMain.hs"]) >>
        assertEqual "module name" () ())
 
 -- | Preserve imports with a "hiding" clause
@@ -70,7 +70,7 @@ test4 :: Test
 test4 =
     TestLabel "imports4" $ TestCase
       (rsync "testdata/imports4" "tmp" >>
-       runMonadClean (putDirs ["tmp"] >> cleanImports "Hiding.hs") >>
+       runMonadClean (putDirs ["tmp"] >> cleanImports ["Hiding.hs"]) >>
        -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
        assertEqual "module name" () ())
 
@@ -82,7 +82,7 @@ test5 =
           _ <- runMonadClean
                  (putDirs ["tmp"] >>
                   modifyExtensions (++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
-                  cleanImports "Deriving.hs")
+                  cleanImports ["Deriving.hs"])
           (code, out, err) <- diff "testdata/imports5" "tmp"
           assertEqual "standalone deriving"
                       (ExitFailure 1,
@@ -104,7 +104,7 @@ test6 :: Test
 test6 =
     TestLabel "imports6" $ TestCase
       (do _ <- rsync "testdata/imports6" "tmp"
-          _ <- withCurrentDirectory "tmp" (runMonadClean (modifyTestMode (const True) >> cleanImports "EndComment.hs"))
+          _ <- withCurrentDirectory "tmp" (runMonadClean (modifyTestMode (const True) >> cleanImports ["EndComment.hs"]))
           (_, out, _) <- readProcessWithExitCode "diff" ["-ru", "imports6-expected", "tmp"] ""
           assertEqual "comment at end" "" out)
 
@@ -113,6 +113,6 @@ test7 :: Test
 test7 =
     TestLabel "imports7" $ TestCase
       (do _ <- rsync "testdata/imports7" "tmp"
-          _ <- withCurrentDirectory "tmp" (runMonadClean (putDirs [".", ".."] >> modifyTestMode (const True) >> cleanImports "CLI.hs"))
+          _ <- withCurrentDirectory "tmp" (runMonadClean (putDirs [".", ".."] >> modifyTestMode (const True) >> cleanImports ["CLI.hs"]))
           (_, out, _) <- readProcessWithExitCode "diff" ["-ru", "imports7-expected", "tmp"] ""
           assertEqual "CLI" "" out)

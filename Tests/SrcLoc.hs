@@ -2,12 +2,7 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Tests.SrcLoc where
 
-import Control.Monad.State (get, put, runState, State)
-import Data.List (groupBy, partition, sort, intercalate)
-import Data.Set (Set, toList)
-import Data.Tree (Tree(Node), unfoldTree)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ModuleHead(..), ModuleName(..), ModulePragma(..), WarningText(..))
-import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
+import Language.Haskell.Exts.SrcLoc (SrcLoc(..))
 import Language.Haskell.Modules.Util.SrcLoc (srcPairText)
 import Prelude hiding (rem)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))

@@ -79,7 +79,7 @@ dir xs =
 
 clean :: MonadClean m => [FilePath] -> m ()
 clean [] = liftIO $ hPutStrLn stderr "Usage: clean <modulepath1> <modulepath2> ..."
-clean args = List.mapM_ cleanImports args
+clean args = cleanImports args >> return ()
 
 split :: MonadClean m => [FilePath] -> m ()
 split [arg] = splitModuleDecls arg >> return ()

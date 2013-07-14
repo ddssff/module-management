@@ -8,6 +8,7 @@ module Language.Haskell.Modules.Split
     ) where
 
 import Control.Exception (throw)
+import Control.Monad as List (mapM, mapM_)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
 import Data.Foldable as Foldable (fold)
@@ -17,14 +18,14 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((<|), (|>))
 import Data.Set as Set (empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
-import Data.Set.Extra as Set (gFind, mapM, mapM_)
+import Data.Set.Extra as Set (gFind)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, ImportDecl(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
 import Language.Haskell.Exts.Annotated.Simplify (sExportSpec, sImportDecl, sImportSpec, sModuleName, sName)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
-import Language.Haskell.Modules.Imports (cleanResult)
+import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(extraImports))
 import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo, moduleName, parseModule)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, RelPath(RelPath))
@@ -129,13 +130,13 @@ splitModuleBy symClassToModule inInfo@(m, _, _) =
             -- The name of the module to be split
             let inName = moduleName m
             allNames <- getNames >>= return . Set.union outNames
-            changes <- Set.mapM (doModule symClassToModule eiMap inInfo inName outNames) allNames
+            changes <- List.mapM (doModule symClassToModule eiMap inInfo inName outNames) (toList allNames)
             -- No good reason to use sets here
             -- changes <- doSplit symClassToModule info >>= return . collisionCheck univ
-            Set.mapM_ doResult changes           -- Write the new modules
-            Set.mapM_ reportResult changes
+            List.mapM_ doResult changes           -- Write the new modules
+            List.mapM_ reportResult changes
             -- Clean the new modules after all edits are finished
-            Set.mapM cleanResult changes >>= return . toList
+            cleanResults changes
     where
 
 {-    collisionCheck univ s =

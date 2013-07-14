@@ -19,7 +19,7 @@ import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, importModule), ModuleName(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
-import Language.Haskell.Modules.Imports (cleanResult)
+import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.Internal (doResult, fixExport, ModuleResult(..), MonadClean)
 import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo, parseModule, parseModule')
 import Language.Haskell.Modules.SourceDirs (modulePathBase)
@@ -37,7 +37,7 @@ mergeModules inNames outName =
          do univ <- getNames
             let allNames = toList $ union univ (Set.fromList (outName : inNames))
             results <- List.mapM (doModule inNames outName) allNames >>= List.mapM doResult >>= List.mapM reportResult
-            List.mapM cleanResult results
+            cleanResults results
     where
       reportResult x@(Modified (S.ModuleName name) _) = qLnPutStr ("mergeModules: modifying " ++ name) >> return x
       reportResult x@(Created (S.ModuleName name) _) = qLnPutStr ("mergeModules: creating " ++ name) >> return x

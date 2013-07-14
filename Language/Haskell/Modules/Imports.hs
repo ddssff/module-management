@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Imports
     ( cleanImports
-    , cleanResult
+    , cleanResults
     ) where
 
 import Control.Applicative ((<$>))
@@ -12,7 +12,7 @@ import Data.Char (toLower)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.List (find, groupBy, intercalate, nub, sortBy)
-import Data.Maybe (catMaybes, fromMaybe)
+import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((|>))
 import Data.Set as Set (empty, member, Set, singleton, toList, union, unions)
@@ -58,32 +58,54 @@ cleanBuildImports lbi =
 -}
 
 -- | Clean up the imports of a source file.
-cleanImports :: MonadClean m => FilePath -> m ModuleResult
-cleanImports relpath =
-    do let path = RelPath relpath
-       source <- parseModule path
-       case source of
-         mi@(m@(A.Module _ _ _ imports _decls), _, _) ->
-             do let name = moduleName m
-                    hiddenImports = filter isHiddenImport imports
-                dumpImports path >> checkImports path name mi hiddenImports
-         (A.XmlPage {}, _, _) -> error "cleanImports: XmlPage"
-         (A.XmlHybrid {}, _, _) -> error "cleanImports: XmlHybrid"
+cleanImports :: MonadClean m => [FilePath] -> m [ModuleResult]
+cleanImports relpaths =
+    do dumpImports (map RelPath relpaths)
+       mapM (\ path -> parseModule path >>= doModule path) (map RelPath relpaths)
     where
-      isHiddenImport (A.ImportDecl {A.importSpecs = Just (A.ImportSpecList _ True _)}) = True
-      isHiddenImport _ = False
+      doModule path mi@(m@(A.Module {}), _, _) = checkImports path (moduleName m) mi
+      doModule _ (m, _, _) = error $ "Unsupported module value: " ++ show m
+
+cleanResults :: MonadClean m => [ModuleResult] -> m [ModuleResult]
+cleanResults results =
+    do mode <- getParams >>= return . testMode
+       if mode then return results else (dump >> clean)
+    where
+      dump =
+          dumpImports (mapMaybe (\ x -> case x of
+                                          Removed _ -> Nothing
+                                          Unchanged _ -> Nothing
+                                          Modified name _ -> Just (modulePathBase "hs" name)
+                                          Created name _ -> Just (modulePathBase "hs" name)) results)
+      clean=
+          mapM (\ x -> case x of
+                         Removed _ -> return x
+                         Unchanged _ -> return x
+                         Modified name _ -> doModule name
+                         Created name _ -> doModule name >>= return . toCreated) results
+
+      toCreated (Modified name text) = Created name text
+      toCreated x@(Created _ _) = x
+      toCreated _ = error "toCreated"
+      doModule name =
+          do let path = modulePathBase "hs" name
+             info <- loadModule path -- was cache updated?
+             checkImports path name info
 
 -- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
-dumpImports :: MonadClean m => RelPath -> m ()
-dumpImports path =
-    do key <- pathKey path
+dumpImports :: MonadClean m => [RelPath] -> m ()
+dumpImports paths =
+    do keys <- mapM pathKey paths
        scratch <- scratchDir <$> getParams
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"
        args <- hsFlags <$> getParams
        dirs <- getDirs
        exts <- getExtensions
-       let args' = args ++ ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs, unPathKey key] ++ map (("-X" ++) . show) exts
+       let args' = args ++
+                   ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs] ++
+                   map (("-X" ++) . show) exts ++
+                   map unPathKey keys
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
          ExitSuccess -> quietly (qLnPutStr (showCommandForUser cmd args' ++ " -> Ok")) >> return ()
@@ -94,8 +116,8 @@ dumpImports path =
 -- source file.  We also need to modify the imports of any names
 -- that are types that appear in standalone instance derivations so
 -- their members are imported too.
-checkImports :: MonadClean m => RelPath -> S.ModuleName -> ModuleInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
-checkImports path name@(S.ModuleName _) m extraImports =
+checkImports :: MonadClean m => RelPath -> S.ModuleName -> ModuleInfo -> m ModuleResult
+checkImports path name@(S.ModuleName _) info@(A.Module _ _ _ imports _, _, _) =
     do let importsPath = modulePathBase "imports" name
        -- The .imports file will appear in the real current directory,
        -- ignore the source dir path.  This may change in future
@@ -107,7 +129,12 @@ checkImports path name@(S.ModuleName _) m extraImports =
                (parseModule importsPath
                   `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here ->
                                                           throw . userError $ here ++ ": " ++ show e)))
-       updateSource path m newImports name extraImports
+       updateSource path info newImports name extraImports
+    where
+      extraImports = filter isHiddenImport imports
+      isHiddenImport (A.ImportDecl {A.importSpecs = Just (A.ImportSpecList _ True _)}) = True
+      isHiddenImport _ = False
+checkImports _ _ (_, _, _) = error "Unsupported module type"
 
 withPackageImportsExtension :: MonadClean m => m a -> m a
 withPackageImportsExtension a =
@@ -307,37 +334,3 @@ mergeSpecs xs = xs
 nameString :: S.Name -> String
 nameString (S.Ident s) = s
 nameString (S.Symbol s) = s
-
-cleanResult :: MonadClean m => ModuleResult -> m ModuleResult
-cleanResult x =
-    case x of
-      (Removed _) -> return x
-      (Unchanged _) -> return x
-      (Modified name text) -> cleanResult' name text >>= return . Modified name
-      (Created name text) -> cleanResult' name text >>= return . Created name
-    where
-      cleanResult' name text =
-          do mode <- getParams >>= return . testMode
-             case mode of
-               True -> return text
-               False -> do let base = modulePathBase "hs" name
-                           _cleanResult <- cleanImports (unRelPath base)
-                           (_, text', _) <- loadModule base
-                           return text'
-{-
-      -- Make sure this isn't trying to clobber a module that exists (other than 'old'.)
-      doClean :: MonadClean m => ModuleResult -> m ()
-      doClean (Created m' _) = doClean' m'
-      doClean (Modified m' _) = doClean' m'
-      doClean (Removed _) = return ()
-      doClean (Unchanged _) = return ()
-      doClean' m' =
-          do flag <- getParams >>= return . not . testMode
-             when flag (modulePath m' >>= cleanImports >> return ())
--}
-{-
-    where
-      clean (Modified name _) = modulePath name >>= \ path -> cleanImports path >> liftIO (readFile path) >>= return . Modified name
-      clean (Created name _) = modulePath name >>= \ path -> cleanImports path >> liftIO (readFile path) >>= return . Created name
-      clean x = return x
--}
