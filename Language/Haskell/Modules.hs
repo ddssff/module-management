@@ -60,23 +60,29 @@
 --                            \"Language.Haskell.Modules.Common.ModulePathBase\"])
 --                   (mn \"Language.Haskell.Modules.Common\"))@
 module Language.Haskell.Modules
-    ( cleanImports
+    ( MonadClean
+    , cleanImports
     , splitModule
     , splitModuleDecls
     , mergeModules
     , module Language.Haskell.Modules.Fold
     , module Language.Haskell.Modules.ModuVerse
     , module Language.Haskell.Modules.Params
+    , module Language.Haskell.Modules.SourceDirs
     , module Language.Haskell.Modules.Util.QIO
     , findModules
     , findPaths
+    , withCurrentDirectory
     ) where
 
+import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
+import Language.Haskell.Modules.Internal (MonadClean)
 import Language.Haskell.Modules.Merge (mergeModules)
-import Language.Haskell.Modules.ModuVerse (ModuVerse(..))
+import Language.Haskell.Modules.ModuVerse (ModuVerse(..), parseModule, parseModule', putName, getNames)
 import Language.Haskell.Modules.Params (modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode, runMonadClean)
+import Language.Haskell.Modules.SourceDirs (putDirs, modulePathBase)
 import Language.Haskell.Modules.Split (splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
 import Language.Haskell.Modules.Util.Test (findModules, findPaths)
