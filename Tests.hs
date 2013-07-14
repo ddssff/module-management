@@ -19,18 +19,21 @@ import Language.Haskell.Modules.Params (modifyTestMode)
 import Language.Haskell.Modules.SourceDirs (modulePath, modulePathBase)
 import Language.Haskell.Modules.Util.QIO (noisily, qLnPutStr)
 import Language.Haskell.Modules.Util.Test (diff', logicModules, rsync)
+import System.Environment (getArgs)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.Process (system)
 import Test.HUnit (assertEqual, Counts(..), runTestTT, Test(TestList, TestCase, TestLabel))
 import qualified Tests.Fold as Fold (tests)
 import qualified Tests.Imports as Imports (tests)
 import qualified Tests.Merge as Merge (tests)
-import qualified Tests.Split as Split (tests)
+import qualified Tests.Split as Split (tests, slow)
 
 main :: IO ()
 main =
-    do _ <- system "[ -d testdata ] || tar xfz testdata.tar.gz"
-       counts <- runTestTT (TestList [TestLabel "Main" Main.tests])
+    do args <- getArgs
+       _ <- system "[ -d testdata ] || tar xfz testdata.tar.gz"
+       counts <- runTestTT (TestList $ [TestLabel "Main" Main.tests] ++
+                                       if elem "--slow" args then [TestLabel "Slow" Main.slow] else [])
        putStrLn (show counts)
        case (errors counts + failures counts) of
          0 -> exitWith ExitSuccess
@@ -52,12 +55,16 @@ tests = TestList [ Main.test1
                  , TestLabel "Fold" Fold.tests
                  , TestLabel "Imports" Imports.tests
                  -- If split-merge-merge fails try split and split-merge.
-                 , Main.logictest "split-merge-merge" test2c
-                 , Main.logictest "split-merge" test2b
-                 , Main.logictest "split" test2a
                  , TestLabel "Split" Split.tests
                  , TestLabel "Merge" Merge.tests
                  ]
+
+slow :: Test
+slow = TestList [ Main.logictest "split-merge-merge" test2c
+                , Main.logictest "split-merge" test2b
+                , Main.logictest "split" test2a
+                , Split.slow
+                ]
 
 test1 :: Test
 test1 =
