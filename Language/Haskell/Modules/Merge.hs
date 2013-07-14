@@ -81,7 +81,7 @@ doModule inNames@(_ : _) outName thisName =
                                 -- The output module gets modified
                                 -- copies of all the input module
                                 -- export lists.
-                                intercalate sep $ List.map (\ (_, info) -> fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 info mempty)) (zip inNames inInfo)
+                                intercalate sep $ filter (/= "") $ List.map (\ (_, info) -> fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 info mempty)) (zip inNames inInfo)
                            else fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 baseInfo mempty)
                        rparen = fold (foldExports ignore2 ignore (<|) baseInfo mempty) in
                    lparen <> newExports <> rparen
