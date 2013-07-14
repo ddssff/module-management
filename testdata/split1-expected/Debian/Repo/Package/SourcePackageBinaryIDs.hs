@@ -4,7 +4,6 @@ module Debian.Repo.Package.SourcePackageBinaryIDs
     ( sourcePackageBinaryIDs
     ) where
 
-
 import Data.List as List (map)
 import qualified Data.Text as T (unpack)
 import Debian.Arch (Arch(Source))

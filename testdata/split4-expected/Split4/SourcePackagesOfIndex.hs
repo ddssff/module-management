@@ -3,7 +3,6 @@ module Split4.SourcePackagesOfIndex
     ( sourcePackagesOfIndex
     ) where
 import Split4.GetPackages (getPackages)
-
 -- >>= return . either Left (Right . List.map (toBinaryPackage index . packageInfo))
 
 -- | Get the contents of a package index

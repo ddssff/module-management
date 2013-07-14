@@ -5,7 +5,6 @@ module Split.Clean
       clean
     ) where
 
-
 import Data.Char (isAlphaNum)
 import Data.List (dropWhile)
 import URL

@@ -4,7 +4,6 @@ module Debian.Repo.Package.Internal.TryParseRel
     ( tryParseRel
     ) where
 
-
 import qualified Debian.Control.Text as B (Field, Field'(Field))
 import qualified Debian.Relation.Text as B (ParseRelations(..), Relations)
 

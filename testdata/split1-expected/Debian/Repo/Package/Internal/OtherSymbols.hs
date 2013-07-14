@@ -6,7 +6,6 @@ module Debian.Repo.Package.Internal.OtherSymbols
 
 
 
-
 (+?+) :: String -> String -> String
 (+?+) a ('_' : b) = a +?+ b
 (+?+) "" b = b

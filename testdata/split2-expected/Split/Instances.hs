@@ -6,7 +6,6 @@ module Split.Instances
     ) where
 
 import Split.Internal.Bar (Bar(Bar))
-
 import Data.Char (isAlphaNum)
 import Data.List (dropWhile)
 import URL

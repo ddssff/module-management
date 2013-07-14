@@ -4,7 +4,6 @@ module Data.Logic.Classes.Literal.Literal
     ( Literal(foldLiteral)
     ) where
 
-
 import Data.Logic.Classes.Constants (Constants)
 import Data.Logic.Classes.Formula (Formula)
 import Data.Logic.Classes.Negate (Negatable)

@@ -4,7 +4,6 @@ module Debian.Repo.Package.BinaryPackageSourceID
     ( binaryPackageSourceID
     ) where
 
-
 import qualified Data.Text as T (unpack)
 import qualified Debian.Control.Text as B (fieldValue)
 import Debian.Relation (BinPkgName(..))

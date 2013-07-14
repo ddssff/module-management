@@ -4,7 +4,6 @@ module Debian.Repo.Package.Internal.UriToString
     ( uriToString'
     ) where
 
-
 import Network.URI (URI, uriToString)
 
 uriToString' :: URI -> String

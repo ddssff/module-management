@@ -4,7 +4,6 @@ module Debian.Repo.Package.Internal.BinarySourceVersion
     ( binarySourceVersion'
     ) where
 
-
 import Debian.Control (ControlFunctions(asString), Paragraph')
 import qualified Debian.Control.Text as B (fieldValue)
 import Debian.Relation (BinPkgName(..))

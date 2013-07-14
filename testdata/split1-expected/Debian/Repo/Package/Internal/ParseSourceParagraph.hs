@@ -4,7 +4,6 @@ module Debian.Repo.Package.Internal.ParseSourceParagraph
     ( parseSourceParagraph
     ) where
 
-
 import Debian.Control (ControlFunctions(stripWS))
 import qualified Debian.Control.Text as B (fieldValue, Paragraph)
 import Debian.Repo.Types.PackageIndex (SourceControl(..))

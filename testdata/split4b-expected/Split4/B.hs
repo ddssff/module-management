@@ -4,7 +4,6 @@ module Split4.B
     , binaryPackagesOfIndex
     ) where
 import Split4.A (getPackages)
-
       --toLazy s = L.fromChunks [s]
       --showStream :: Either Exception L.ByteString -> IO (Either Exception L.ByteString)
       --showStream x@(Left e) = hPutStrLn stderr (show uri' ++ " - exception: " ++ show e) >> return x

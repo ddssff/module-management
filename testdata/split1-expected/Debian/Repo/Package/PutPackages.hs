@@ -4,7 +4,6 @@ module Debian.Repo.Package.PutPackages
     ( putPackages
     ) where
 
-
 import qualified Data.ByteString.Lazy.Char8 as L (fromChunks)
 import Data.List as List (intercalate, intersperse, map)
 import qualified Data.Text as T (concat, pack)

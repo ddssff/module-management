@@ -5,7 +5,6 @@ module Split.Internal.Unexp
       unexp
     ) where
 
-
 import Data.Char (isAlphaNum)
 import Data.List (dropWhile)
 import URL

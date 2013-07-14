@@ -4,7 +4,6 @@ module Debian.Repo.Package.SourceFilePaths
     ( sourceFilePaths
     ) where
 
-
 import Data.Set as Set (fromList, map, Set)
 import Debian.Repo.Types.PackageIndex (SourceFileSpec(sourceFileName), SourcePackage(sourceDirectory, sourcePackageFiles))
 import System.FilePath ((</>))
