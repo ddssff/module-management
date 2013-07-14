@@ -11,7 +11,7 @@ import Language.Haskell.Modules.Params (modifyTestMode)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, SourceDirs(putDirs))
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
-import System.Exit (ExitCode(ExitSuccess))
+import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 tests :: Test
