@@ -12,7 +12,7 @@ import Control.Monad (when)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
 import Data.Foldable as Foldable (fold)
-import Data.List as List (filter, intercalate, map, nub)
+import Data.List as List (filter, intercalate, map, nub, group, sort)
 import Data.Map as Map (delete, elems, empty, filter, insert, insertWith, lookup, Map, mapWithKey, fromSet)
 import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid ((<>), mempty)
@@ -192,7 +192,7 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
                                        (\ s r -> r |> [("", s)]) inInfo mempty))
            Just _ ->
               -- If the module has an export list use its outline
-              intercalate "\n    , " (nub (List.map (prettyPrintWithMode defaultMode) newExports')) <> "\n" <>
+              intercalate sep (nub (List.map (prettyPrintWithMode defaultMode) newExports')) <> "\n" <>
               maybe "    ) where\n" (\ _ -> Foldable.fold $ foldExports ignore2 ignore (<|) inInfo mempty) (moduleExports inInfo)
           where
             -- Build export specs of the symbols created by each declaration.
@@ -203,6 +203,8 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
             doSeps :: [(String, String)] -> String
             doSeps [] = ""
             doSeps ((_, hd) : tl) = hd <> concatMap (\ (a, b) -> a <> b) tl
+
+            sep = exportSep "\n    , " inInfo
 
       newImports =
           case (oldImportText, newImports'') of
@@ -269,6 +271,24 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
                                List.map (\ x -> (sImportDecl i) {S.importModule = x, S.importSpecs = Just (flag, [sImportSpec spec])}) xs) specs
 
       moduleMap = symClassToModuleMap symClassToModule inInfo
+
+-- | Combine the suffix of each export with the prefix of the following
+-- export to make a list of all the separators.  Discards the first
+-- prefix and the last suffix, if all the remaining separators are
+-- equal return it, otherwise return the default argument.
+exportSep :: String -> ModuleInfo -> String
+exportSep def info =
+    case seps of
+      [] -> def
+      (x : xs) -> case (group . sort) xs of
+                    [[x]] -> x -- We could choose the most common one here
+                    _ -> def
+    where
+      seps = foldModule ignore2 ignore ignore ignore ignore2
+                        (\ _ pref s suff r -> case r of
+                                                [] -> [suff]
+                                                (suff' : xs) -> suff : (pref ++ suff') : xs)
+                        ignore2 ignore ignore ignore2 info []
 
 -- | Return a list of the names declared in this module, Nothing
 -- denotes one or more instances.
