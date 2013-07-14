@@ -20,10 +20,10 @@ import Data.Sequence ((<|), (|>))
 import Data.Set as Set (delete, difference, empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
 import Data.Set.Extra as Set (gFind, mapM, mapM_)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, ImportDecl(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
-import Language.Haskell.Exts.Annotated.Simplify (sImportDecl, sImportSpec, sModuleName, sName)
+import Language.Haskell.Exts.Annotated.Simplify (sImportDecl, sImportSpec, sExportSpec, sModuleName, sName)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..), SrcLoc(..))
-import qualified Language.Haskell.Exts.Syntax as S (ExportSpec, ImportDecl(..), ModuleName(..), Name(..))
+import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResult)
 import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(testMode, extraImports))
@@ -239,11 +239,20 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
       moduleExports (A.Module _ (Just (A.ModuleHead _ _ _ x)) _ _ _, _, _) = x
 
       -- Update the imports to reflect the changed module names in symClassToModule.
+      -- Update re-exports of the split module.
       updateImports :: ModuleInfo -> String
       updateImports oldInfo =
-        Foldable.fold (foldModule echo2 echo echo echo echo2 echo echo2
-                                  (\ i pref s suff r -> r |> pref <> updateImportDecl eiMap s i <> suff)
-                                  echo echo2 oldInfo mempty)
+          Foldable.fold (foldModule echo2 echo echo echo echo2
+                                    (\ e pref s suff r -> r |> pref <> fixExport s (sExportSpec e) <> suff) echo2
+                                    (\ i pref s suff r -> r |> pref <> updateImportDecl eiMap s i <> suff)
+                                    echo echo2 oldInfo mempty)
+          where
+            -- If we see the input module re-exported, replace with all the output modules
+            fixExport :: String -> S.ExportSpec -> String
+            fixExport s x@(S.EModuleContents m) | m == inName = intercalate sep (List.map (prettyPrint . S.EModuleContents) (toList outNames))
+            fixExport s _ = s
+
+            sep = exportSep "\n    , " oldInfo
 
       -- In this module, we need to import any module that declares a symbol
       -- referenced here.
