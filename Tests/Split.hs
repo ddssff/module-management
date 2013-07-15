@@ -4,7 +4,7 @@ import Control.Monad as List (mapM_)
 import Data.Set.Extra as Set (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (Module(..), ModuleName(..), Name(Ident))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Internal (modifyParams, Params(testMode), runMonadClean)
+import Language.Haskell.Modules.Internal (modifyParams, Params(testMode), runCleanT)
 import Language.Haskell.Modules.ModuVerse (parseModule, putName)
 import Language.Haskell.Modules.Params (modifyTestMode)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, SourceDirs(putDirs), RelPath(RelPath))
@@ -26,7 +26,7 @@ split1 :: Test
 split1 =
     TestCase $
       do _ <- system "rsync -aHxS --delete testdata/debian/ tmp"
-         _ <- runMonadClean $ noisily $ noisily $
+         _ <- runCleanT $ noisily $ noisily $
            do putDirs ["tmp"]
               Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) repoModules
               splitModuleDecls "Debian/Repo/Package.hs"
@@ -37,7 +37,7 @@ split2a :: Test
 split2a =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
-       _ <- runMonadClean $ noisily $ noisily $
+       _ <- runCleanT $ noisily $ noisily $
          do modifyParams (\ p -> p {testMode = True})
             putDirs ["tmp"]
             parseModule (modulePathBase "hs" (S.ModuleName "Split")) >>= putName (S.ModuleName "Split")
@@ -49,7 +49,7 @@ split2b :: Test
 split2b =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
-       _ <- runMonadClean $ noisily $ noisily $
+       _ <- runCleanT $ noisily $ noisily $
          do putDirs ["tmp"]
             parseModule (modulePathBase "hs" (S.ModuleName "Split")) >>= putName (S.ModuleName "Split")
             splitModuleDecls "Split.hs"
@@ -65,7 +65,7 @@ split4 =
     TestLabel "Split4" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        _ <- withCurrentDirectory "tmp" $
-         runMonadClean $ noisily $ noisily $ modifyTestMode (const True) >> parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>= putName (S.ModuleName "Split4") >> splitModuleDecls "Split4.hs"
+         runCleanT $ noisily $ noisily $ modifyTestMode (const True) >> parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>= putName (S.ModuleName "Split4") >> splitModuleDecls "Split4.hs"
        result <- diff "testdata/split4-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
 
@@ -74,7 +74,7 @@ split4b =
     TestLabel "Split4b" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        _ <- withCurrentDirectory "tmp" $
-         runMonadClean $ noisily $ noisily $
+         runCleanT $ noisily $ noisily $
            modifyTestMode (const True) >>
            parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>=
            putName (S.ModuleName "Split4") >>
@@ -92,7 +92,7 @@ split4c =
     TestLabel "Split4b" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        _ <- withCurrentDirectory "tmp" $
-         runMonadClean $ noisily $ noisily $
+         runCleanT $ noisily $ noisily $
            modifyTestMode (const True) >>
            parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>=
            putName (S.ModuleName "Split4") >>
@@ -110,7 +110,7 @@ split5 =
     TestLabel "Split5" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split5/ tmp"
        _ <- withCurrentDirectory "tmp" $
-         runMonadClean $ noisily $ noisily $
+         runCleanT $ noisily $ noisily $
            parseModule (RelPath "B.hs") >>= \ b ->
            List.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name)
                       [S.ModuleName "A",

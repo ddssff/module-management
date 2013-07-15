@@ -4,7 +4,7 @@ import Control.Monad as List (mapM_)
 import Data.Set.Extra as Set (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Internal (runMonadClean)
+import Language.Haskell.Modules.Internal (runCleanT)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.ModuVerse (parseModule, putName)
 import Language.Haskell.Modules.Params (modifyTestMode)
@@ -21,7 +21,7 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
-         _result <- runMonadClean $
+         _result <- runCleanT $
            do putDirs ["tmp"]
               modifyTestMode (const True)
               Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) repoModules
@@ -35,7 +35,7 @@ test2 :: Test
 test2 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
-         _result <- runMonadClean $
+         _result <- runCleanT $
            do putDirs ["tmp"]
               modifyTestMode (const True)
               Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) repoModules
@@ -50,7 +50,7 @@ test3 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
          _result <- withCurrentDirectory "tmp" $
-                   runMonadClean $
+                   runCleanT $
            do modifyTestMode (const True)
               Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) repoModules
               mergeModules
@@ -65,7 +65,7 @@ test4 :: Test
 test4 =
     TestCase $
       do _ <- rsync "testdata/merge4" "tmp"
-         _ <- withCurrentDirectory "tmp" $ runMonadClean $
+         _ <- withCurrentDirectory "tmp" $ runCleanT $
               do List.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) [S.ModuleName "In1", S.ModuleName "In2", S.ModuleName "M1"]
                  mergeModules [S.ModuleName "In1", S.ModuleName "In2"] (S.ModuleName "Out")
          (code, out, err) <- diff "testdata/merge4-expected" "tmp"
@@ -75,7 +75,7 @@ test5 :: Test
 test5 =
     TestCase $
       do _ <- rsync "testdata/merge5" "tmp"
-         _ <- withCurrentDirectory "tmp" $ runMonadClean $ noisily $ noisily $ noisily $
+         _ <- withCurrentDirectory "tmp" $ runCleanT $ noisily $ noisily $ noisily $
               do modifyTestMode (const True)
                  List.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name)
                             [S.ModuleName "Apt.AptIO", S.ModuleName "Apt.AptIOT", S.ModuleName "Apt.AptState",

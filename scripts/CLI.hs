@@ -10,7 +10,7 @@ import Language.Haskell.Modules
 import System.IO (hGetLine, hPutStr, hPutStrLn, stderr, stdin)
 
 main :: IO ()
-main = runMonadClean (noisily cli)
+main = runCleanT (noisily cli)
 
 cli :: MonadClean m => m ()
 cli = liftIO (hPutStr stderr " > " >> hGetLine stdin) >>= cmd . words

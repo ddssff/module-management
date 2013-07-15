@@ -3,6 +3,8 @@ haskell-module-management (0.13) unstable; urgency=low
   * Changed cleanImports and cleanResults functions to take a list of
     paths and process multiple files at once.  This changed reduced the
     run time of test suite from 15 minutes to 30 seconds.
+  * Rename runMonadClean -> runCleanT
+  * Simplify splitModule function signatures
 
  -- David Fox <dsf@seereason.com>  Sun, 14 Jul 2013 10:41:51 -0700
 

@@ -13,7 +13,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules (mergeModules, splitModuleDecls)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Internal (MonadClean, Params, runMonadClean)
+import Language.Haskell.Modules.Internal (MonadClean, Params, runCleanT)
 import Language.Haskell.Modules.ModuVerse (modifyExtensions, parseModule, putName)
 import Language.Haskell.Modules.SourceDirs (modulePathBase)
 import Language.Haskell.Modules.Util.QIO (noisily, qLnPutStr)
@@ -82,7 +82,7 @@ logictest :: String -> (Set ModuleName -> StateT Params IO ()) -> Test
 logictest s f =
     TestLabel s $ TestCase $
     do _ <- rsync "testdata/logic" "tmp"
-       _ <- withCurrentDirectory "tmp" $ runMonadClean $ noisily $ f logicModules
+       _ <- withCurrentDirectory "tmp" $ runCleanT $ noisily $ f logicModules
        (code, out, err) <- diff' ("testdata/" ++ s ++ "-expected") "tmp"
        let out' = unlines (filter (not . isPrefixOf "Binary files") . map (takeWhile (/= '\t')) $ (lines out))
        assertEqual s (ExitSuccess, "", "") (code, out', err)

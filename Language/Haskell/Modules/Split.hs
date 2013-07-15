@@ -47,19 +47,21 @@ import System.FilePath ((<.>))
 -- (.+.) = b + c
 -- @
 --
--- After running @splitModule defaultSymbolToModule@ the @Start@ module will be gone.  The
--- @a@ and @b@ symbols will be in new modules named @Start.A@ and
--- @Start.B@.  Because they were not exported by @Start@, the @c@ and
--- @c'@ symbols will both be in a new module named @Start.Internal.C@.
--- And the @.+.@ symbol will be in a module named
--- @Start.OtherSymbols@.  Note that this module needs to import new
--- @Start.A@ and @Start.Internal.C@ modules.
+-- After running @splitModuleDecls "Start.hs"@ the @Start@ module will
+-- be gone.  The @a@ and @b@ symbols will be in new modules named
+-- @Start.A@ and @Start.B@.  Because they were not exported by
+-- @Start@, the @c@ and @c'@ symbols will both be in a new module
+-- named @Start.Internal.C@.  And the @.+.@ symbol will be in a module
+-- named @Start.OtherSymbols@.  Note that this module needs to import
+-- new @Start.A@ and @Start.Internal.C@ modules.
 --
 -- If we had imported and then re-exported a symbol in Start it would
 -- go into a module named @Start.ReExported@.  Any instance declarations
 -- would go into @Start.Instances@.
 splitModule :: MonadClean m =>
-               (Maybe S.Name -> S.ModuleName) -- ^ Map declaration to new module name
+               (Maybe S.Name -> S.ModuleName)
+               -- ^ Map declaration to new module name.   The name @Nothing@
+               -- is used for instance declarations.
             -> FilePath
             -> m [ModuleResult]
 splitModule symClassToModule path =

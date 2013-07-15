@@ -2,15 +2,13 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Params
-    ( MonadClean
-    , runMonadClean
-    , modifyRemoveEmptyImports
+    ( modifyRemoveEmptyImports
     , modifyHsFlags
     , modifyDryRun
     , modifyTestMode
     ) where
 
-import Language.Haskell.Modules.Internal (modifyParams, MonadClean, Params(dryRun, hsFlags, removeEmptyImports, testMode), runMonadClean)
+import Language.Haskell.Modules.Internal (modifyParams, MonadClean, Params(dryRun, hsFlags, removeEmptyImports, testMode))
 import Prelude hiding (writeFile)
 
 -- | If this flag is set, imports that become empty are removed.

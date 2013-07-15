@@ -38,7 +38,7 @@
 --
 -- * 'mergeModules'
 --
--- * 'runMonadClean' - Sets up the environment for splitting and merging
+-- * 'runCleanT' - Sets up the environment for splitting and merging
 --
 -- * 'Language.Haskell.Modules.Params' - Functions to control modes of operation
 --
@@ -46,13 +46,13 @@
 --
 -- * Use @cleanImports@ to clean up the import lists of all the modules under @./Language@:
 --
---    @findPaths \"Language\" >>= runMonadClean . mapM cleanImports . toList@
+--    @findPaths \"Language\" >>= runCleanT . mapM cleanImports . toList@
 --
 -- * Use @splitModule@ to split up module
 --   @Language.Haskell.Modules.Common@, and then merge two of the pieces
 --   back in.
 --
---   @findModules \"Language\" >>= \\ modules -> runMonadClean $
+--   @findModules \"Language\" >>= \\ modules -> runCleanT $
 --      let mn = Language.Haskell.Exts.Syntax.ModuleName in
 --      modifyModuVerse (const modules) >>
 --      splitModule (mn \"Language.Haskell.Modules.Common\") >>
@@ -61,6 +61,7 @@
 --                   (mn \"Language.Haskell.Modules.Common\"))@
 module Language.Haskell.Modules
     ( MonadClean
+    , runCleanT
     , cleanImports
     , splitModule
     , splitModuleDecls
@@ -78,10 +79,10 @@ module Language.Haskell.Modules
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (MonadClean)
+import Language.Haskell.Modules.Internal (MonadClean, runCleanT)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.ModuVerse (ModuVerse(..), parseModule, parseModule', putName, getNames)
-import Language.Haskell.Modules.Params (modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode, runMonadClean)
+import Language.Haskell.Modules.Params (modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode)
 import Language.Haskell.Modules.SourceDirs (getDirs, putDirs, modifyDirs, modulePathBase)
 import Language.Haskell.Modules.Split (splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
