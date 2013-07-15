@@ -75,11 +75,11 @@ getInfo name = getModuVerse >>= return . Map.lookup name . fromMaybe (error "No 
 putName :: ModuVerse m => S.ModuleName -> ModuleInfo -> m ()
 putName name info = modifyModuVerse (\ s -> s {moduleNames_ = Just (Map.insert name info (fromMaybe Map.empty (moduleNames_ s)))})
 
-putModule :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m ()
-putModule name = parseModule (modulePathBase "hs" name) >>= putName name
+putModule :: (ModuVerse m, MonadVerbosity m) => String -> m ()
+putModule name = parseModule (modulePathBase "hs" (S.ModuleName name)) >>= putName (S.ModuleName name)
 
-putModuleAnew :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m ()
-putModuleAnew name = loadModule (modulePathBase "hs" name) >>= putName name
+putModuleAnew :: (ModuVerse m, MonadVerbosity m) => String -> m ()
+putModuleAnew name = loadModule (modulePathBase "hs" (S.ModuleName name)) >>= putName (S.ModuleName name)
 
 delName :: ModuVerse m => S.ModuleName -> m ()
 delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Map.delete name (fromMaybe Map.empty (moduleNames_ s)))

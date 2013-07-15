@@ -1,7 +1,6 @@
 module Tests.Split where
 
 import Control.Monad as List (mapM_)
-import Data.Set.Extra as Set (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (modifyParams, Params(testMode), runCleanT)
@@ -28,7 +27,7 @@ split1 =
       do _ <- system "rsync -aHxS --delete testdata/debian/ tmp"
          _ <- runCleanT $ noisily $ noisily $
            do putDirs ["tmp"]
-              Set.mapM_ putModule repoModules
+              mapM_ putModule repoModules
               splitModuleDecls "Debian/Repo/Package.hs"
          (code, out, err) <- diff "testdata/split1-expected" "tmp"
          assertEqual "splitModule" (ExitSuccess, "", "") (code, out, err)
@@ -40,7 +39,7 @@ split2a =
        _ <- runCleanT $ noisily $ noisily $
          do modifyParams (\ p -> p {testMode = True})
             putDirs ["tmp"]
-            putModule (S.ModuleName "Split")
+            putModule "Split"
             splitModuleDecls "Split.hs"
        (code, out, err) <- diff "testdata/split2-expected" "tmp"
        assertEqual "split2" (ExitSuccess, "", "") (code, out, err)
@@ -51,7 +50,7 @@ split2b =
     do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
        _ <- runCleanT $ noisily $ noisily $
          do putDirs ["tmp"]
-            putModule (S.ModuleName "Split")
+            putModule "Split"
             splitModuleDecls "Split.hs"
        (code, out, err) <- diff "testdata/split2-clean-expected" "tmp"
        -- The output of splitModule is "correct", but it will not be
@@ -65,7 +64,7 @@ split4 =
     TestLabel "Split4" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        _ <- withCurrentDirectory "tmp" $
-         runCleanT $ noisily $ noisily $ modifyTestMode (const True) >> putModule (S.ModuleName "Split4") >> splitModuleDecls "Split4.hs"
+         runCleanT $ noisily $ noisily $ modifyTestMode (const True) >> putModule "Split4" >> splitModuleDecls "Split4.hs"
        result <- diff "testdata/split4-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
 
@@ -76,7 +75,7 @@ split4b =
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
            modifyTestMode (const True) >>
-           putModule (S.ModuleName "Split4") >>
+           putModule "Split4" >>
            splitModule f "Split4.hs"
        result <- diff "testdata/split4b-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
@@ -93,7 +92,7 @@ split4c =
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
            modifyTestMode (const True) >>
-           putModule (S.ModuleName "Split4") >>
+           putModule "Split4" >>
            splitModule f "Split4.hs"
        result <- diff "testdata/split4c-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
@@ -110,12 +109,7 @@ split5 =
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
            parseModule "B.hs" >>= \ b ->
-           List.mapM_ putModule
-                      [S.ModuleName "A",
-                       S.ModuleName "B",
-                       S.ModuleName "C",
-                       S.ModuleName "D",
-                       S.ModuleName "E"] >>
+           List.mapM_ putModule ["A", "B", "C", "D", "E"] >>
            modifyTestMode (const True) >>
            splitModule (defaultSymbolToModule b) "B.hs"
        result <- diff "testdata/split5-expected" "tmp"

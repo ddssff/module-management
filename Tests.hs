@@ -4,7 +4,6 @@
 import Control.Exception (SomeException, try)
 import Control.Monad.State (StateT)
 import Data.List (isPrefixOf)
-import Data.Set.Extra as Set (mapM_, Set)
 import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
@@ -77,7 +76,7 @@ test1 =
     where
       test parsed comments text = return (exactPrint parsed comments, text)
 
-logictest :: String -> (Set ModuleName -> StateT Params IO ()) -> Test
+logictest :: String -> ([String] -> StateT Params IO ()) -> Test
 logictest s f =
     TestLabel s $ TestCase $
     do _ <- rsync "testdata/logic" "tmp"
@@ -86,20 +85,20 @@ logictest s f =
        let out' = unlines (filter (not . isPrefixOf "Binary files") . map (takeWhile (/= '\t')) $ (lines out))
        assertEqual s (ExitSuccess, "", "") (code, out', err)
 
-test2a :: MonadClean m => Set ModuleName -> m ()
+test2a :: MonadClean m => [String] -> m ()
 test2a u =
          do modifyExtensions (++ [MultiParamTypeClasses])
             -- We *must* clean the split results, or there will be
             -- circular imports created when we merge.
-            Set.mapM_ putModule u
+            mapM_ putModule u
             qLnPutStr "Splitting module Literal"
             _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
             return ()
 
-test2b :: MonadClean m => Set ModuleName -> m ()
+test2b :: MonadClean m => [String] -> m ()
 test2b u =
          do modifyExtensions (++ [MultiParamTypeClasses])
-            Set.mapM_ putModule u
+            mapM_ putModule u
             _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules
                    [ModuleName "Data.Logic.Classes.FirstOrder",
@@ -109,10 +108,10 @@ test2b u =
             noisily (qLnPutStr "merge2")
             return ()
 
-test2c :: MonadClean m => Set ModuleName -> m ()
+test2c :: MonadClean m => [String] -> m ()
 test2c u =
          do modifyExtensions (++ [MultiParamTypeClasses])
-            Set.mapM_ putModule u
+            mapM_ putModule u
             _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules
                    [ModuleName "Data.Logic.Classes.FirstOrder",

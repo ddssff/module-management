@@ -139,16 +139,16 @@ doResult x@(Removed name) =
        delName name
        return x
 
-doResult x@(Modified name text) =
-    do path <- modulePath "hs" name
+doResult x@(Modified m@(S.ModuleName name) text) =
+    do path <- modulePath "hs" m
        -- qLnPutStr ("modifying " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
        putModuleAnew name
        return x
 
-doResult x@(Created name text) =
-    do path <- modulePath "hs" name
+doResult x@(Created m@(S.ModuleName name) text) =
+    do path <- modulePath "hs" m
        -- qLnPutStr ("creating " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)

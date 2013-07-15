@@ -1,7 +1,6 @@
 module Tests.Merge where
 
 import Control.Monad as List (mapM_)
-import Data.Set.Extra as Set (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (runCleanT)
@@ -24,7 +23,7 @@ test1 =
          _result <- runCleanT $
            do putDirs ["tmp"]
               modifyTestMode (const True)
-              Set.mapM_ putModule repoModules
+              mapM_ putModule repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.AptCache", S.ModuleName "Debian.Repo.AptImage"]
                      (S.ModuleName "Debian.Repo.Cache")
@@ -38,7 +37,7 @@ test2 =
          _result <- runCleanT $
            do putDirs ["tmp"]
               modifyTestMode (const True)
-              Set.mapM_ putModule repoModules
+              mapM_ putModule repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.Types.Slice", S.ModuleName "Debian.Repo.Types.Repo", S.ModuleName "Debian.Repo.Types.EnvPath"]
                      (S.ModuleName "Debian.Repo.Types.Common")
@@ -52,7 +51,7 @@ test3 =
          _result <- withCurrentDirectory "tmp" $
                    runCleanT $
            do modifyTestMode (const True)
-              Set.mapM_ putModule repoModules
+              mapM_ putModule repoModules
               mergeModules
                      [S.ModuleName "Debian.Repo.Types.Slice",
                       S.ModuleName "Debian.Repo.Types.Repo",
@@ -66,7 +65,7 @@ test4 =
     TestCase $
       do _ <- rsync "testdata/merge4" "tmp"
          _ <- withCurrentDirectory "tmp" $ runCleanT $
-              do List.mapM_ putModule [S.ModuleName "In1", S.ModuleName "In2", S.ModuleName "M1"]
+              do mapM_ putModule ["In1", "In2", "M1"]
                  mergeModules [S.ModuleName "In1", S.ModuleName "In2"] (S.ModuleName "Out")
          (code, out, err) <- diff "testdata/merge4-expected" "tmp"
          assertEqual "mergeModules4" (ExitSuccess, "", "") (code, out, err)
@@ -78,8 +77,8 @@ test5 =
          _ <- withCurrentDirectory "tmp" $ runCleanT $ noisily $ noisily $ noisily $
               do modifyTestMode (const True)
                  List.mapM_ putModule
-                            [S.ModuleName "Apt.AptIO", S.ModuleName "Apt.AptIOT", S.ModuleName "Apt.AptState",
-                             S.ModuleName "Apt.InitState", S.ModuleName "Apt.Instances", S.ModuleName "Apt.MonadApt"]
+                            ["Apt.AptIO", "Apt.AptIOT", "Apt.AptState",
+                             "Apt.InitState", "Apt.Instances", "Apt.MonadApt"]
                  mergeModules [S.ModuleName "Apt.AptIO", S.ModuleName "Apt.AptIOT", S.ModuleName "Apt.AptState",
                                S.ModuleName "Apt.InitState", S.ModuleName "Apt.Instances", S.ModuleName "Apt.MonadApt"]
                               (S.ModuleName "Apt")

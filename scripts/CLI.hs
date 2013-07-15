@@ -4,7 +4,7 @@ module Main where
 import Control.Monad as List (mapM_)
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (intercalate, isPrefixOf)
-import Data.Set.Extra as Set (mapM_, Set, singleton, size, toList)
+import Data.Set.Extra as Set (Set, toList)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules
 import System.IO (hGetLine, hPutStr, hPutStrLn, stderr, stdin)
@@ -51,15 +51,14 @@ verse [] =
                                   "Currently:\n  " ++ showVerse modules)
 verse args =
     do new <- mapM (liftIO . find) args
-       List.mapM_ (Set.mapM_ putModule) new
+       List.mapM_ (List.mapM_ putModule) new
        modules <- getNames
        liftIO (hPutStrLn stderr $ "moduVerse updated:\n  " ++ showVerse modules)
     where
-      find :: String -> IO (Set ModuleName)
       find s =
           do ms <- liftIO (findHsModules [s])
-             case size ms of
-               0 -> return (singleton (ModuleName s))
+             case ms of
+               [] -> return [s]
                _ -> return ms
 
 showVerse :: Set ModuleName -> String
