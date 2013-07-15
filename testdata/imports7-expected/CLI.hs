@@ -6,7 +6,7 @@ import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (intercalate, isPrefixOf)
 import Data.Set.Extra as Set (mapM_, Set, singleton, size, toList)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
-import Language.Haskell.Modules (cleanImports, findModules, getDirs, getNames, mergeModules, modifyDirs, modulePathBase, MonadClean, noisily, parseModule, putDirs, putName, quietly, runCleanT, splitModuleDecls)
+import Language.Haskell.Modules (cleanImports, findHsModules, getDirs, getNames, mergeModules, modifyDirs, modulePathBase, MonadClean, noisily, parseModule, putDirs, putName, quietly, runCleanT, splitModuleDecls)
 import System.IO (hGetLine, hPutStr, hPutStrLn, stderr, stdin)
 
 main :: IO ()
@@ -57,7 +57,7 @@ verse args =
     where
       find :: String -> IO (Set ModuleName)
       find s =
-          do ms <- liftIO (findModules s)
+          do ms <- liftIO (findHsModules [s])
              case size ms of
                0 -> return (singleton (ModuleName s))
                _ -> return ms

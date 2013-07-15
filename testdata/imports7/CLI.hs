@@ -57,7 +57,7 @@ verse args =
     where
       find :: String -> IO (Set ModuleName)
       find s =
-          do ms <- liftIO (findModules s)
+          do ms <- liftIO (findHsModules [s])
              case size ms of
                0 -> return (singleton (ModuleName s))
                _ -> return ms
