@@ -71,8 +71,8 @@ module Language.Haskell.Modules
     , module Language.Haskell.Modules.Params
     , module Language.Haskell.Modules.SourceDirs
     , module Language.Haskell.Modules.Util.QIO
-    , findModules
-    , findPaths
+    , findHsModules
+    , findHsFiles
     , withCurrentDirectory
     ) where
 
@@ -86,4 +86,4 @@ import Language.Haskell.Modules.Params (modifyDryRun, modifyHsFlags, modifyRemov
 import Language.Haskell.Modules.SourceDirs (getDirs, putDirs, modifyDirs, modulePathBase)
 import Language.Haskell.Modules.Split (splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
-import Language.Haskell.Modules.Util.Test (findModules, findPaths)
+import Language.Haskell.Modules.Util.Test (findHsFiles, findHsModules)

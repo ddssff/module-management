@@ -4,8 +4,8 @@ module Language.Haskell.Modules.Util.Test
     , diff
     , diff'
     , rsync
-    , findModules
-    , findPaths
+    , findHsModules
+    , findHsFiles
     ) where
 
 import Control.Monad (foldM)
@@ -120,8 +120,8 @@ rsync :: FilePath -> FilePath -> IO ()
 rsync a b = readProcess "rsync" ["-aHxS", "--delete", a ++ "/", b] "" >> return ()
 
 -- | Find the paths of all the files below the directory @top@.
-findPaths :: [FilePath] -> IO (Set FilePath)
-findPaths tops =
+findHsFiles :: [FilePath] -> IO (Set FilePath)
+findHsFiles tops =
     foldM doPath empty tops
     where
       doPath r path =
@@ -139,9 +139,9 @@ findPaths tops =
 -- MonadClean and use the value of sourceDirs to remove prefixes from
 -- the module paths.  And then it should look at the module text to
 -- see what the module name really is.
-findModules :: [FilePath] -> IO (Set S.ModuleName)
-findModules tops =
-    findPaths tops >>= return . Set.map asModuleName
+findHsModules :: [FilePath] -> IO (Set S.ModuleName)
+findHsModules tops =
+    findHsFiles tops >>= return . Set.map asModuleName
     where
       asModuleName path =
           S.ModuleName (List.map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))
