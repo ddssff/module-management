@@ -114,5 +114,5 @@ test7 =
     TestLabel "imports7" $ TestCase
       (do _ <- rsync "testdata/imports7" "tmp"
           _ <- withCurrentDirectory "tmp" (runCleanT (putDirs [".", ".."] >> modifyTestMode (const True) >> cleanImports ["CLI.hs"]))
-          (_, out, _) <- readProcessWithExitCode "diff" ["-ru", "imports7-expected", "tmp"] ""
-          assertEqual "CLI" "" out)
+          out <- diff "testdata/imports7-expected" "tmp"
+          assertEqual "CLI" (ExitSuccess, "", "") out)

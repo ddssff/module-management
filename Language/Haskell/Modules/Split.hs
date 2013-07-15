@@ -12,8 +12,8 @@ import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
 import Data.Foldable as Foldable (fold)
 import Data.List as List (filter, group, intercalate, map, nub, sort)
-import Data.Map as Map (delete, elems, empty, filter, fromSet, insert, insertWith, lookup, Map, mapWithKey)
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Map as Map (delete, elems, empty, filter, fromSet, insertWith, lookup, Map, mapWithKey)
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((<|), (|>))
 import Data.Set as Set (empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
@@ -64,9 +64,9 @@ splitModule :: MonadClean m =>
                -- is used for instance declarations.
             -> FilePath
             -> m [ModuleResult]
-splitModule symClassToModule path =
+splitModule symToModule path =
     do info <- parseModule (RelPath path)
-       splitModuleBy symClassToModule info
+       splitModuleBy symToModule info
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
 splitModuleDecls :: MonadClean m => FilePath -> m [ModuleResult]
@@ -80,16 +80,16 @@ splitModuleBy _ (A.XmlHybrid {}, _, _) = error "XmlPage"
 splitModuleBy _ (m@(A.Module _ _ _ _ []), _, _) = return [Unchanged (moduleName m)] -- No declarations - nothing to split
 splitModuleBy _ (m@(A.Module _ _ _ _ [_]), _, _) = return [Unchanged (moduleName m)] -- One declaration - nothing to split (but maybe we should anyway?)
 splitModuleBy _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
-splitModuleBy symClassToModule inInfo@(m, _, _) =
+splitModuleBy symToModule inInfo@(m, _, _) =
     do qLnPutStr ("Splitting " ++ prettyPrint (moduleName m))
        quietly $
          do eiMap <- getParams >>= return . extraImports
             -- The name of the module to be split
             let inName = moduleName m
             allNames <- getNames >>= return . Set.union outNames
-            changes <- List.mapM (doModule symClassToModule eiMap inInfo inName outNames) (toList allNames)
+            changes <- List.mapM (doModule symToModule eiMap inInfo inName outNames) (toList allNames)
             -- No good reason to use sets here
-            -- changes <- doSplit symClassToModule info >>= return . collisionCheck univ
+            -- changes <- doSplit symToModule info >>= return . collisionCheck univ
             List.mapM_ doResult changes           -- Write the new modules
             List.mapM_ reportResult changes
             -- Clean the new modules after all edits are finished
@@ -106,14 +106,14 @@ splitModuleBy symClassToModule inInfo@(m, _, _) =
       reportResult x@(Removed (S.ModuleName name)) = qLnPutStr ("splitModule: removing " ++ name) >> return x
       reportResult x = return x
 
-      outNames = Set.map symClassToModule (union (declared inInfo) (exported inInfo))
+      outNames = Set.map symToModule (union (declared inInfo) (exported inInfo))
 
 doModule :: MonadClean m =>
             (Maybe S.Name -> S.ModuleName)
          -> Map S.ModuleName (Set S.ImportDecl)
          -> ModuleInfo -> S.ModuleName
          -> Set S.ModuleName -> S.ModuleName -> m ModuleResult
-doModule symClassToModule eiMap inInfo inName outNames thisName =
+doModule symToModule eiMap inInfo inName outNames thisName =
     case () of
       _ | member thisName outNames ->
             return $ if thisName == inName then Modified thisName newModule else Created thisName newModule
@@ -194,7 +194,7 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
       moduleExports (A.Module _ (Just (A.ModuleHead _ _ _ x)) _ _ _, _, _) = x
       moduleExports (_, _, _) = error "Unsupported module type"
 
-      -- Update the imports to reflect the changed module names in symClassToModule.
+      -- Update the imports to reflect the changed module names in symToModule.
       -- Update re-exports of the split module.
       updateImports :: ModuleInfo -> String
       updateImports oldInfo =
@@ -219,7 +219,7 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
       -- will be in that module.  All of these declarations used to be
       -- in moduleName.
       moduleDeclMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
-      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (symClassToModule sym) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 inInfo Map.empty
+      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (symToModule sym) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 inInfo Map.empty
 
       updateImportDecl :: String -> A.ImportDecl SrcSpanInfo -> String
       updateImportDecl s i =
@@ -229,13 +229,18 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
 
       updateImportSpecs :: A.ImportDecl SrcSpanInfo -> Maybe (A.ImportSpecList SrcSpanInfo) -> [S.ImportDecl]
       -- No spec list, import all the split modules
-      updateImportSpecs i Nothing = List.map (\ x -> (sImportDecl i) {S.importModule = x}) (Map.elems moduleMap)
+      updateImportSpecs i Nothing = List.map (\ x -> (sImportDecl i) {S.importModule = x}) (Set.toList moduleNames) -- (Map.elems moduleMap)
       -- If flag is True this is a "hiding" import
       updateImportSpecs i (Just (A.ImportSpecList _ flag specs)) =
-          concatMap (\ spec -> let xs = mapMaybe (\ sym -> Map.lookup sym moduleMap) (toList (symbols spec)) in
+          concatMap (\ spec -> let xs = List.map symToModule (toList (symbols spec)) in
                                List.map (\ x -> (sImportDecl i) {S.importModule = x, S.importSpecs = Just (flag, [sImportSpec spec])}) xs) specs
 
-      moduleMap = symClassToModuleMap symClassToModule inInfo
+      moduleNames :: Set S.ModuleName
+      moduleNames =
+          s
+          where
+            s = foldExports ignore2 (\ e _ _ _ r -> Set.fold (Set.insert . symToModule) r (symbols e)) ignore2 inInfo s'
+            s' = foldDecls (\ d _ _ _ r -> Set.fold (Set.insert . symToModule) r (symbols d)) ignore2 inInfo Set.empty
 
 -- | Combine the suffix of each export with the prefix of the following
 -- export to make a list of all the separators.  Discards the first
@@ -277,14 +282,6 @@ exported m =
 
 instanceImports :: S.ModuleName -> Map S.ModuleName (Set S.ImportDecl) -> [S.ImportDecl]
 instanceImports name eiMap = maybe [] toList (Map.lookup name eiMap)
-
-symClassToModuleMap :: (Maybe S.Name -> S.ModuleName) -> ModuleInfo -> Map (Maybe S.Name) S.ModuleName
-symClassToModuleMap symClassToModule m =
-    mp'
-    where
-      mp' = foldExports ignore2 (\ e _ _ _ r -> Set.fold f r (symbols e)) ignore2 m mp
-      mp = foldDecls (\ d _ _ _ r -> Set.fold f r (symbols d)) ignore2 m Map.empty
-      f sym mp'' = Map.insert sym (symClassToModule sym) mp''
 
 data DeclClass
     = Exported S.Name

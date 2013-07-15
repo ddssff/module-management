@@ -2,7 +2,7 @@ module Tests.Split where
 
 import Control.Monad as List (mapM_)
 import Data.Set.Extra as Set (mapM_)
-import qualified Language.Haskell.Exts.Syntax as S (Module(..), ModuleName(..), Name(Ident))
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (modifyParams, Params(testMode), runCleanT)
 import Language.Haskell.Modules.ModuVerse (parseModule, putName)
