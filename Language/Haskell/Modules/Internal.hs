@@ -6,6 +6,7 @@ module Language.Haskell.Modules.Internal
     , modifyParams
     , markForDelete
     , Params(..)
+    , CleanT
     , MonadClean(getParams, putParams)
     , ModuleResult(..)
     , doResult
@@ -68,6 +69,8 @@ data Params
       -- splitModule and catModules operations.
       } deriving (Eq, Ord, Show)
 
+type CleanT m = StateT Params m
+
 instance MonadClean m => ModuVerse m where
     getModuVerse = getParams >>= return . moduVerse
     modifyModuVerse f = modifyParams (\ p -> p {moduVerse = f (moduVerse p)})
@@ -79,7 +82,7 @@ class (MonadIO m, MonadCatchIO m, Functor m) => MonadClean m where
 modifyParams :: MonadClean m => (Params -> Params) -> m ()
 modifyParams f = getParams >>= putParams . f
 
-instance (MonadCatchIO m, Functor m) => MonadClean (StateT Params m) where
+instance (MonadCatchIO m, Functor m) => MonadClean (CleanT m) where
     getParams = get
     putParams = put
 
@@ -94,7 +97,7 @@ instance MonadClean m => MonadDryRun m where
 -- | Create the environment required to do import cleaning and module
 -- splitting/merging.  This environment, StateT Params m a, is an
 -- instance of MonadClean.
-runCleanT :: MonadCatchIO m => StateT Params m a -> m a
+runCleanT :: MonadCatchIO m => CleanT m a -> m a
 runCleanT action =
     withTempDirectory "." "scratch" $ \ scratch ->
     do (result, params) <- runStateT action (Params {scratchDir = scratch,

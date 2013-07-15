@@ -1,27 +1,6 @@
--- | This package provides three functions.  The 'cleanImports'
--- function uses ghc's -ddump-minimal-imports flag to generate
--- minimized and explicit imports and re-insert them into the module.
---
--- The 'splitModuleDecls' function moves each declaration of a module
--- into a separate new module, and may also create three additional
--- modules: ReExported (for identifiers that were re-exported from
--- other imports), Instances (for declarations that don't result in an
--- identifier to export), and OtherSymbols (for declarations that
--- can't be turned into a module name.)
---
--- In addition to creating new modules, 'splitModuleDecls' also scans the
--- a set of modules (known as the moduVerse) and updates their imports
--- to account for the new locations of the symbols.  The moduVerse is
--- stored in MonadClean's state, and is updated as modules are created
--- and destroyed by 'splitModule' and 'catModules'.
---
--- The 'splitModule' function is a version of 'splitModuleDecls' that
--- allows the caller to customize the mapping from symbols to new
--- modules.
---
--- The 'mergeModules' function is the inverse operation of
--- 'splitModule', it merges two or more modules into a new or existing
--- module, updating imports of the moduVerse elements as necessary.
+-- | This package provides functions to clean import lists, to split
+-- up modules, and to merge modules.    The important entry
+-- points are:
 --
 -- There are several features worth noting.  The 'Params' type in the
 -- state of 'MonadClean' has a 'removeEmptyImports' field, which is
@@ -32,35 +11,54 @@
 --
 -- These are the important entry points:
 --
--- * 'cleanImports'
+-- * 'runCleanT' - Sets up the environment for splitting and merging.
+--   These operations require updates to be made to all the modules
+--   that import the modules being split or merged, so this
+--   environment tracks the creation and removal of modules.  This
+--   allows a sequence of splits and merges to be performed without
+--   forgetting to update newly created modules.
 --
--- * 'splitModule'
+-- * 'cleanImports' - uses ghc's -ddump-minimal-imports flag to
+--   generate minimized and explicit imports and re-insert them into
+--   the module.
 --
--- * 'mergeModules'
+-- * 'splitModule' - Splits a module into two or more parts according to
+--   the argument function.
 --
--- * 'runCleanT' - Sets up the environment for splitting and merging
+-- * 'splitModuleDecls' - Calls 'splitModule' with a default first
+--   argument.  Each declaration goes into a different module, and
+--   separate modules are created for instances and re-exports.  Decls
+--   that were local to the original module go into a subdirectory named
+--   @Internal@.  Symbols which can't be turned into valid module names
+--   go into @OtherSymbols@.
+--
+-- * 'mergeModules' - the inverse operation of 'splitModule', it
+--   merges two or more modules into a new or existing module, updating
+--   imports of the moduVerse elements as necessary.
 --
 -- * 'Language.Haskell.Modules.Params' - Functions to control modes of operation
 --
 -- Examples:
 --
--- * Use @cleanImports@ to clean up the import lists of all the modules under @./Language@:
+-- * Use 'findHsFiles' and 'cleanImports' to clean up the import lists
+-- of all the modules under @./Language@:
 --
---    @findPaths \"Language\" >>= runCleanT . mapM cleanImports . toList@
+--    @findHsFiles [\"Language\", \"Tests.hs\", \"Tests\"] >>= runCleanT . cleanImports . toList@
 --
--- * Use @splitModule@ to split up module
+-- * Use 'findHsModules' and 'splitModule' to split up module
 --   @Language.Haskell.Modules.Common@, and then merge two of the pieces
 --   back in.
 --
---   @findModules \"Language\" >>= \\ modules -> runCleanT $
+--   @findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
 --      let mn = Language.Haskell.Exts.Syntax.ModuleName in
 --      modifyModuVerse (const modules) >>
---      splitModule (mn \"Language.Haskell.Modules.Common\") >>
+--      splitModuleDecls \"Language/Haskell/Modules/Common.hs\" >>
 --      mergeModules (map mn [\"Language.Haskell.Modules.Common.WithCurrentDirectory\",
 --                            \"Language.Haskell.Modules.Common.ModulePathBase\"])
---                   (mn \"Language.Haskell.Modules.Common\"))@
+--                   (mn \"Language.Haskell.Modules.Common\")@
 module Language.Haskell.Modules
     ( MonadClean
+    , CleanT
     , runCleanT
     , cleanImports
     , splitModule
@@ -79,7 +77,7 @@ module Language.Haskell.Modules
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (MonadClean, runCleanT)
+import Language.Haskell.Modules.Internal (MonadClean, CleanT, runCleanT)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.ModuVerse (ModuVerse(..), parseModule, parseModule', putName, getNames)
 import Language.Haskell.Modules.Params (modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode)
