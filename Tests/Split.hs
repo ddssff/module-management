@@ -2,13 +2,13 @@ module Tests.Split where
 
 import Control.Monad as List (mapM_)
 import Data.Set.Extra as Set (mapM_)
-import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
+import qualified Language.Haskell.Exts.Syntax as S (Module(..), ModuleName(..), Name(Ident))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (modifyParams, Params(testMode), runMonadClean)
 import Language.Haskell.Modules.ModuVerse (parseModule, putName)
 import Language.Haskell.Modules.Params (modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (modulePathBase, SourceDirs(putDirs))
-import Language.Haskell.Modules.Split (DeclClass(..), defaultSymbolToModule, splitModule, splitModuleDecls)
+import Language.Haskell.Modules.SourceDirs (modulePathBase, SourceDirs(putDirs), RelPath(RelPath))
+import Language.Haskell.Modules.Split (defaultSymbolToModule, splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
 import Prelude hiding (writeFile)
@@ -74,13 +74,17 @@ split4b =
     TestLabel "Split4b" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        _ <- withCurrentDirectory "tmp" $
-         runMonadClean $ noisily $ noisily $ modifyTestMode (const True) >> parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>= putName (S.ModuleName "Split4") >> splitModule f "Split4.hs"
+         runMonadClean $ noisily $ noisily $
+           modifyTestMode (const True) >>
+           parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>=
+           putName (S.ModuleName "Split4") >>
+           splitModule f "Split4.hs"
        result <- diff "testdata/split4b-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
     where
-      f :: S.ModuleName -> DeclClass -> S.ModuleName
-      f (S.ModuleName parent) (Exported (S.Ident "getPackages")) = S.ModuleName (parent ++ ".A")
-      f (S.ModuleName parent) _ = S.ModuleName (parent ++ ".B")
+      f :: Maybe S.Name -> S.ModuleName
+      f (Just (S.Ident "getPackages")) = S.ModuleName ("Split4.A")
+      f _ = S.ModuleName ("Split4.B")
 
 
 split4c :: Test
@@ -88,13 +92,17 @@ split4c =
     TestLabel "Split4b" $ TestCase $
     do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
        _ <- withCurrentDirectory "tmp" $
-         runMonadClean $ noisily $ noisily $ modifyTestMode (const True) >> parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>= putName (S.ModuleName "Split4") >> splitModule f "Split4.hs"
+         runMonadClean $ noisily $ noisily $
+           modifyTestMode (const True) >>
+           parseModule (modulePathBase "hs" (S.ModuleName "Split4")) >>=
+           putName (S.ModuleName "Split4") >>
+           splitModule f "Split4.hs"
        result <- diff "testdata/split4c-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
     where
-      f :: S.ModuleName -> DeclClass -> S.ModuleName
-      f (S.ModuleName parent) (Exported (S.Ident "getPackages")) = S.ModuleName (parent ++ ".A")
-      f (S.ModuleName parent) _ = S.ModuleName parent
+      f :: Maybe S.Name -> S.ModuleName
+      f (Just (S.Ident "getPackages")) = S.ModuleName ("Split4.A")
+      f _ = S.ModuleName "Split4"
 
 -- Test what happens when a split module is re-exported
 split5 :: Test
@@ -103,6 +111,7 @@ split5 =
     do _ <- system "rsync -aHxs --delete testdata/split5/ tmp"
        _ <- withCurrentDirectory "tmp" $
          runMonadClean $ noisily $ noisily $
+           parseModule (RelPath "B.hs") >>= \ b ->
            List.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name)
                       [S.ModuleName "A",
                        S.ModuleName "B",
@@ -110,6 +119,6 @@ split5 =
                        S.ModuleName "D",
                        S.ModuleName "E"] >>
            modifyTestMode (const True) >>
-           splitModule defaultSymbolToModule "B.hs"
+           splitModule (defaultSymbolToModule b) "B.hs"
        result <- diff "testdata/split5-expected" "tmp"
        assertEqual "Split5" (ExitSuccess, "", "") result

@@ -1,8 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.Split
-    ( DeclClass(..)
-    , splitModule
+    ( splitModule
     , splitModuleDecls
     , defaultSymbolToModule
     ) where
@@ -20,10 +19,10 @@ import Data.Sequence ((<|), (|>))
 import Data.Set as Set (empty, filter, fold, insert, intersection, map, member, null, Set, singleton, toList, union, unions)
 import Data.Set.Extra as Set (gFind)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, ImportDecl(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
-import Language.Haskell.Exts.Annotated.Simplify (sExportSpec, sImportDecl, sImportSpec, sModuleName, sName)
+import Language.Haskell.Exts.Annotated.Simplify (sModule, sExportSpec, sImportDecl, sImportSpec, sModuleName, sName)
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo(..))
-import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(..), ModuleName(..), Name(..))
+import qualified Language.Haskell.Exts.Syntax as S (Module(..), ExportSpec(..), ImportDecl(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(extraImports))
@@ -33,48 +32,6 @@ import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
 import Prelude hiding (writeFile)
 import System.FilePath ((<.>))
-
-data DeclClass
-    = Exported S.Name
-    | Internal S.Name
-    | ReExported S.Name
-    | Instance
-    | Unknown S.Name
-    deriving (Eq, Ord, Show)
-
--- | Classify the symbols in a module.
-declClass :: ModuleInfo -> Maybe S.Name -> DeclClass
-declClass m mName =
-    unknown mName $ Map.lookup mName mp
-    where
-      unknown :: Maybe S.Name -> Maybe DeclClass -> DeclClass
-      unknown _ (Just x) = x
-      unknown Nothing _ = error "declClass Nothing"
-      unknown (Just x) _ = Unknown x
-      mp = Map.fromSet declClass' (union declaredSymbols exportedSymbols)
-      declClass' Nothing = Instance
-      declClass' x@(Just name) =
-          if member x exportedSymbols
-          then if member x declaredSymbols
-               then Exported name
-               else ReExported name -- Exported but not declared - must come from an import
-          else Internal name        -- Not exported
-      declaredSymbols = foldDecls (\ d _pref _s _suff r -> Set.union (symbols d) r) ignore2 m Set.empty
-      exportedSymbols =
-        case hasExportList m of
-          False -> declaredSymbols
-          True -> union (foldExports ignore2 (\ e _pref _s _suff r -> Set.union (symbols e) r) ignore2 m Set.empty)
-                        -- Any instances declared are exported regardless of the export list
-                        (if member Nothing declaredSymbols then singleton Nothing else Set.empty)
-        where
-          hasExportList :: ModuleInfo -> Bool
-          hasExportList (A.Module _ Nothing _ _ _, _, _) = False
-          hasExportList (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _, _) = False
-          hasExportList _ = True
-
-isReExported :: DeclClass -> Bool
-isReExported (ReExported _) = True
-isReExported _ = False
 
 -- | Split each of a module's declarations into a new module.  Update
 -- the imports of all the modules in the moduVerse to reflect the split.
@@ -102,22 +59,20 @@ isReExported _ = False
 -- go into a module named @Start.ReExported@.  Any instance declarations
 -- would go into @Start.Instances@.
 splitModule :: MonadClean m =>
-               (S.ModuleName -> DeclClass -> S.ModuleName) -- ^ Map declaration to new module name
+               (Maybe S.Name -> S.ModuleName) -- ^ Map declaration to new module name
             -> FilePath
             -> m [ModuleResult]
 splitModule symClassToModule path =
-    do info@(m, _, _) <- parseModule (RelPath path)
-       splitModuleBy (symClassToModule (moduleName m)) info
+    do info <- parseModule (RelPath path)
+       splitModuleBy symClassToModule info
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
 splitModuleDecls :: MonadClean m => FilePath -> m [ModuleResult]
 splitModuleDecls path =
-    do info@(m, _, _) <- parseModule (RelPath path)
-       splitModuleBy (defaultSymbolToModule (moduleName m)) info
+    do info <- parseModule (RelPath path)
+       splitModuleBy (defaultSymbolToModule info) info
 
-splitModuleBy :: MonadClean m =>
-                 (DeclClass -> S.ModuleName)
-              -> ModuleInfo -> m [ModuleResult]
+splitModuleBy :: MonadClean m => (Maybe S.Name -> S.ModuleName) -> ModuleInfo -> m [ModuleResult]
 splitModuleBy _ (A.XmlPage {}, _, _) = error "XmlPage"
 splitModuleBy _ (A.XmlHybrid {}, _, _) = error "XmlPage"
 splitModuleBy _ (m@(A.Module _ _ _ _ []), _, _) = return [Unchanged (moduleName m)] -- No declarations - nothing to split
@@ -149,9 +104,13 @@ splitModuleBy symClassToModule inInfo@(m, _, _) =
       reportResult x@(Removed (S.ModuleName name)) = qLnPutStr ("splitModule: removing " ++ name) >> return x
       reportResult x = return x
 
-      outNames = Set.map (symClassToModule . declClass inInfo) (union (declared inInfo) (exported inInfo))
+      outNames = Set.map symClassToModule (union (declared inInfo) (exported inInfo))
 
-doModule :: MonadClean m => (DeclClass -> S.ModuleName) -> Map S.ModuleName (Set S.ImportDecl) -> ModuleInfo -> S.ModuleName -> Set S.ModuleName -> S.ModuleName -> m ModuleResult
+doModule :: MonadClean m =>
+            (Maybe S.Name -> S.ModuleName)
+         -> Map S.ModuleName (Set S.ImportDecl)
+         -> ModuleInfo -> S.ModuleName
+         -> Set S.ModuleName -> S.ModuleName -> m ModuleResult
 doModule symClassToModule eiMap inInfo inName outNames thisName =
     case () of
       _ | member thisName outNames ->
@@ -258,7 +217,7 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
       -- will be in that module.  All of these declarations used to be
       -- in moduleName.
       moduleDeclMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
-      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (symClassToModule (declClass inInfo sym)) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 inInfo Map.empty
+      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (symClassToModule sym) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 inInfo Map.empty
 
       updateImportDecl :: String -> A.ImportDecl SrcSpanInfo -> String
       updateImportDecl s i =
@@ -271,7 +230,7 @@ doModule symClassToModule eiMap inInfo inName outNames thisName =
       updateImportSpecs i Nothing = List.map (\ x -> (sImportDecl i) {S.importModule = x}) (Map.elems moduleMap)
       -- If flag is True this is a "hiding" import
       updateImportSpecs i (Just (A.ImportSpecList _ flag specs)) =
-          concatMap (\ spec -> let xs = mapMaybe (\ sym -> Map.lookup (declClass inInfo sym) moduleMap) (toList (symbols spec)) in
+          concatMap (\ spec -> let xs = mapMaybe (\ sym -> Map.lookup sym moduleMap) (toList (symbols spec)) in
                                List.map (\ x -> (sImportDecl i) {S.importModule = x, S.importSpecs = Just (flag, [sImportSpec spec])}) xs) specs
 
       moduleMap = symClassToModuleMap symClassToModule inInfo
@@ -317,30 +276,69 @@ exported m =
 instanceImports :: S.ModuleName -> Map S.ModuleName (Set S.ImportDecl) -> [S.ImportDecl]
 instanceImports name eiMap = maybe [] toList (Map.lookup name eiMap)
 
-symClassToModuleMap :: (DeclClass -> S.ModuleName) -> ModuleInfo -> Map DeclClass S.ModuleName
+symClassToModuleMap :: (Maybe S.Name -> S.ModuleName) -> ModuleInfo -> Map (Maybe S.Name) S.ModuleName
 symClassToModuleMap symClassToModule m =
     mp'
     where
       mp' = foldExports ignore2 (\ e _ _ _ r -> Set.fold f r (symbols e)) ignore2 m mp
       mp = foldDecls (\ d _ _ _ r -> Set.fold f r (symbols d)) ignore2 m Map.empty
-      f sym mp'' =
-          Map.insert
-            (declClass m sym)
-            (symClassToModule (declClass m sym))
-            mp''
+      f sym mp'' = Map.insert sym (symClassToModule sym) mp''
+
+data DeclClass
+    = Exported S.Name
+    | Internal S.Name
+    | ReExported S.Name
+    | Instance
+    | Unknown S.Name
+    deriving (Eq, Ord, Show)
+
+-- | Classify the symbols in a module.
+declClass :: ModuleInfo -> Maybe S.Name -> DeclClass
+declClass info@(m, _, _) mName =
+    unknown mName $ Map.lookup mName mp
+    where
+      unknown :: Maybe S.Name -> Maybe DeclClass -> DeclClass
+      unknown _ (Just x) = x
+      unknown Nothing _ = error "declClass Nothing"
+      unknown (Just x) _ = Unknown x
+      mp = Map.fromSet declClass' (union declaredSymbols exportedSymbols)
+      declClass' Nothing = Instance
+      declClass' x@(Just name) =
+          if member x exportedSymbols
+          then if member x declaredSymbols
+               then Exported name
+               else ReExported name -- Exported but not declared - must come from an import
+          else Internal name        -- Not exported
+      declaredSymbols = foldDecls (\ d _pref _s _suff r -> Set.union (symbols d) r) ignore2 info Set.empty
+      exportedSymbols =
+        case hasExportList (sModule m) of
+          False -> declaredSymbols
+          True -> union (foldExports ignore2 (\ e _pref _s _suff r -> Set.union (symbols e) r) ignore2 info Set.empty)
+                        -- Any instances declared are exported regardless of the export list
+                        (if member Nothing declaredSymbols then singleton Nothing else Set.empty)
+        where
+          hasExportList :: S.Module -> Bool
+          hasExportList (S.Module _ _ _ _ Nothing _ _) = False
+          hasExportList _ = True
+
+isReExported :: DeclClass -> Bool
+isReExported (ReExported _) = True
+isReExported _ = False
 
 -- | What module should this symbol be moved to?
-defaultSymbolToModule :: S.ModuleName -- ^ Parent module name
-                      -> DeclClass     -- ^ Declared symbol
+defaultSymbolToModule :: ModuleInfo    -- ^ Parent module name
+                      -> Maybe S.Name
                       -> S.ModuleName
-defaultSymbolToModule (S.ModuleName parentModuleName) name =
-    S.ModuleName (parentModuleName <.> case name of
-                                         Instance -> "Instances"
-                                         ReExported _ -> "ReExported"
-                                         Internal x -> "Internal" <.> f x
-                                         Unknown x -> "Unknown" <.> f x
-                                         Exported x -> f x)
+defaultSymbolToModule info@(m, _, _) name =
+    S.ModuleName (parentModuleName <.>
+                             case declClass info name of
+                               Instance -> "Instances"
+                               ReExported _ -> "ReExported"
+                               Internal x -> "Internal" <.> f x
+                               Unknown x -> "Unknown" <.> f x
+                               Exported x -> f x)
     where
+      S.ModuleName parentModuleName = moduleName m
       f (S.Symbol s) = g s
       f (S.Ident s) = g s
       -- Any symbol that starts with a letter is converted to a module name
