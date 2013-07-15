@@ -51,7 +51,7 @@ verse [] =
                                   "Currently:\n  " ++ showVerse modules)
 verse args =
     do new <- mapM (liftIO . find) args
-       List.mapM_ (Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name)) new
+       List.mapM_ (Set.mapM_ putModule) new
        modules <- getNames
        liftIO (hPutStrLn stderr $ "moduVerse updated:\n  " ++ showVerse modules)
     where

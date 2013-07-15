@@ -14,8 +14,7 @@ import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules (mergeModules, splitModuleDecls)
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (MonadClean, Params, runCleanT)
-import Language.Haskell.Modules.ModuVerse (modifyExtensions, parseModule, putName)
-import Language.Haskell.Modules.SourceDirs (modulePathBase)
+import Language.Haskell.Modules.ModuVerse (modifyExtensions, putModule)
 import Language.Haskell.Modules.Util.QIO (noisily, qLnPutStr)
 import Language.Haskell.Modules.Util.Test (diff', logicModules, rsync)
 import System.Environment (getArgs)
@@ -92,7 +91,7 @@ test2a u =
          do modifyExtensions (++ [MultiParamTypeClasses])
             -- We *must* clean the split results, or there will be
             -- circular imports created when we merge.
-            Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) u
+            Set.mapM_ putModule u
             qLnPutStr "Splitting module Literal"
             _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
             return ()
@@ -100,7 +99,7 @@ test2a u =
 test2b :: MonadClean m => Set ModuleName -> m ()
 test2b u =
          do modifyExtensions (++ [MultiParamTypeClasses])
-            Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) u
+            Set.mapM_ putModule u
             _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules
                    [ModuleName "Data.Logic.Classes.FirstOrder",
@@ -113,7 +112,7 @@ test2b u =
 test2c :: MonadClean m => Set ModuleName -> m ()
 test2c u =
          do modifyExtensions (++ [MultiParamTypeClasses])
-            Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name) u
+            Set.mapM_ putModule u
             _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules
                    [ModuleName "Data.Logic.Classes.FirstOrder",

@@ -25,7 +25,7 @@ import qualified Language.Haskell.Exts.Annotated as A (ExportSpec)
 import Language.Haskell.Exts.Annotated.Simplify (sExportSpec)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl, ModuleName(..))
-import Language.Haskell.Modules.ModuVerse (delName, loadModule, ModuVerse(..), moduVerseInit, ModuVerseState, putName, unloadModule)
+import Language.Haskell.Modules.ModuVerse (delName, ModuVerse(..), moduVerseInit, ModuVerseState, unloadModule, putModuleAnew)
 import Language.Haskell.Modules.SourceDirs (modulePath, modulePathBase)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
@@ -140,24 +140,20 @@ doResult x@(Removed name) =
        return x
 
 doResult x@(Modified name text) =
-    do let rel = modulePathBase "hs" name
-       path <- modulePath "hs" name
+    do path <- modulePath "hs" name
        -- qLnPutStr ("modifying " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
-       info <- loadModule rel
-       putName name info
+       putModuleAnew name
        return x
 
 doResult x@(Created name text) =
-    do let rel = modulePathBase "hs" name
-       path <- modulePath "hs" name
+    do path <- modulePath "hs" name
        -- qLnPutStr ("creating " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
        replaceFile tildeBackup path text
-       info <- loadModule rel
-       putName name info
+       putModuleAnew name
        return x
 
 -- | Update an export spec.  The only thing we might need to change is

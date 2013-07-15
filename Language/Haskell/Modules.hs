@@ -49,13 +49,12 @@
 --   @Language.Haskell.Modules.Common@, and then merge two of the pieces
 --   back in.
 --
---   @findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
---      let mn = Language.Haskell.Exts.Syntax.ModuleName in
---      modifyModuVerse (const modules) >>
---      splitModuleDecls \"Language/Haskell/Modules/Common.hs\" >>
---      mergeModules (map mn [\"Language.Haskell.Modules.Common.WithCurrentDirectory\",
---                            \"Language.Haskell.Modules.Common.ModulePathBase\"])
---                   (mn \"Language.Haskell.Modules.Common\")@
+--   @findHsFiles [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
+--      mapM putModule modules >>
+--      splitModuleDecls "Language/Haskell/Modules/Common.hs" >>
+--      mergeModules [\"Language.Haskell.Modules.Common.WithCurrentDirectory\",
+--                    \"Language.Haskell.Modules.Common.ModulePathBase\"]
+--                   \"Language.Haskell.Modules.Common\"@
 module Language.Haskell.Modules
     ( MonadClean
     , CleanT
@@ -79,7 +78,7 @@ import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldH
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Internal (CleanT, MonadClean, runCleanT)
 import Language.Haskell.Modules.Merge (mergeModules)
-import Language.Haskell.Modules.ModuVerse (getNames, ModuVerse(..), parseModule, parseModule', putName)
+import Language.Haskell.Modules.ModuVerse (getNames, ModuVerse(..), parseModule, parseModule', putModule)
 import Language.Haskell.Modules.Params (modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode)
 import Language.Haskell.Modules.SourceDirs (getDirs, modifyDirs, modulePathBase, putDirs)
 import Language.Haskell.Modules.Split (splitModule, splitModuleDecls)

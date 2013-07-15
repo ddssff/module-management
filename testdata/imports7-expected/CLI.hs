@@ -6,7 +6,7 @@ import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (intercalate, isPrefixOf)
 import Data.Set.Extra as Set (mapM_, Set, singleton, size, toList)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
-import Language.Haskell.Modules (cleanImports, findHsModules, getDirs, getNames, mergeModules, modifyDirs, modulePathBase, MonadClean, noisily, parseModule, putDirs, putName, quietly, runCleanT, splitModuleDecls)
+import Language.Haskell.Modules (cleanImports, findHsModules, getDirs, getNames, mergeModules, modifyDirs, MonadClean, noisily, putDirs, putModule, quietly, runCleanT, splitModuleDecls)
 import System.IO (hGetLine, hPutStr, hPutStrLn, stderr, stdin)
 
 main :: IO ()
@@ -51,7 +51,7 @@ verse [] =
                                   "Currently:\n  " ++ showVerse modules)
 verse args =
     do new <- mapM (liftIO . find) args
-       List.mapM_ (Set.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name)) new
+       List.mapM_ (Set.mapM_ putModule) new
        modules <- getNames
        liftIO (hPutStrLn stderr $ "moduVerse updated:\n  " ++ showVerse modules)
     where

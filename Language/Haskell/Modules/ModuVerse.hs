@@ -8,7 +8,9 @@ module Language.Haskell.Modules.ModuVerse
     , ModuVerse(..)
     , getNames
     , getInfo
-    , putName
+    -- , putName
+    , putModule
+    , putModuleAnew
     , delName
     , getExtensions
     , modifyExtensions
@@ -33,7 +35,7 @@ import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import Language.Haskell.Modules.SourceDirs (pathKey, PathKey(..), SourceDirs(..))
+import Language.Haskell.Modules.SourceDirs (pathKey, PathKey(..), SourceDirs(..), modulePathBase)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
@@ -65,13 +67,19 @@ moduVerseInit =
                    , sourceDirs_ = ["."] }
 
 getNames :: ModuVerse m => m (Set S.ModuleName)
-getNames = getModuVerse >>= return . Set.fromList . keys . fromMaybe (error "No modules in ModuVerse, use putName") . moduleNames_
+getNames = getModuVerse >>= return . Set.fromList . keys . fromMaybe (error "No modules in ModuVerse, use putModule") . moduleNames_
 
 getInfo :: ModuVerse m => S.ModuleName -> m (Maybe ModuleInfo)
-getInfo name = getModuVerse >>= return . Map.lookup name . fromMaybe (error "No modules in ModuVerse, use putName") . moduleNames_
+getInfo name = getModuVerse >>= return . Map.lookup name . fromMaybe (error "No modules in ModuVerse, use putModule") . moduleNames_
 
 putName :: ModuVerse m => S.ModuleName -> ModuleInfo -> m ()
 putName name info = modifyModuVerse (\ s -> s {moduleNames_ = Just (Map.insert name info (fromMaybe Map.empty (moduleNames_ s)))})
+
+putModule :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m ()
+putModule name = parseModule (modulePathBase "hs" name) >>= putName name
+
+putModuleAnew :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m ()
+putModuleAnew name = loadModule (modulePathBase "hs" name) >>= putName name
 
 delName :: ModuVerse m => S.ModuleName -> m ()
 delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Map.delete name (fromMaybe Map.empty (moduleNames_ s)))
