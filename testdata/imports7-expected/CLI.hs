@@ -6,7 +6,9 @@ import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (intercalate, isPrefixOf)
 import Data.Set.Extra as Set (Set, toList)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
-import Language.Haskell.Modules (cleanImports, findHsModules, getDirs, getNames, mergeModules, modifyDirs, MonadClean, noisily, putDirs, putModule, quietly, runCleanT, splitModuleDecls)
+import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules, modifyDirs, MonadClean, noisily, putDirs, putModule, quietly, runCleanT, splitModuleDecls)
+import Language.Haskell.Modules.ModuVerse (getNames)
+import Language.Haskell.Modules.SourceDirs (getDirs)
 import System.IO (hGetLine, hPutStr, hPutStrLn, stderr, stdin)
 
 main :: IO ()
@@ -55,7 +57,6 @@ verse args =
        modules <- getNames
        liftIO (hPutStrLn stderr $ "moduVerse updated:\n  " ++ showVerse modules)
     where
-      find :: String -> IO [String]
       find s =
           do ms <- liftIO (findHsModules [s])
              case ms of

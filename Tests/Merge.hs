@@ -2,13 +2,7 @@ module Tests.Merge where
 
 import Control.Monad as List (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
-import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Internal (runCleanT)
-import Language.Haskell.Modules.Merge (mergeModules)
-import Language.Haskell.Modules.ModuVerse (putModule)
-import Language.Haskell.Modules.Params (modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (SourceDirs(putDirs))
-import Language.Haskell.Modules.Util.QIO (noisily)
+import Language.Haskell.Modules
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))

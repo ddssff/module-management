@@ -3,12 +3,7 @@ module Tests.Imports where
 
 import Language.Haskell.Exts.Extension (Extension(FlexibleInstances, StandaloneDeriving, TypeSynonymInstances))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
-import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (runCleanT)
-import Language.Haskell.Modules.ModuVerse (modifyExtensions)
-import Language.Haskell.Modules.Params (modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (modulePathBase, putDirs)
+import Language.Haskell.Modules
 import Language.Haskell.Modules.Util.Test (diff, rsync)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))

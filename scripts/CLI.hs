@@ -7,6 +7,8 @@ import Data.List (intercalate, isPrefixOf)
 import Data.Set.Extra as Set (Set, toList)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules
+import Language.Haskell.Modules.ModuVerse (getNames)
+import Language.Haskell.Modules.SourceDirs (getDirs)
 import System.IO (hGetLine, hPutStr, hPutStrLn, stderr, stdin)
 
 main :: IO ()

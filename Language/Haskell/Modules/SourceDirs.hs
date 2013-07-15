@@ -7,7 +7,6 @@ module Language.Haskell.Modules.SourceDirs
     , pathKey
     , modulePath
     , modulePathBase
-    , findSourcePath
     ) where
 
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
@@ -28,13 +27,13 @@ newtype PathKey = PathKey {unPathKey :: FilePath} deriving (Eq, Ord, Show)
 
 pathKey :: SourceDirs m => FilePath -> m PathKey
 -- pathKey path = PathKey <$> liftIO (canonicalizePath path)
-pathKey path = findSourcePath path >>= liftIO . canonicalizePath >>= return . PathKey
+pathKey path = findFile path >>= liftIO . canonicalizePath >>= return . PathKey
 
 -- | Search the path directory list, preferring an already existing file, but
 -- if there is none construct one using the first element of the directory list.
 modulePath :: SourceDirs m => String -> S.ModuleName -> m FilePath
 modulePath ext name =
-    findSourcePath path `IO.catch` (\ (_ :: IOError) -> makePath)
+    findFile path `IO.catch` (\ (_ :: IOError) -> makePath)
     where
       makePath =
           do dirs <- getDirs
@@ -57,16 +56,16 @@ modulePathBase ext (S.ModuleName name) =
 
 -- | Search the path directory list for a source file that already exists.
 -- FIXME: this should return a Maybe.
-findSourcePath :: SourceDirs m => FilePath -> m FilePath
-findSourcePath path =
-    findFile =<< getDirs
+findFile :: SourceDirs m => FilePath -> m FilePath
+findFile path =
+    getDirs >>= f
     where
-      findFile (dir : dirs) =
+      f (dir : dirs) =
           do let x = dir </> path
              exists <- liftIO $ doesFileExist x
-             if exists then return x else findFile dirs
-      findFile [] =
+             if exists then return x else f dirs
+      f [] =
           do -- Just building an error message here
              here <- liftIO getCurrentDirectory
              dirs <- getDirs
-             liftIO . throw . userError $ "findSourcePath failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ path
+             liftIO . throw . userError $ "findFile failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ path

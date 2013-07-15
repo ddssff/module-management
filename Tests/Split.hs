@@ -2,13 +2,7 @@ module Tests.Split where
 
 import Control.Monad as List (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
-import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Internal (modifyParams, Params(testMode), runCleanT)
-import Language.Haskell.Modules.ModuVerse (parseModule, putModule)
-import Language.Haskell.Modules.Params (modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (SourceDirs(putDirs))
-import Language.Haskell.Modules.Split (defaultSymbolToModule, splitModule, splitModuleDecls)
-import Language.Haskell.Modules.Util.QIO (noisily)
+import Language.Haskell.Modules
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
 import Prelude hiding (writeFile)
 import System.Cmd (system)
@@ -37,7 +31,7 @@ split2a =
     TestCase $
     do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
        _ <- runCleanT $ noisily $ noisily $
-         do modifyParams (\ p -> p {testMode = True})
+         do modifyTestMode (const True)
             putDirs ["tmp"]
             putModule "Split"
             splitModuleDecls "Split.hs"
@@ -108,9 +102,8 @@ split5 =
     do _ <- system "rsync -aHxs --delete testdata/split5/ tmp"
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
-           parseModule "B.hs" >>= \ b ->
            List.mapM_ putModule ["A", "B", "C", "D", "E"] >>
            modifyTestMode (const True) >>
-           splitModule (defaultSymbolToModule b) "B.hs"
+           splitModuleDecls "B.hs"
        result <- diff "testdata/split5-expected" "tmp"
        assertEqual "Split5" (ExitSuccess, "", "") result

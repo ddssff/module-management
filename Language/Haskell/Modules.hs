@@ -56,31 +56,43 @@
 --                    \"Language.Haskell.Modules.Common.ModulePathBase\"]
 --                   \"Language.Haskell.Modules.Common\"@
 module Language.Haskell.Modules
-    ( MonadClean
+    ( -- * The runtime environment
+      MonadClean
     , CleanT
     , runCleanT
+    , putModule
+    , findModule
+    -- * Run time parameters
+    , modifyDryRun
+    , modifyHsFlags
+    , modifyRemoveEmptyImports
+    , modifyExtensions
+    , modifyTestMode
+    , modifyDirs
+    , putDirs
+    -- * Progress reporting
+    , noisily
+    , quietly
+    -- * The main entry points
     , cleanImports
     , splitModule
     , splitModuleDecls
+    , defaultSymbolToModule
     , mergeModules
-    , module Language.Haskell.Modules.Fold
-    , module Language.Haskell.Modules.ModuVerse
-    , module Language.Haskell.Modules.Params
-    , module Language.Haskell.Modules.SourceDirs
-    , module Language.Haskell.Modules.Util.QIO
+    -- * Helper functions
+    , modulePathBase
     , findHsModules
     , findHsFiles
     , withCurrentDirectory
     ) where
 
 import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (CleanT, MonadClean, runCleanT)
+import Language.Haskell.Modules.Internal (MonadClean, CleanT, runCleanT)
 import Language.Haskell.Modules.Merge (mergeModules)
-import Language.Haskell.Modules.ModuVerse (getNames, ModuVerse(..), parseModule, parseModule', putModule)
+import Language.Haskell.Modules.ModuVerse (putModule, findModule, modifyExtensions)
 import Language.Haskell.Modules.Params (modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (getDirs, modifyDirs, modulePathBase, putDirs)
-import Language.Haskell.Modules.Split (splitModule, splitModuleDecls)
+import Language.Haskell.Modules.SourceDirs (modifyDirs, putDirs, modulePathBase)
+import Language.Haskell.Modules.Split (splitModule, splitModuleDecls, defaultSymbolToModule)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
 import Language.Haskell.Modules.Util.Test (findHsFiles, findHsModules)

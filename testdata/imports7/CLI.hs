@@ -4,9 +4,11 @@ module Main where
 import Control.Monad as List (mapM_)
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (intercalate, isPrefixOf)
-import Data.Set.Extra as Set (mapM_, Set, singleton, size, toList)
+import Data.Set.Extra as Set (Set, toList)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules
+import Language.Haskell.Modules.ModuVerse (getNames)
+import Language.Haskell.Modules.SourceDirs (getDirs)
 import System.IO (hGetLine, hPutStr, hPutStrLn, stderr, stdin)
 
 main :: IO ()
@@ -55,7 +57,6 @@ verse args =
        modules <- getNames
        liftIO (hPutStrLn stderr $ "moduVerse updated:\n  " ++ showVerse modules)
     where
-      find :: String -> IO [String]
       find s =
           do ms <- liftIO (findHsModules [s])
              case ms of

@@ -11,6 +11,7 @@ module Language.Haskell.Modules.ModuVerse
     -- , putName
     , putModule
     , putModuleAnew
+    , findModule
     , delName
     , getExtensions
     , modifyExtensions
@@ -80,6 +81,9 @@ putModule name = parseModule (modulePathBase "hs" (S.ModuleName name)) >>= putNa
 
 putModuleAnew :: (ModuVerse m, MonadVerbosity m) => String -> m ()
 putModuleAnew name = loadModule (modulePathBase "hs" (S.ModuleName name)) >>= putName (S.ModuleName name)
+
+findModule :: (ModuVerse m, MonadVerbosity m) => String -> m (Maybe ModuleInfo)
+findModule name = parseModule' (modulePathBase "hs" (S.ModuleName name))
 
 delName :: ModuVerse m => S.ModuleName -> m ()
 delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Map.delete name (fromMaybe Map.empty (moduleNames_ s)))

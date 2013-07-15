@@ -69,6 +69,7 @@ data Params
       -- splitModule and catModules operations.
       } deriving (Eq, Ord, Show)
 
+-- | An instance of MonadClean.
 type CleanT m = StateT Params m
 
 instance MonadClean m => ModuVerse m where
