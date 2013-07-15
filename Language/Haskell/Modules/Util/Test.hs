@@ -10,7 +10,7 @@ module Language.Haskell.Modules.Util.Test
 
 import Control.Monad (foldM)
 import Data.List as List (filter, isPrefixOf, isSuffixOf, map)
-import Data.Set as Set (Set, empty, fromList, insert, map, unions)
+import Data.Set as Set (empty, fromList, insert, map, Set)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents)
 import System.Exit (ExitCode)
