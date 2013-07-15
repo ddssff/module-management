@@ -324,7 +324,8 @@ isReExported :: DeclClass -> Bool
 isReExported (ReExported _) = True
 isReExported _ = False
 
--- | What module should this symbol be moved to?
+-- | This can be used to build function parameter of splitModule, it
+-- determines which module should a symbol be moved to.
 defaultSymbolToModule :: ModuleInfo    -- ^ Parent module name
                       -> Maybe S.Name
                       -> S.ModuleName

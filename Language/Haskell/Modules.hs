@@ -56,13 +56,19 @@
 --                    \"Language.Haskell.Modules.Common.ModulePathBase\"]
 --                   \"Language.Haskell.Modules.Common\"@
 module Language.Haskell.Modules
-    ( -- * The runtime environment
-      MonadClean
+    (
+    -- * Entry points
+      cleanImports
+    , splitModule
+    , splitModuleDecls
+    , defaultSymbolToModule
+    , mergeModules
+    -- * Runtime environment
+    , MonadClean
     , CleanT
     , runCleanT
     , putModule
     , findModule
-    -- * Run time parameters
     , modifyDryRun
     , modifyHsFlags
     , modifyRemoveEmptyImports
@@ -73,12 +79,6 @@ module Language.Haskell.Modules
     -- * Progress reporting
     , noisily
     , quietly
-    -- * The main entry points
-    , cleanImports
-    , splitModule
-    , splitModuleDecls
-    , defaultSymbolToModule
-    , mergeModules
     -- * Helper functions
     , modulePathBase
     , findHsModules
@@ -86,13 +86,18 @@ module Language.Haskell.Modules
     , withCurrentDirectory
     ) where
 
-import Language.Haskell.Modules.Common (withCurrentDirectory)
-import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (MonadClean, CleanT, runCleanT)
-import Language.Haskell.Modules.Merge (mergeModules)
-import Language.Haskell.Modules.ModuVerse (putModule, findModule, modifyExtensions)
-import Language.Haskell.Modules.Params (modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (modifyDirs, putDirs, modulePathBase)
-import Language.Haskell.Modules.Split (splitModule, splitModuleDecls, defaultSymbolToModule)
-import Language.Haskell.Modules.Util.QIO (noisily, quietly)
-import Language.Haskell.Modules.Util.Test (findHsFiles, findHsModules)
+import Language.Haskell.Modules.Common -- (withCurrentDirectory)
+import Language.Haskell.Modules.Fold
+import Language.Haskell.Modules.Imports -- (cleanImports)
+import Language.Haskell.Modules.Internal -- (MonadClean, CleanT, runCleanT)
+import Language.Haskell.Modules.Merge -- (mergeModules)
+import Language.Haskell.Modules.ModuVerse -- (putModule, findModule, modifyExtensions)
+import Language.Haskell.Modules.Params -- (modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode)
+import Language.Haskell.Modules.SourceDirs -- (modifyDirs, putDirs, modulePathBase)
+import Language.Haskell.Modules.Split -- (splitModule, splitModuleDecls, defaultSymbolToModule)
+import Language.Haskell.Modules.Util.DryIO
+import Language.Haskell.Modules.Util.QIO -- (noisily, quietly)
+import Language.Haskell.Modules.Util.SrcLoc
+import Language.Haskell.Modules.Util.Symbols
+import Language.Haskell.Modules.Util.Temp
+import Language.Haskell.Modules.Util.Test -- (findHsFiles, findHsModules)
