@@ -7,7 +7,7 @@ import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Internal (modifyParams, Params(testMode), runCleanT)
 import Language.Haskell.Modules.ModuVerse (parseModule, putName)
 import Language.Haskell.Modules.Params (modifyTestMode)
-import Language.Haskell.Modules.SourceDirs (modulePathBase, SourceDirs(putDirs), RelPath(RelPath))
+import Language.Haskell.Modules.SourceDirs (modulePathBase, SourceDirs(putDirs))
 import Language.Haskell.Modules.Split (defaultSymbolToModule, splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily)
 import Language.Haskell.Modules.Util.Test (diff, repoModules)
@@ -111,7 +111,7 @@ split5 =
     do _ <- system "rsync -aHxs --delete testdata/split5/ tmp"
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
-           parseModule (RelPath "B.hs") >>= \ b ->
+           parseModule "B.hs" >>= \ b ->
            List.mapM_ (\ name -> parseModule (modulePathBase "hs" name) >>= putName name)
                       [S.ModuleName "A",
                        S.ModuleName "B",

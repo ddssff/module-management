@@ -25,7 +25,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, import
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(..), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
 import Language.Haskell.Modules.ModuVerse (getExtensions, loadModule, modifyExtensions, ModuleInfo, moduleName, parseModule)
-import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, pathKey, PathKey(unPathKey), RelPath(..), SourceDirs(getDirs, putDirs))
+import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, pathKey, PathKey(unPathKey), SourceDirs(getDirs, putDirs))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
@@ -59,9 +59,9 @@ cleanBuildImports lbi =
 
 -- | Clean up the imports of a source file.
 cleanImports :: MonadClean m => [FilePath] -> m [ModuleResult]
-cleanImports relpaths =
-    do dumpImports (map RelPath relpaths)
-       mapM (\ path -> parseModule path >>= doModule path) (map RelPath relpaths)
+cleanImports paths =
+    do dumpImports paths
+       mapM (\ path -> parseModule path >>= doModule path) paths
     where
       doModule path mi@(m@(A.Module {}), _, _) = checkImports path (moduleName m) mi
       doModule _ (m, _, _) = error $ "Unsupported module value: " ++ show m
@@ -93,7 +93,7 @@ cleanResults results =
              checkImports path name info
 
 -- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
-dumpImports :: MonadClean m => [RelPath] -> m ()
+dumpImports :: MonadClean m => [FilePath] -> m ()
 dumpImports paths =
     do keys <- mapM pathKey paths
        scratch <- scratchDir <$> getParams
@@ -116,13 +116,13 @@ dumpImports paths =
 -- source file.  We also need to modify the imports of any names
 -- that are types that appear in standalone instance derivations so
 -- their members are imported too.
-checkImports :: MonadClean m => RelPath -> S.ModuleName -> ModuleInfo -> m ModuleResult
+checkImports :: MonadClean m => FilePath -> S.ModuleName -> ModuleInfo -> m ModuleResult
 checkImports path name@(S.ModuleName _) info@(A.Module _ _ _ imports _, _, _) =
     do let importsPath = modulePathBase "imports" name
        -- The .imports file will appear in the real current directory,
        -- ignore the source dir path.  This may change in future
        -- versions of GHC, see http://ghc.haskell.org/trac/ghc/ticket/7957
-       markForDelete (unRelPath importsPath)
+       markForDelete importsPath
        (newImports, _, _) <-
            withDot $
              withPackageImportsExtension $
@@ -150,13 +150,13 @@ withDot a =
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: MonadClean m => RelPath -> ModuleInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
+updateSource :: MonadClean m => FilePath -> ModuleInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
 updateSource path m@(A.Module _ _ _ oldImports _, _, _) (A.Module _ _ _ newImports _) name extraImports =
     do remove <- removeEmptyImports <$> getParams
        key <- pathKey path
-       maybe (qLnPutStr ("cleanImports: no changes to " ++ unRelPath path) >> return (Unchanged name))
+       maybe (qLnPutStr ("cleanImports: no changes to " ++ path) >> return (Unchanged name))
              (\ text' ->
-                  qLnPutStr ("cleanImports: modifying " ++ unRelPath path) >>
+                  qLnPutStr ("cleanImports: modifying " ++ path) >>
                   replaceFile tildeBackup (unPathKey key) text' >>
                   return (Modified name text'))
              (replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m)

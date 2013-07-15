@@ -33,7 +33,7 @@ import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import Language.Haskell.Modules.SourceDirs (pathKey, PathKey(..), RelPath(..), SourceDirs(..))
+import Language.Haskell.Modules.SourceDirs (pathKey, PathKey(..), SourceDirs(..))
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
@@ -102,10 +102,10 @@ modifySourceDirs :: ModuVerse m => ([FilePath] -> [FilePath]) -> m ()
 modifySourceDirs f = modifyModuVerse (\ p -> p {sourceDirs_ = f (sourceDirs_ p)})
 -}
 
-parseModule :: (ModuVerse m, MonadVerbosity m) => RelPath -> m ModuleInfo
+parseModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
 parseModule path = parseModule' path >>= maybe (error $ "parseModule - not found: " ++ show path) return
 
-parseModule' :: (ModuVerse m, MonadVerbosity m) => RelPath -> m (Maybe ModuleInfo)
+parseModule' :: (ModuVerse m, MonadVerbosity m) => FilePath -> m (Maybe ModuleInfo)
 parseModule' path =
     (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e || isUserError e then return Nothing else throw e)
     where
@@ -117,7 +117,7 @@ parseModule' path =
       load Nothing = Just <$> loadModule path
 
 -- | Force a possibly cached module to be reloaded.
-loadModule :: (ModuVerse m, MonadVerbosity m) => RelPath -> m ModuleInfo
+loadModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
 loadModule path =
     do key <- pathKey path
        text <- liftIO $ readFile (unPathKey key)
@@ -126,7 +126,7 @@ loadModule path =
        modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ x)})
        return (parsed, text, comments)
 
-unloadModule :: (ModuVerse m, MonadVerbosity m) => RelPath -> m ()
+unloadModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ()
 unloadModule path =
     do key <- pathKey path
        modifyModuVerse (\ x -> x {moduleInfo_ = Map.delete key (moduleInfo_ x)})

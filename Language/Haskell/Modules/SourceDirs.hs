@@ -7,7 +7,6 @@ module Language.Haskell.Modules.SourceDirs
     , pathKey
     , modulePath
     , modulePathBase
-    , RelPath(..)
     , findSourcePath
     ) where
 
@@ -27,7 +26,7 @@ modifyDirs f = getDirs >>= putDirs . f
 -- | A FilePath that can be assumed to be unique.
 newtype PathKey = PathKey {unPathKey :: FilePath} deriving (Eq, Ord, Show)
 
-pathKey :: SourceDirs m => RelPath -> m PathKey
+pathKey :: SourceDirs m => FilePath -> m PathKey
 -- pathKey path = PathKey <$> liftIO (canonicalizePath path)
 pathKey path = findSourcePath path >>= liftIO . canonicalizePath >>= return . PathKey
 
@@ -35,19 +34,19 @@ pathKey path = findSourcePath path >>= liftIO . canonicalizePath >>= return . Pa
 -- if there is none construct one using the first element of the directory list.
 modulePath :: SourceDirs m => String -> S.ModuleName -> m FilePath
 modulePath ext name =
-    findSourcePath relPath `IO.catch` (\ (_ :: IOError) -> makePath)
+    findSourcePath path `IO.catch` (\ (_ :: IOError) -> makePath)
     where
       makePath =
           do dirs <- getDirs
              case dirs of
                [] -> return path -- should this be an error?
                (d : _) -> return $ d </> path
-      relPath@(RelPath path) = modulePathBase ext name
+      path = modulePathBase ext name
 
 -- | Construct the base of a module path.
-modulePathBase :: String -> S.ModuleName -> RelPath
+modulePathBase :: String -> S.ModuleName -> FilePath
 modulePathBase ext (S.ModuleName name) =
-    RelPath (base <.> ext)
+    base <.> ext
     where base = case ext of
                    "hs" -> map f name
                    "lhs" -> map f name
@@ -56,12 +55,10 @@ modulePathBase ext (S.ModuleName name) =
           f '.' = '/'
           f c = c
 
-newtype RelPath = RelPath {unRelPath :: FilePath} deriving (Eq, Ord, Show)
-
 -- | Search the path directory list for a source file that already exists.
 -- FIXME: this should return a Maybe.
-findSourcePath :: SourceDirs m => RelPath -> m FilePath
-findSourcePath (RelPath path) =
+findSourcePath :: SourceDirs m => FilePath -> m FilePath
+findSourcePath path =
     findFile =<< getDirs
     where
       findFile (dir : dirs) =
