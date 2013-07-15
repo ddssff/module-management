@@ -10,7 +10,7 @@ module Language.Haskell.Modules.Util.Test
 
 import Control.Monad (foldM)
 import Data.List as List (filter, isPrefixOf, isSuffixOf, map)
-import Data.Set as Set (empty, fromList, insert, map, Set)
+import Data.Set as Set (Set, empty, fromList, insert, map, unions)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents)
 import System.Exit (ExitCode)
@@ -120,9 +120,9 @@ rsync :: FilePath -> FilePath -> IO ()
 rsync a b = readProcess "rsync" ["-aHxS", "--delete", a ++ "/", b] "" >> return ()
 
 -- | Find the paths of all the files below the directory @top@.
-findPaths :: FilePath -> IO (Set FilePath)
-findPaths top =
-    doPath empty top
+findPaths :: [FilePath] -> IO (Set FilePath)
+findPaths tops =
+    foldM doPath empty tops
     where
       doPath r path =
           do dir <- doesDirectoryExist path
@@ -139,9 +139,9 @@ findPaths top =
 -- MonadClean and use the value of sourceDirs to remove prefixes from
 -- the module paths.  And then it should look at the module text to
 -- see what the module name really is.
-findModules :: FilePath -> IO (Set S.ModuleName)
-findModules top =
-    findPaths top >>= return . Set.map asModuleName
+findModules :: [FilePath] -> IO (Set S.ModuleName)
+findModules tops =
+    findPaths tops >>= return . Set.map asModuleName
     where
       asModuleName path =
           S.ModuleName (List.map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))
