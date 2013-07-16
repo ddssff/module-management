@@ -2,13 +2,13 @@ module Tests.Merge where
 
 import Control.Monad as List (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
-import Language.Haskell.Modules (mergeModules, modifyTestMode, noisily, putDirs, putModule, runCleanT, withCurrentDirectory)
+import Language.Haskell.Modules (mergeModules, modifyTestMode, noisily, putDirs, putModule, runCleanT, withCurrentDirectory, findHsModules, splitModuleDecls)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 tests :: Test
-tests = TestList [test1, test2, test3, test4, test5]
+tests = TestList [test1, test2, test3, test4, test5, test6]
 
 test1 :: Test
 test1 =
@@ -78,3 +78,15 @@ test5 =
                               (S.ModuleName "Apt")
          (code, out, err) <- diff "testdata/merge5-expected" "tmp"
          assertEqual "mergeModules5" (ExitFailure 1,"Only in tmp: Apt\n","") (code, out, err)
+
+test6 :: Test
+test6 =
+    TestCase $
+      do _ <- rsync "testdata/merge6" "tmp"
+         _ <- withCurrentDirectory "tmp" $
+              findHsModules ["Test.hs", "A.hs", "B/C.hs", "B/D.hs"] >>= \ modules ->
+              runCleanT $ noisily $ noisily $ noisily $
+              do mapM putModule modules
+                 mergeModules [S.ModuleName "B.C", S.ModuleName "A"] (S.ModuleName "A")
+         (code, out, err) <- diff "testdata/merge6" "tmp"
+         assertEqual "merge6" (ExitSuccess, "", "") (code, out, err)
