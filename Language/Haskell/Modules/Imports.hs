@@ -25,7 +25,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, import
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(..), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
 import Language.Haskell.Modules.ModuVerse (getExtensions, loadModule, modifyExtensions, ModuleInfo, moduleName, parseModule)
-import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, pathKey, PathKey(unPathKey), SourceDirs(getDirs, putDirs))
+import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, pathKey, PathKey(unPathKey), SourceDirs(getDirs, putDirs), PathKey(..))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
@@ -61,9 +61,9 @@ cleanBuildImports lbi =
 cleanImports :: MonadClean m => [FilePath] -> m [ModuleResult]
 cleanImports paths =
     do dumpImports paths
-       mapM (\ path -> parseModule path >>= doModule path) paths
+       mapM (\ path -> pathKey path >>= \ key -> parseModule key >>= doModule key) paths
     where
-      doModule path mi@(m@(A.Module {}), _, _) = checkImports path (moduleName m) mi
+      doModule key mi@(m@(A.Module {}), _, _) = checkImports key (moduleName m) mi
       doModule _ (m, _, _) = error $ "Unsupported module value: " ++ show m
 
 cleanResults :: MonadClean m => [ModuleResult] -> m [ModuleResult]
@@ -89,8 +89,9 @@ cleanResults results =
       toCreated _ = error "toCreated"
       doModule name =
           do let path = modulePathBase "hs" name
-             info <- loadModule path -- was cache updated?
-             checkImports path name info
+             key <- pathKey path
+             info <- loadModule key -- was cache updated?
+             checkImports key name info
 
 -- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
 dumpImports :: MonadClean m => [FilePath] -> m ()
@@ -116,8 +117,8 @@ dumpImports paths =
 -- source file.  We also need to modify the imports of any names
 -- that are types that appear in standalone instance derivations so
 -- their members are imported too.
-checkImports :: MonadClean m => FilePath -> S.ModuleName -> ModuleInfo -> m ModuleResult
-checkImports path name@(S.ModuleName _) info@(A.Module _ _ _ imports _, _, _) =
+checkImports :: MonadClean m => PathKey -> S.ModuleName -> ModuleInfo -> m ModuleResult
+checkImports key name@(S.ModuleName _) info@(A.Module _ _ _ imports _, _, _) =
     do let importsPath = modulePathBase "imports" name
        -- The .imports file will appear in the real current directory,
        -- ignore the source dir path.  This may change in future
@@ -126,10 +127,10 @@ checkImports path name@(S.ModuleName _) info@(A.Module _ _ _ imports _, _, _) =
        (newImports, _, _) <-
            withDot $
              withPackageImportsExtension $
-               (parseModule importsPath
+               (parseModule (PathKey importsPath)
                   `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here ->
                                                           throw . userError $ here ++ ": " ++ show e)))
-       updateSource path info newImports name extraImports
+       updateSource key info newImports name extraImports
     where
       extraImports = filter isHiddenImport imports
       isHiddenImport (A.ImportDecl {A.importSpecs = Just (A.ImportSpecList _ True _)}) = True
@@ -150,13 +151,12 @@ withDot a =
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: MonadClean m => FilePath -> ModuleInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
-updateSource path m@(A.Module _ _ _ oldImports _, _, _) (A.Module _ _ _ newImports _) name extraImports =
+updateSource :: MonadClean m => PathKey -> ModuleInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
+updateSource key m@(A.Module _ _ _ oldImports _, _, _) (A.Module _ _ _ newImports _) name extraImports =
     do remove <- removeEmptyImports <$> getParams
-       key <- pathKey path
-       maybe (qLnPutStr ("cleanImports: no changes to " ++ path) >> return (Unchanged name))
+       maybe (qLnPutStr ("cleanImports: no changes to " ++ show key) >> return (Unchanged name))
              (\ text' ->
-                  qLnPutStr ("cleanImports: modifying " ++ path) >>
+                  qLnPutStr ("cleanImports: modifying " ++ show key) >>
                   replaceFile tildeBackup (unPathKey key) text' >>
                   return (Modified name text'))
              (replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m)

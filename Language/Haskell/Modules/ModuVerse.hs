@@ -18,7 +18,7 @@ module Language.Haskell.Modules.ModuVerse
     -- , getSourceDirs
     -- , modifySourceDirs
     , parseModule
-    , parseModule'
+    , parseModuleMaybe
     , loadModule
     , unloadModule
     ) where
@@ -36,7 +36,7 @@ import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import Language.Haskell.Modules.SourceDirs (pathKey, PathKey(..), SourceDirs(..), modulePathBase)
+import Language.Haskell.Modules.SourceDirs (pathKey, pathKeyMaybe, PathKey(..), SourceDirs(..), modulePathBase)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
@@ -77,13 +77,13 @@ putName :: ModuVerse m => S.ModuleName -> ModuleInfo -> m ()
 putName name info = modifyModuVerse (\ s -> s {moduleNames_ = Just (Map.insert name info (fromMaybe Map.empty (moduleNames_ s)))})
 
 putModule :: (ModuVerse m, MonadVerbosity m) => String -> m ()
-putModule name = parseModule (modulePathBase "hs" (S.ModuleName name)) >>= putName (S.ModuleName name)
+putModule name = pathKey (modulePathBase "hs" (S.ModuleName name)) >>= parseModule >>= putName (S.ModuleName name)
 
 putModuleAnew :: (ModuVerse m, MonadVerbosity m) => String -> m ()
-putModuleAnew name = loadModule (modulePathBase "hs" (S.ModuleName name)) >>= putName (S.ModuleName name)
+putModuleAnew name = pathKey (modulePathBase "hs" (S.ModuleName name)) >>= loadModule >>= putName (S.ModuleName name)
 
 findModule :: (ModuVerse m, MonadVerbosity m) => String -> m (Maybe ModuleInfo)
-findModule name = parseModule' (modulePathBase "hs" (S.ModuleName name))
+findModule name = pathKeyMaybe (modulePathBase "hs" (S.ModuleName name)) >>= parseModuleMaybe
 
 delName :: ModuVerse m => S.ModuleName -> m ()
 delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Map.delete name (fromMaybe Map.empty (moduleNames_ s)))
@@ -114,25 +114,24 @@ modifySourceDirs :: ModuVerse m => ([FilePath] -> [FilePath]) -> m ()
 modifySourceDirs f = modifyModuVerse (\ p -> p {sourceDirs_ = f (sourceDirs_ p)})
 -}
 
-parseModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
-parseModule path = parseModule' path >>= maybe (error $ "parseModule - not found: " ++ show path) return
+parseModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ModuleInfo
+parseModule key = parseModuleMaybe (Just key) >>= maybe (error $ "parseModule - not found: " ++ show key) return
 
-parseModule' :: (ModuVerse m, MonadVerbosity m) => FilePath -> m (Maybe ModuleInfo)
-parseModule' path =
+parseModuleMaybe :: (ModuVerse m, MonadVerbosity m) => Maybe PathKey -> m (Maybe ModuleInfo)
+parseModuleMaybe Nothing = return Nothing
+parseModuleMaybe (Just key) =
     (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e || isUserError e then return Nothing else throw e)
     where
       look =
-          do key <- pathKey path
-             verse <- getModuVerse
+          do verse <- getModuVerse
              return $ Map.lookup key (moduleInfo_ verse)
       load (Just x) = return (Just x)
-      load Nothing = Just <$> loadModule path
+      load Nothing = Just <$> loadModule key
 
 -- | Force a possibly cached module to be reloaded.
-loadModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
-loadModule path =
-    do key <- pathKey path
-       text <- liftIO $ readFile (unPathKey key)
+loadModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ModuleInfo
+loadModule key =
+    do text <- liftIO $ readFile (unPathKey key)
        quietly $ qLnPutStr ("parsing " ++ unPathKey key)
        (parsed, comments) <- parseFileWithComments (unPathKey key) >>= return . Exts.fromParseResult
        modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ x)})

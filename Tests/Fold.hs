@@ -10,6 +10,7 @@ import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldModule)
 import Language.Haskell.Modules.Internal (runCleanT)
 import Language.Haskell.Modules.ModuVerse (ModuleInfo, parseModule)
+import Language.Haskell.Modules.SourceDirs (pathKey)
 import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), makeTree)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
@@ -20,7 +21,7 @@ test1 :: Test
 test1 =
     TestLabel "test1" $ TestCase $ withCurrentDirectory "testdata/debian" $
     do let path = "Debian/Repo/Orphans.hs"
-       (m, text, comments) <- runCleanT $ parseModule path
+       (m, text, comments) <- runCleanT $ pathKey path >>= parseModule
        let (output, original) = test (m, text, comments)
        assertEqual "echo" original output
     where
@@ -31,7 +32,7 @@ test1b :: Test
 test1b =
     TestLabel "test1b" $ TestCase $ withCurrentDirectory "testdata/debian" $
     do let path = "Debian/Repo/Sync.hs"
-       (m, text, comments) <- runCleanT $ parseModule path
+       (m, text, comments) <- runCleanT $ pathKey path >>= parseModule
        let output = test (m, text, comments)
        assertEqual "echo" mempty (Seq.filter (\ (a, b) -> a /= b) (Seq.zip expected output))
     where
@@ -74,7 +75,7 @@ test3 :: Test
 test3 =
     TestLabel "test3" $ TestCase $ withCurrentDirectory "testdata" $
     do let path = "Equal.hs"
-       (m, text, comments) <- runCleanT $ parseModule path
+       (m, text, comments) <- runCleanT $ pathKey path >>= parseModule
        let (output, original) = test (m, text, comments)
        assertEqual "echo" original output
     where
@@ -85,7 +86,7 @@ test5 :: Test
 test5 =
     TestLabel "fold5" $ TestCase $
     do let path = "testdata/fold5.hs" -- "testdata/logic/Data/Logic/Classes/Literal.hs"
-       (m, text, comments) <- runCleanT $ parseModule path
+       (m, text, comments) <- runCleanT $ pathKey path >>= parseModule
        -- let actual = map f (adjustSpans text comments (spans m))
        -- assertEqual "spans" original actual
        let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) (m, text, comments) []
@@ -99,7 +100,7 @@ test5b :: Test
 test5b =
     TestLabel "test5b" $ TestCase $
     do let path = "testdata/logic/Data/Logic/Classes/Literal.hs"
-       (m, text, comments) <- runCleanT $ parseModule path
+       (m, text, comments) <- runCleanT $ pathKey path >>= parseModule
        let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) (m, text, comments) []
        assertEqual "spans" expected actual
     where
@@ -158,7 +159,7 @@ test4 = TestCase (assertEqual "test4" (SrcLoc "<unknown>.hs" 2 24 < SrcLoc "<unk
 test7 :: Test
 test7 =
     TestCase $
-    do (m, text, comments) <- runCleanT $ parseModule "testdata/Fold7.hs"
+    do (m, text, comments) <- runCleanT $ pathKey "testdata/Fold7.hs" >>= parseModule
        let actual = foldModule (\ s r -> r |> (s, "", ""))
                                (\ _ b s a r -> r |> (b, s, a))
                                (\ _ b s a r -> r |> (b, s, a))

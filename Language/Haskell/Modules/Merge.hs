@@ -21,8 +21,8 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, impor
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.Internal (doResult, fixExport, ModuleResult(..), MonadClean)
-import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo, parseModule, parseModule')
-import Language.Haskell.Modules.SourceDirs (modulePathBase)
+import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo, parseModule, parseModuleMaybe)
+import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, pathKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 
 -- | Merge the declarations from several modules into a single new
@@ -57,10 +57,10 @@ doModule inNames@(_ : _) outName thisName =
     do -- The new module will be based on the first input module,
        -- though its name will be changed to outModule.
        inInfo@(firstInfo@(_, text, _) : _) <-
-           List.mapM (\ name -> parseModule (modulePathBase "hs" name)) inNames
+           List.mapM (\ name -> pathKey (modulePathBase "hs" name) >>= parseModule) inNames
              `IO.catch` (\ (_ :: IOError) -> error $ "mergeModules - failure reading input modules: " ++ show inNames)
-       outInfo <- parseModule' (modulePathBase "hs" outName)
-       thisInfo <- parseModule' (modulePathBase "hs" thisName)
+       outInfo <- pathKeyMaybe (modulePathBase "hs" outName) >>= parseModuleMaybe
+       thisInfo <- pathKeyMaybe (modulePathBase "hs" thisName) >>= parseModuleMaybe
        let baseInfo = fromMaybe firstInfo thisInfo
        when (isJust outInfo && notElem outName inNames) (error "mergeModules - if output module exist it must also be one of the input modules")
        case thisName /= outName && elem thisName inNames of

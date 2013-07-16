@@ -28,7 +28,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl, 
 import Language.Haskell.Modules.ModuVerse (delName, ModuVerse(..), moduVerseInit, ModuVerseState, unloadModule, putModuleAnew)
 import Language.Haskell.Modules.SourceDirs (modulePath, modulePathBase)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
-import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
+import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import Prelude hiding (writeFile)
 import System.Directory (removeFile)
@@ -128,11 +128,12 @@ data ModuleResult
 -- so that all the compiles required for import cleaning succeed.  On
 -- the other hand, we might be able to maintain the moduVerse here.
 doResult :: (ModuVerse m, MonadDryRun m, MonadVerbosity m) => ModuleResult -> m ModuleResult
-doResult x@(Unchanged _name) =
-    do -- quietly (qLnPutStr ("unchanged: " ++ show _name))
+doResult x@(Unchanged name) =
+    do quietly (qLnPutStr ("unchanged: " ++ show name))
        return x
 doResult x@(Removed name) =
-    do let rel = modulePathBase "hs" name
+    do quietly (qLnPutStr ("removed: " ++ show name))
+       let rel = modulePathBase "hs" name
        path <- modulePath "hs" name
        unloadModule rel
        -- I think this event handler is redundant.
@@ -141,7 +142,8 @@ doResult x@(Removed name) =
        return x
 
 doResult x@(Modified m@(S.ModuleName name) text) =
-    do path <- modulePath "hs" m
+    do quietly (qLnPutStr ("modified: " ++ show name))
+       path <- modulePath "hs" m
        -- qLnPutStr ("modifying " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
@@ -149,7 +151,8 @@ doResult x@(Modified m@(S.ModuleName name) text) =
        return x
 
 doResult x@(Created m@(S.ModuleName name) text) =
-    do path <- modulePath "hs" m
+    do quietly (qLnPutStr ("created: " ++ show name))
+       path <- modulePath "hs" m
        -- qLnPutStr ("creating " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)

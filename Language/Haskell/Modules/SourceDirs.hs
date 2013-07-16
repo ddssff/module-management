@@ -5,6 +5,7 @@ module Language.Haskell.Modules.SourceDirs
     , modifyDirs
     , PathKey(..)
     , pathKey
+    , pathKeyMaybe
     , modulePath
     , modulePathBase
     ) where
@@ -28,6 +29,9 @@ newtype PathKey = PathKey {unPathKey :: FilePath} deriving (Eq, Ord, Show)
 pathKey :: SourceDirs m => FilePath -> m PathKey
 -- pathKey path = PathKey <$> liftIO (canonicalizePath path)
 pathKey path = findFile path >>= liftIO . canonicalizePath >>= return . PathKey
+
+pathKeyMaybe :: SourceDirs m => FilePath -> m (Maybe PathKey)
+pathKeyMaybe path = findFileMaybe path >>= maybe (return Nothing) (\ path' -> liftIO (canonicalizePath path') >>= return . Just . PathKey)
 
 -- | Search the path directory list, preferring an already existing file, but
 -- if there is none construct one using the first element of the directory list.
@@ -58,14 +62,18 @@ modulePathBase ext (S.ModuleName name) =
 -- FIXME: this should return a Maybe.
 findFile :: SourceDirs m => FilePath -> m FilePath
 findFile path =
+    findFileMaybe path >>=
+    maybe (do here <- liftIO getCurrentDirectory
+              dirs <- getDirs
+              liftIO . throw . userError $ "findFile failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ path)
+          return
+
+findFileMaybe :: SourceDirs m => FilePath -> m (Maybe FilePath)
+findFileMaybe path =
     getDirs >>= f
     where
       f (dir : dirs) =
           do let x = dir </> path
              exists <- liftIO $ doesFileExist x
-             if exists then return x else f dirs
-      f [] =
-          do -- Just building an error message here
-             here <- liftIO getCurrentDirectory
-             dirs <- getDirs
-             liftIO . throw . userError $ "findFile failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ path
+             if exists then return (Just x) else f dirs
+      f [] = return Nothing

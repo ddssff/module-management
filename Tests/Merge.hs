@@ -14,7 +14,7 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
-         _result <- runCleanT $
+         _result <- runCleanT $ noisily $ noisily $ noisily $
            do putDirs ["tmp"]
               modifyTestMode (const True)
               mapM_ putModule repoModules
