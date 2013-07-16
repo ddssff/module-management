@@ -25,7 +25,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, import
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(..), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
 import Language.Haskell.Modules.ModuVerse (getExtensions, loadModule, modifyExtensions, ModuleInfo(..), moduleName, parseModule)
-import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, pathKey, PathKey(unPathKey), SourceDirs(getDirs, putDirs), PathKey(..))
+import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, pathKey, PathKey(..), PathKey(unPathKey), SourceDirs(getDirs, putDirs))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
