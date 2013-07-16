@@ -24,7 +24,7 @@ import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(..), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
-import Language.Haskell.Modules.ModuVerse (getExtensions, loadModule, modifyExtensions, ModuleInfo, moduleName, parseModule)
+import Language.Haskell.Modules.ModuVerse (getExtensions, loadModule, modifyExtensions, ModuleInfo(..), moduleName, parseModule)
 import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, pathKey, PathKey(unPathKey), SourceDirs(getDirs, putDirs), PathKey(..))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
@@ -61,10 +61,10 @@ cleanBuildImports lbi =
 cleanImports :: MonadClean m => [FilePath] -> m [ModuleResult]
 cleanImports paths =
     do dumpImports paths
-       mapM (\ path -> pathKey path >>= \ key -> parseModule key >>= doModule key) paths
+       mapM (\ path -> pathKey path >>= parseModule >>= doModule) paths
     where
-      doModule key mi@(m@(A.Module {}), _, _) = checkImports key (moduleName m) mi
-      doModule _ (m, _, _) = error $ "Unsupported module value: " ++ show m
+      doModule mi@(ModuleInfo m@(A.Module {}) _ _ _) = checkImports (moduleName m) mi
+      doModule (ModuleInfo m _ _ _) = error $ "Unsupported module value: " ++ show m
 
 cleanResults :: MonadClean m => [ModuleResult] -> m [ModuleResult]
 cleanResults results =
@@ -91,7 +91,7 @@ cleanResults results =
           do let path = modulePathBase "hs" name
              key <- pathKey path
              info <- loadModule key -- was cache updated?
-             checkImports key name info
+             checkImports name info
 
 -- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
 dumpImports :: MonadClean m => [FilePath] -> m ()
@@ -117,14 +117,14 @@ dumpImports paths =
 -- source file.  We also need to modify the imports of any names
 -- that are types that appear in standalone instance derivations so
 -- their members are imported too.
-checkImports :: MonadClean m => PathKey -> S.ModuleName -> ModuleInfo -> m ModuleResult
-checkImports key name@(S.ModuleName _) info@(A.Module _ _ _ imports _, _, _) =
+checkImports :: MonadClean m => S.ModuleName -> ModuleInfo -> m ModuleResult
+checkImports name@(S.ModuleName _) info@(ModuleInfo (A.Module _ _ _ imports _) _ _ key) =
     do let importsPath = modulePathBase "imports" name
        -- The .imports file will appear in the real current directory,
        -- ignore the source dir path.  This may change in future
        -- versions of GHC, see http://ghc.haskell.org/trac/ghc/ticket/7957
        markForDelete importsPath
-       (newImports, _, _) <-
+       (ModuleInfo newImports _ _ _) <-
            withDot $
              withPackageImportsExtension $
                (parseModule (PathKey importsPath)
@@ -135,7 +135,7 @@ checkImports key name@(S.ModuleName _) info@(A.Module _ _ _ imports _, _, _) =
       extraImports = filter isHiddenImport imports
       isHiddenImport (A.ImportDecl {A.importSpecs = Just (A.ImportSpecList _ True _)}) = True
       isHiddenImport _ = False
-checkImports _ _ (_, _, _) = error "Unsupported module type"
+checkImports _ _ = error "Unsupported module type"
 
 withPackageImportsExtension :: MonadClean m => m a -> m a
 withPackageImportsExtension a =
@@ -152,7 +152,7 @@ withDot a =
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
 updateSource :: MonadClean m => PathKey -> ModuleInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
-updateSource key m@(A.Module _ _ _ oldImports _, _, _) (A.Module _ _ _ newImports _) name extraImports =
+updateSource key m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ _) (A.Module _ _ _ newImports _) name extraImports =
     do remove <- removeEmptyImports <$> getParams
        maybe (qLnPutStr ("cleanImports: no changes to " ++ show key) >> return (Unchanged name))
              (\ text' ->
@@ -235,9 +235,9 @@ fixNewImports remove m oldImports imports =
       sdTypes = standaloneDerivingTypes m
 
 standaloneDerivingTypes :: ModuleInfo -> Set (Maybe S.ModuleName, S.Name)
-standaloneDerivingTypes (A.XmlPage _ _ _ _ _ _ _, _, _) = error "standaloneDerivingTypes A.XmlPage"
-standaloneDerivingTypes (A.XmlHybrid _ _ _ _ _ _ _ _ _, _, _) = error "standaloneDerivingTypes A.XmlHybrid"
-standaloneDerivingTypes (A.Module _ _ _ _ decls, _, _) =
+standaloneDerivingTypes (ModuleInfo (A.XmlPage _ _ _ _ _ _ _) _ _ _) = error "standaloneDerivingTypes A.XmlPage"
+standaloneDerivingTypes (ModuleInfo (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ _) = error "standaloneDerivingTypes A.XmlHybrid"
+standaloneDerivingTypes (ModuleInfo (A.Module _ _ _ _ decls) _ _ _) =
     unions (map derivDeclTypes decls)
     where
       -- derivDeclTypes :: Decl -> Set (Maybe S.ModuleName, S.Name)

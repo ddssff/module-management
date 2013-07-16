@@ -9,7 +9,7 @@ import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldModule)
 import Language.Haskell.Modules.Internal (runCleanT)
-import Language.Haskell.Modules.ModuVerse (ModuleInfo, parseModule)
+import Language.Haskell.Modules.ModuVerse (ModuleInfo(..), parseModule)
 import Language.Haskell.Modules.SourceDirs (pathKey)
 import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), makeTree)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
@@ -21,19 +21,19 @@ test1 :: Test
 test1 =
     TestLabel "test1" $ TestCase $ withCurrentDirectory "testdata/debian" $
     do let path = "Debian/Repo/Orphans.hs"
-       (m, text, comments) <- runCleanT $ pathKey path >>= parseModule
-       let (output, original) = test (m, text, comments)
+       mi <- runCleanT $ pathKey path >>= parseModule
+       let (output, original) = test mi
        assertEqual "echo" original output
     where
       test :: ModuleInfo -> (String, String)
-      test m@(_, text, _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
+      test m@(ModuleInfo _ text _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
 
 test1b :: Test
 test1b =
     TestLabel "test1b" $ TestCase $ withCurrentDirectory "testdata/debian" $
     do let path = "Debian/Repo/Sync.hs"
-       (m, text, comments) <- runCleanT $ pathKey path >>= parseModule
-       let output = test (m, text, comments)
+       mi <- runCleanT $ pathKey path >>= parseModule
+       let output = test mi
        assertEqual "echo" mempty (Seq.filter (\ (a, b) -> a /= b) (Seq.zip expected output))
     where
       expected :: Seq (String, String, String, String)
@@ -75,21 +75,21 @@ test3 :: Test
 test3 =
     TestLabel "test3" $ TestCase $ withCurrentDirectory "testdata" $
     do let path = "Equal.hs"
-       (m, text, comments) <- runCleanT $ pathKey path >>= parseModule
-       let (output, original) = test (m, text, comments)
+       mi <- runCleanT $ pathKey path >>= parseModule
+       let (output, original) = test mi
        assertEqual "echo" original output
     where
       test :: ModuleInfo -> (String, String)
-      test m@(_, text, _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
+      test m@(ModuleInfo _ text _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
 
 test5 :: Test
 test5 =
     TestLabel "fold5" $ TestCase $
     do let path = "testdata/fold5.hs" -- "testdata/logic/Data/Logic/Classes/Literal.hs"
-       (m, text, comments) <- runCleanT $ pathKey path >>= parseModule
+       mi <- runCleanT $ pathKey path >>= parseModule
        -- let actual = map f (adjustSpans text comments (spans m))
        -- assertEqual "spans" original actual
-       let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) (m, text, comments) []
+       let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) mi []
        assertEqual "spans" expected actual
     where
       expected = [("","a = 1 where","\n"),
@@ -100,8 +100,8 @@ test5b :: Test
 test5b =
     TestLabel "test5b" $ TestCase $
     do let path = "testdata/logic/Data/Logic/Classes/Literal.hs"
-       (m, text, comments) <- runCleanT $ pathKey path >>= parseModule
-       let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) (m, text, comments) []
+       mi <- runCleanT $ pathKey path >>= parseModule
+       let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) mi []
        assertEqual "spans" expected actual
     where
       expected = [("\n-- |Literals are the building blocks of the clause and implicative normal\n-- |forms.  They support negation and must include True and False elements.\n",
@@ -159,7 +159,7 @@ test4 = TestCase (assertEqual "test4" (SrcLoc "<unknown>.hs" 2 24 < SrcLoc "<unk
 test7 :: Test
 test7 =
     TestCase $
-    do (m, text, comments) <- runCleanT $ pathKey "testdata/Fold7.hs" >>= parseModule
+    do mi <- runCleanT $ pathKey "testdata/Fold7.hs" >>= parseModule
        let actual = foldModule (\ s r -> r |> (s, "", ""))
                                (\ _ b s a r -> r |> (b, s, a))
                                (\ _ b s a r -> r |> (b, s, a))
@@ -170,7 +170,7 @@ test7 =
                                (\ _ b s a r -> r |> (b, s, a))
                                (\ _ b s a r -> r |> (b, s, a))
                                (\ s r -> r |> (s, "", ""))
-                               (m, text, comments) mempty
+                               mi mempty
        assertEqual "fold7" expected actual
     where
       expected = Seq.fromList $

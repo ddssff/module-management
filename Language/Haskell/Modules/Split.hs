@@ -26,7 +26,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(.
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(extraImports))
-import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo, moduleName, parseModule)
+import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), moduleName, parseModule)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
@@ -75,12 +75,12 @@ splitModuleDecls path =
        splitModuleBy (defaultSymbolToModule info) info
 
 splitModuleBy :: MonadClean m => (Maybe S.Name -> S.ModuleName) -> ModuleInfo -> m [ModuleResult]
-splitModuleBy _ (A.XmlPage {}, _, _) = error "XmlPage"
-splitModuleBy _ (A.XmlHybrid {}, _, _) = error "XmlPage"
-splitModuleBy _ (m@(A.Module _ _ _ _ []), _, _) = return [Unchanged (moduleName m)] -- No declarations - nothing to split
-splitModuleBy _ (m@(A.Module _ _ _ _ [_]), _, _) = return [Unchanged (moduleName m)] -- One declaration - nothing to split (but maybe we should anyway?)
-splitModuleBy _ (A.Module _ Nothing _ _ _, _, _) = throw $ userError $ "splitModule: no explicit header"
-splitModuleBy symToModule inInfo@(m, _, _) =
+splitModuleBy _ (ModuleInfo (A.XmlPage {}) _ _ _) = error "XmlPage"
+splitModuleBy _ (ModuleInfo (A.XmlHybrid {}) _ _ _) = error "XmlPage"
+splitModuleBy _ (ModuleInfo (m@(A.Module _ _ _ _ [])) _ _ _) = return [Unchanged (moduleName m)] -- No declarations - nothing to split
+splitModuleBy _ (ModuleInfo (m@(A.Module _ _ _ _ [_])) _ _ _) = return [Unchanged (moduleName m)] -- One declaration - nothing to split (but maybe we should anyway?)
+splitModuleBy _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = throw $ userError $ "splitModule: no explicit header"
+splitModuleBy symToModule inInfo@(ModuleInfo m _ _ _) =
     do qLnPutStr ("Splitting " ++ prettyPrint (moduleName m))
        quietly $
          do eiMap <- getParams >>= return . extraImports
@@ -119,7 +119,7 @@ doModule symToModule eiMap inInfo inName outNames thisName =
             return $ if thisName == inName then Modified thisName newModule else Created thisName newModule
         | thisName == inName -> return (Removed thisName)
         | True ->
-            pathKey (modulePathBase "hs" thisName) >>= parseModule >>= \ oldInfo@(_, oldText, _) ->
+            pathKey (modulePathBase "hs" thisName) >>= parseModule >>= \ oldInfo@(ModuleInfo _ oldText _ _) ->
             let newText = updateImports oldInfo in
             return $ if newText /= oldText then Modified thisName newText else Unchanged thisName
     where
@@ -190,9 +190,9 @@ doModule symToModule eiMap inInfo inName outNames thisName =
       modDecls :: [(A.Decl SrcSpanInfo, String)]
       modDecls = fromMaybe [] (Map.lookup thisName moduleDeclMap)
 
-      moduleExports (A.Module _ Nothing _ _ _, _, _) = Nothing
-      moduleExports (A.Module _ (Just (A.ModuleHead _ _ _ x)) _ _ _, _, _) = x
-      moduleExports (_, _, _) = error "Unsupported module type"
+      moduleExports (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = Nothing
+      moduleExports (ModuleInfo (A.Module _ (Just (A.ModuleHead _ _ _ x)) _ _ _) _ _ _) = x
+      moduleExports (ModuleInfo _ _ _ _) = error "Unsupported module type"
 
       -- Update the imports to reflect the changed module names in symToModule.
       -- Update re-exports of the split module.
@@ -276,8 +276,8 @@ exported m =
                     (if member Nothing (declared m) then singleton Nothing else Set.empty)
     where
       hasExportList :: ModuleInfo -> Bool
-      hasExportList (A.Module _ Nothing _ _ _, _, _) = False
-      hasExportList (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _, _, _) = False
+      hasExportList (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = False
+      hasExportList (ModuleInfo (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _) _ _ _) = False
       hasExportList _ = True
 
 instanceImports :: S.ModuleName -> Map S.ModuleName (Set S.ImportDecl) -> [S.ImportDecl]
@@ -293,7 +293,7 @@ data DeclClass
 
 -- | Classify the symbols in a module.
 declClass :: ModuleInfo -> Maybe S.Name -> DeclClass
-declClass info@(m, _, _) mName =
+declClass info@(ModuleInfo m _ _ _) mName =
     unknown mName $ Map.lookup mName mp
     where
       unknown :: Maybe S.Name -> Maybe DeclClass -> DeclClass
@@ -329,7 +329,7 @@ isReExported _ = False
 defaultSymbolToModule :: ModuleInfo    -- ^ Parent module name
                       -> Maybe S.Name
                       -> S.ModuleName
-defaultSymbolToModule info@(m, _, _) name =
+defaultSymbolToModule info@(ModuleInfo m _ _ _) name =
     S.ModuleName (parentModuleName <.>
                              case declClass info name of
                                Instance -> "Instances"

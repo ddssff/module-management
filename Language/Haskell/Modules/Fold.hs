@@ -23,7 +23,7 @@ import Data.Sequence (Seq, (|>))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
-import Language.Haskell.Modules.ModuVerse (ModuleInfo)
+import Language.Haskell.Modules.ModuVerse (ModuleInfo(ModuleInfo))
 import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, srcLoc, srcPairText)
 
 --type Module = A.Module SrcSpanInfo
@@ -167,9 +167,9 @@ foldModule :: forall r. (Show r) =>
            -> ModuleInfo -- ^ Parsed module
            -> r -- ^ Fold initialization value
            -> r -- ^ Result
-foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlPage _ _ _ _ _ _ _, _, _) _ = error "XmlPage: unsupported"
-foldModule _ _ _ _ _ _ _ _ _ _ (A.XmlHybrid _ _ _ _ _ _ _ _ _, _, _) _ = error "XmlHybrid: unsupported"
-foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (m@(A.Module (SrcSpanInfo (SrcSpan path _ _ _ _) _) mh ps is ds), text, comments) r0 =
+foldModule _ _ _ _ _ _ _ _ _ _ (ModuleInfo (A.XmlPage _ _ _ _ _ _ _) _ _ _) _ = error "XmlPage: unsupported"
+foldModule _ _ _ _ _ _ _ _ _ _ (ModuleInfo (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ _) _ = error "XmlHybrid: unsupported"
+foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (ModuleInfo (m@(A.Module (SrcSpanInfo (SrcSpan path _ _ _ _) _) mh ps is ds)) text comments _) r0 =
     (\ (_, (_, _, _, r)) -> r) $ runState doModule (text, (SrcLoc path 1 1), spans m, r0)
     where
       doModule =

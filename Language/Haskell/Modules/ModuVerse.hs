@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
-    ( ModuleInfo
+    ( ModuleInfo(..)
     , moduleName
     , ModuVerseState
     , moduVerseInit
@@ -42,8 +42,13 @@ import System.IO.Error (isDoesNotExistError, isUserError)
 
 deriving instance Ord Comment
 
-type ModuleInfo = (A.Module SrcSpanInfo, String, [Comment])
---type ModuleMap = Map S.ModuleName ModuleInfo
+data ModuleInfo
+    = ModuleInfo
+      { module_ :: A.Module SrcSpanInfo
+      , text_ :: String
+      , comments_ :: [Comment]
+      , path_ :: PathKey }
+    deriving (Eq, Ord, Show)
 
 moduleName :: A.Module a -> S.ModuleName
 moduleName (A.Module _ (Just (A.ModuleHead _ x _ _)) _ _ _) = sModuleName x
@@ -134,8 +139,8 @@ loadModule key =
     do text <- liftIO $ readFile (unPathKey key)
        quietly $ qLnPutStr ("parsing " ++ unPathKey key)
        (parsed, comments) <- parseFileWithComments (unPathKey key) >>= return . Exts.fromParseResult
-       modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (parsed, text, comments) (moduleInfo_ x)})
-       return (parsed, text, comments)
+       modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (ModuleInfo parsed text comments key) (moduleInfo_ x)})
+       return (ModuleInfo parsed text comments key)
 
 unloadModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ()
 unloadModule path =

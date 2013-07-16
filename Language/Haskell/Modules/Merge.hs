@@ -21,7 +21,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, impor
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.Internal (doResult, fixExport, ModuleResult(..), MonadClean)
-import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo, parseModule, parseModuleMaybe)
+import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), parseModule, parseModuleMaybe)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, pathKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 
@@ -56,7 +56,7 @@ doModule :: MonadClean m =>
 doModule inNames@(_ : _) outName thisName =
     do -- The new module will be based on the first input module,
        -- though its name will be changed to outModule.
-       inInfo@(firstInfo@(_, text, _) : _) <-
+       inInfo@(firstInfo@(ModuleInfo _ text _ _) : _) <-
            List.mapM (\ name -> pathKey (modulePathBase "hs" name) >>= parseModule) inNames
              `IO.catch` (\ (_ :: IOError) -> error $ "mergeModules - failure reading input modules: " ++ show inNames)
        outInfo <- pathKeyMaybe (modulePathBase "hs" outName) >>= parseModuleMaybe
@@ -120,7 +120,7 @@ moduleImports inNames outName thisName x pref s suff r =
 -- modules in oldmap with an "as" qualifier, identifiers using the
 -- module name in the "as" qualifier must use new instead.
 moduleDecls :: [S.ModuleName] -> S.ModuleName -> S.ModuleName -> ModuleInfo -> String
-moduleDecls inNames outName thisName info@(A.Module _ _ _ imports _, _, _) =
+moduleDecls inNames outName thisName info@(ModuleInfo (A.Module _ _ _ imports _) _ _ _) =
     -- Get the import list for this module
     let inNames' = inNames ++ if thisName == outName then mapMaybe qualifiedImportName imports else [] in
     fold (foldDecls (\ d pref s suff r ->
@@ -137,7 +137,7 @@ moduleDecls inNames outName thisName info@(A.Module _ _ _ imports _, _, _) =
             True -> Just (sModuleName a)
             _ -> Nothing
       qualifiedImportName _ = Nothing
-moduleDecls _ _ _ (m, _, _) = error $ "Unsupported module type: " ++ show m
+moduleDecls _ _ _ (ModuleInfo m _ _ _) = error $ "Unsupported module type: " ++ show m
 
 -- | Change any ModuleName in 'old' to 'new'.
 fixReferences :: (Data a, Typeable a) => [S.ModuleName] -> S.ModuleName -> a -> a
