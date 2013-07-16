@@ -146,7 +146,6 @@ doModule symToModule eiMap inInfo inName outNames thisName =
                                             else r)
                                        (\ s r -> r |> [("", s)]) inInfo mempty))
            Just _ ->
-              -- If the module has an export list use its outline
               intercalate sep (nub (List.map (prettyPrintWithMode defaultMode) newExports')) <> "\n" <>
               maybe "    ) where\n" (\ _ -> Foldable.fold $ foldExports ignore2 ignore (<|) inInfo mempty) (moduleExports inInfo)
           where
@@ -185,7 +184,7 @@ doModule symToModule eiMap inInfo inName outNames thisName =
                       let declared' = justs (Set.unions (List.map (symbols . fst) pairs)) in
                       not (Set.null (Set.intersection declared' referenced))
 
-      newDecls = concatMap snd (reverse modDecls)
+      newDecls = concatMap snd modDecls
 
       modDecls :: [(A.Decl SrcSpanInfo, String)]
       modDecls = fromMaybe [] (Map.lookup thisName moduleDeclMap)
@@ -219,7 +218,7 @@ doModule symToModule eiMap inInfo inName outNames thisName =
       -- will be in that module.  All of these declarations used to be
       -- in moduleName.
       moduleDeclMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
-      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (++) (symToModule sym) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 inInfo Map.empty
+      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (\ a b -> b ++ a) (symToModule sym) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 inInfo Map.empty
 
       updateImportDecl :: String -> A.ImportDecl SrcSpanInfo -> String
       updateImportDecl s i =

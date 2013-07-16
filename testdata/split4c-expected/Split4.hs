@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Split4 
-    ( sourcePackagesOfIndex
-    , binaryPackagesOfIndex
+    ( binaryPackagesOfIndex
+    , sourcePackagesOfIndex
     ) where
 import Split4.A (getPackages)
       --toLazy s = L.fromChunks [s]

@@ -2,15 +2,15 @@ module Tests.Split where
 
 import Control.Monad as List (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
-import Language.Haskell.Modules (modifyTestMode, noisily, putDirs, putModule, runCleanT, splitModule, splitModuleDecls, withCurrentDirectory)
-import Language.Haskell.Modules.Util.Test (diff, repoModules)
+import Language.Haskell.Modules (modifyTestMode, noisily, putDirs, putModule, runCleanT, splitModule, splitModuleDecls, withCurrentDirectory, findHsModules)
+import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import Prelude hiding (writeFile)
 import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import Test.HUnit (assertEqual, Test(TestCase, TestList, TestLabel))
 
 tests :: Test
-tests = TestList [split2a, split2b, split4, split4b, split4c, split5]
+tests = TestList [split2a, split2b, split4, split4b, split4c, split5, split6]
 
 slow :: Test
 slow = TestList [split1]
@@ -107,3 +107,18 @@ split5 =
            splitModuleDecls "B.hs"
        result <- diff "testdata/split5-expected" "tmp"
        assertEqual "Split5" (ExitSuccess, "", "") result
+
+split6 :: Test
+split6 =
+    TestLabel "Split6" $ TestCase $
+    do _ <- rsync "testdata/debian" "tmp"
+       _ <- withCurrentDirectory "tmp" $
+         findHsModules ["Debian", "Text", "Tmp"] >>= \ modules ->
+         runCleanT $ noisily $ noisily $
+           mapM putModule modules >>
+           splitModule f "Debian/Repo/Monads/Apt.hs"
+       result <- diff "testdata/split6-expected" "tmp"
+       assertEqual "Split6" (ExitSuccess, "", "") result
+    where
+      f (Just (S.Ident "countTasks")) = S.ModuleName "IO"
+      f _ = S.ModuleName "Debian.Repo.Monads.Apt"
