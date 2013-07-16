@@ -52,7 +52,7 @@
 --      mapM putModule modules >>
 --      splitModuleDecls "Language/Haskell/Modules/Common.hs" >>
 --      mergeModules [\"Language.Haskell.Modules.Common.WithCurrentDirectory\",
---                    \"Language.Haskell.Modules.Common.ModulePathBase\"]
+--                    \"Language.Haskell.Modules.Common.Internal.ToEq\"]
 --                   \"Language.Haskell.Modules.Common\"@
 module Language.Haskell.Modules
     (
