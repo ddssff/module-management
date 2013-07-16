@@ -48,24 +48,26 @@
 -- * Split the module @Language.Haskell.Modules.Common@, and then
 --   merge two of the declarations back in:
 --
---   @findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
+--   @:m +Language.Haskell.Exts.Syntax
+--    findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
 --      mapM putModule modules >>
---      splitModuleDecls "Language/Haskell/Modules/Common.hs" >>
+--      splitModuleDecls \"Language/Haskell/Modules/Common.hs\" >>
 --      mergeModules [ModuleName \"Language.Haskell.Modules.Common.WithCurrentDirectory\",
 --                    ModuleName \"Language.Haskell.Modules.Common.Internal.ToEq\"]
 --                   (ModuleName \"Language.Haskell.Modules.Common\")@
 --
--- * Move two declarations from Internal to Common:
+-- * Move two declarations from Internal to Common.  The intermediate module
+--   @Tmp@ is used because using existing modules for a split is not allowed.
+--   The exception to this is that you can leave declarations in the original module.
 --
---   @:m +Language.Haskell.Exts.Syntax
---    findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
+--   @findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
 --      mapM putModule modules >>
 --      splitModule (\\ n -> if elem n [Just (Ident \"ModuleResult\"), Just (Ident \"doResult\")]
 --                          then ModuleName \"Tmp\"
 --                          else ModuleName \"Language.Haskell.Modules.Internal\")
 --                  (ModuleName \"Language/Haskell/Modules/Internal.hs\") >>
 --      mergeModules [ModuleName \"Language.Haskell.Modules.Common\", ModuleName \"Tmp\"]
---                   (ModuleName \"Language.Haskell.Modules.Common"/)@
+--                   (ModuleName \"Language.Haskell.Modules.Common\")@
 module Language.Haskell.Modules
     (
     -- * Entry points
