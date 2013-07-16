@@ -43,11 +43,10 @@
 -- * Use 'findHsFiles' and 'cleanImports' to clean up the import lists
 -- of all the modules under @./Language@:
 --
---    @findHsFiles [\"Language\", \"Tests.hs\", \"Tests\"] >>= runCleanT . cleanImports . toList@
+--    @findHsFiles [\"Language\", \"Tests.hs\", \"Tests\"] >>= runCleanT . cleanImports@
 --
--- * Use 'findHsModules' and 'splitModule' to split up module
---   @Language.Haskell.Modules.Common@, and then merge two of the pieces
---   back in.
+-- * Split the module @Language.Haskell.Modules.Common@, and then
+--   merge two of the declarations back in:
 --
 --   @findHsFiles [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
 --      mapM putModule modules >>
