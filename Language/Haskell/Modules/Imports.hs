@@ -83,14 +83,17 @@ cleanResults results =
                          Unchanged _ -> return x
                          Modified name _ -> doModule name
                          Created name _ -> doModule name >>= return . toCreated) results
-
+      -- The cleaning may have turned a Created result into Modified,
+      -- turn it back into Created.
       toCreated (Modified name text) = Created name text
       toCreated x@(Created _ _) = x
       toCreated _ = error "toCreated"
+      -- Update the cached version of the now modified module and then
+      -- clean its import list.
       doModule name =
           do let path = modulePathBase "hs" name
              key <- pathKey path
-             info <- loadModule key -- was cache updated?
+             info <- loadModule key
              checkImports name info
 
 -- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
