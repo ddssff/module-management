@@ -48,7 +48,7 @@
 -- * Split the module @Language.Haskell.Modules.Common@, and then
 --   merge two of the declarations back in:
 --
---   @findHsFiles [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
+--   @findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
 --      mapM putModule modules >>
 --      splitModuleDecls "Language/Haskell/Modules/Common.hs" >>
 --      mergeModules [\"Language.Haskell.Modules.Common.WithCurrentDirectory\",

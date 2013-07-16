@@ -18,7 +18,7 @@ slow = TestList [split1]
 split1 :: Test
 split1 =
     TestCase $
-      do _ <- system "rsync -aHxS --delete testdata/debian/ tmp"
+      do _ <- rsync "testdata/debian" "tmp"
          _ <- runCleanT $ noisily $ noisily $
            do putDirs ["tmp"]
               mapM_ putModule repoModules
@@ -29,7 +29,7 @@ split1 =
 split2a :: Test
 split2a =
     TestCase $
-    do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
+    do _ <- rsync "testdata/split2" "tmp"
        _ <- runCleanT $ noisily $ noisily $
          do modifyTestMode (const True)
             putDirs ["tmp"]
@@ -41,7 +41,7 @@ split2a =
 split2b :: Test
 split2b =
     TestCase $
-    do _ <- system "rsync -aHxS --delete testdata/split2/ tmp"
+    do _ <- rsync "testdata/split2" "tmp"
        _ <- runCleanT $ noisily $ noisily $
          do putDirs ["tmp"]
             putModule "Split"
@@ -56,7 +56,7 @@ split2b =
 split4 :: Test
 split4 =
     TestLabel "Split4" $ TestCase $
-    do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
+    do _ <- rsync "testdata/split4" "tmp"
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $ modifyTestMode (const True) >> putModule "Split4" >> splitModuleDecls "Split4.hs"
        result <- diff "testdata/split4-expected" "tmp"
@@ -65,7 +65,7 @@ split4 =
 split4b :: Test
 split4b =
     TestLabel "Split4b" $ TestCase $
-    do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
+    do _ <- rsync "testdata/split4" "tmp"
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
            modifyTestMode (const True) >>
@@ -82,7 +82,7 @@ split4b =
 split4c :: Test
 split4c =
     TestLabel "Split4b" $ TestCase $
-    do _ <- system "rsync -aHxs --delete testdata/split4/ tmp"
+    do _ <- rsync "testdata/split4" "tmp"
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
            modifyTestMode (const True) >>
@@ -99,7 +99,7 @@ split4c =
 split5 :: Test
 split5 =
     TestLabel "Split5" $ TestCase $
-    do _ <- system "rsync -aHxs --delete testdata/split5/ tmp"
+    do _ <- rsync "testdata/split5" "tmp"
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
            List.mapM_ putModule ["A", "B", "C", "D", "E"] >>
