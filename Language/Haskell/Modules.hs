@@ -51,9 +51,21 @@
 --   @findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
 --      mapM putModule modules >>
 --      splitModuleDecls "Language/Haskell/Modules/Common.hs" >>
---      mergeModules [\"Language.Haskell.Modules.Common.WithCurrentDirectory\",
---                    \"Language.Haskell.Modules.Common.Internal.ToEq\"]
---                   \"Language.Haskell.Modules.Common\"@
+--      mergeModules [ModuleName \"Language.Haskell.Modules.Common.WithCurrentDirectory\",
+--                    ModuleName \"Language.Haskell.Modules.Common.Internal.ToEq\"]
+--                   (ModuleName \"Language.Haskell.Modules.Common\")@
+--
+-- * Move two declarations from Internal to Common:
+--
+--   @:m +Language.Haskell.Exts.Syntax
+--    findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
+--      mapM putModule modules >>
+--      splitModule (\\ n -> if elem n [Just (Ident \"ModuleResult\"), Just (Ident \"doResult\")]
+--                          then ModuleName \"Tmp\"
+--                          else ModuleName \"Language.Haskell.Modules.Internal\")
+--                  (ModuleName \"Language/Haskell/Modules/Internal.hs\") >>
+--      mergeModules [ModuleName \"Language.Haskell.Modules.Common\", ModuleName \"Tmp\"]
+--                   (ModuleName \"Language.Haskell.Modules.Common"/)@
 module Language.Haskell.Modules
     (
     -- * Entry points

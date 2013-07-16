@@ -26,7 +26,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(.
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(extraImports))
-import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), moduleName, parseModule)
+import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), moduleName, parseModule, findModule)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
@@ -113,10 +113,16 @@ doModule :: MonadClean m =>
          -> Map S.ModuleName (Set S.ImportDecl)
          -> ModuleInfo -> S.ModuleName
          -> Set S.ModuleName -> S.ModuleName -> m ModuleResult
-doModule symToModule eiMap inInfo inName outNames thisName =
+doModule symToModule eiMap inInfo inName outNames thisName@(S.ModuleName s) =
     case () of
       _ | member thisName outNames ->
-            return $ if thisName == inName then Modified thisName (key_ inInfo) newModule else Created thisName newModule
+            findModule s >>= \ thisInfo ->
+            return $ if thisName == inName
+                     then Modified thisName (key_ inInfo) newModule
+                     else case thisInfo of
+                            Just (ModuleInfo {key_ = key}) ->
+                                error $ "splitModule: output module already exists: " ++ show key
+                            _ -> Created thisName newModule
         | thisName == inName -> return (Removed thisName (key_ inInfo))
         | True ->
             pathKey (modulePathBase "hs" thisName) >>= parseModule >>= \ oldInfo@(ModuleInfo _ oldText _ _) ->
