@@ -12,20 +12,20 @@ import Data.Char (toLower)
 import Data.Foldable (fold)
 import Data.Function (on)
 import Data.List (find, groupBy, intercalate, nub, sortBy)
-import Data.Maybe (catMaybes, fromMaybe, mapMaybe)
+import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence ((|>))
-import Data.Set as Set (empty, member, Set, singleton, toList, union, unions)
+import Data.Set as Set (empty, member, Set, singleton, toList, union, unions, fromList)
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, sModuleName, sName)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleName(ModuleName), QName(..), Type(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleHead(..), ModuleName(..), QName(..), Type(..))
 import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.Internal (markForDelete, ModuleResult(..), MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
-import Language.Haskell.Modules.ModuVerse (getExtensions, loadModule, modifyExtensions, ModuleInfo(..), moduleName, parseModule)
-import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, pathKey, PathKey(..), PathKey(unPathKey), SourceDirs(getDirs, putDirs))
+import Language.Haskell.Modules.ModuVerse (getExtensions, loadModule, findModule, modifyExtensions, ModuleInfo(..), moduleName, parseModule)
+import Language.Haskell.Modules.SourceDirs (modifyDirs, pathKey, PathKey(..), PathKey(unPathKey), SourceDirs(getDirs, putDirs))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
@@ -60,11 +60,9 @@ cleanBuildImports lbi =
 -- | Clean up the imports of a source file.
 cleanImports :: MonadClean m => [FilePath] -> m [ModuleResult]
 cleanImports paths =
-    do dumpImports paths
-       mapM (\ path -> pathKey path >>= parseModule >>= doModule) paths
-    where
-      doModule mi@(ModuleInfo m@(A.Module {}) _ _ _) = checkImports (moduleName m) mi
-      doModule (ModuleInfo m _ _ _) = error $ "Unsupported module value: " ++ show m
+    do keys <- mapM pathKey paths >>= return . fromList
+       dumpImports keys
+       mapM (\ key -> parseModule key >>= checkImports) (toList keys)
 
 cleanResults :: MonadClean m => [ModuleResult] -> m [ModuleResult]
 cleanResults results =
@@ -72,35 +70,37 @@ cleanResults results =
        if mode then return results else (dump >> clean)
     where
       dump =
-          dumpImports (mapMaybe (\ x -> case x of
-                                          Removed _ -> Nothing
-                                          Unchanged _ -> Nothing
-                                          Modified name _ -> Just (modulePathBase "hs" name)
-                                          Created name _ -> Just (modulePathBase "hs" name)) results)
-      clean=
           mapM (\ x -> case x of
-                         Removed _ -> return x
-                         Unchanged _ -> return x
-                         Modified name _ -> doModule name
-                         Created name _ -> doModule name >>= return . toCreated) results
+                         Removed _ _ -> return Nothing
+                         Unchanged _ _ -> return Nothing
+                         Modified _ key _ -> return (Just key)
+                         Created (S.ModuleName name) _ -> findModule name >>= return . fmap key_) results >>=
+          dumpImports . fromList . catMaybes
+      clean =
+          mapM (\ x -> case x of
+                         Removed _ _ -> return x
+                         Unchanged _ _ -> return x
+                         Modified _name key _ -> doModule key
+                         Created (S.ModuleName name) _ ->
+                             do mi <- findModule name
+                                let Just k = fmap key_ mi -- This is pretty sure to be a Just
+                                x' <- doModule k
+                                return $ toCreated x') results
       -- The cleaning may have turned a Created result into Modified,
       -- turn it back into Created.
-      toCreated (Modified name text) = Created name text
-      toCreated x@(Created _ _) = x
+      toCreated (Modified name _key text) = Created name text
+      toCreated x@(Created {}) = x
       toCreated _ = error "toCreated"
       -- Update the cached version of the now modified module and then
       -- clean its import list.
-      doModule name =
-          do let path = modulePathBase "hs" name
-             key <- pathKey path
-             info <- loadModule key
-             checkImports name info
+      doModule key =
+          do info <- loadModule key
+             checkImports info
 
 -- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
-dumpImports :: MonadClean m => [FilePath] -> m ()
-dumpImports paths =
-    do keys <- mapM pathKey paths
-       scratch <- scratchDir <$> getParams
+dumpImports :: MonadClean m => Set PathKey -> m ()
+dumpImports keys =
+    do scratch <- scratchDir <$> getParams
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"
        args <- hsFlags <$> getParams
@@ -109,7 +109,7 @@ dumpImports paths =
        let args' = args ++
                    ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs] ++
                    map (("-X" ++) . show) exts ++
-                   map unPathKey keys
+                   map unPathKey (toList keys)
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
          ExitSuccess -> quietly (qLnPutStr (showCommandForUser cmd args' ++ " -> Ok")) >> return ()
@@ -120,9 +120,9 @@ dumpImports paths =
 -- source file.  We also need to modify the imports of any names
 -- that are types that appear in standalone instance derivations so
 -- their members are imported too.
-checkImports :: MonadClean m => S.ModuleName -> ModuleInfo -> m ModuleResult
-checkImports name@(S.ModuleName _) info@(ModuleInfo (A.Module _ _ _ imports _) _ _ key) =
-    do let importsPath = modulePathBase "imports" name
+checkImports :: MonadClean m => ModuleInfo -> m ModuleResult
+checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _) =
+    do let importsPath = maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh ++ ".imports"
        -- The .imports file will appear in the real current directory,
        -- ignore the source dir path.  This may change in future
        -- versions of GHC, see http://ghc.haskell.org/trac/ghc/ticket/7957
@@ -133,12 +133,12 @@ checkImports name@(S.ModuleName _) info@(ModuleInfo (A.Module _ _ _ imports _) _
                (parseModule (PathKey importsPath)
                   `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here ->
                                                           throw . userError $ here ++ ": " ++ show e)))
-       updateSource key info newImports name extraImports
+       updateSource info newImports extraImports
     where
       extraImports = filter isHiddenImport imports
       isHiddenImport (A.ImportDecl {A.importSpecs = Just (A.ImportSpecList _ True _)}) = True
       isHiddenImport _ = False
-checkImports _ _ = error "Unsupported module type"
+checkImports _ = error "Unsupported module type"
 
 withPackageImportsExtension :: MonadClean m => m a -> m a
 withPackageImportsExtension a =
@@ -154,16 +154,16 @@ withDot a =
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: MonadClean m => PathKey -> ModuleInfo -> A.Module SrcSpanInfo -> S.ModuleName -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
-updateSource key m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ _) (A.Module _ _ _ newImports _) name extraImports =
+updateSource :: MonadClean m => ModuleInfo -> A.Module SrcSpanInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
+updateSource m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ key) (A.Module _ _ _ newImports _) extraImports =
     do remove <- removeEmptyImports <$> getParams
-       maybe (qLnPutStr ("cleanImports: no changes to " ++ show key) >> return (Unchanged name))
+       maybe (qLnPutStr ("cleanImports: no changes to " ++ show key) >> return (Unchanged (moduleName m) key))
              (\ text' ->
                   qLnPutStr ("cleanImports: modifying " ++ show key) >>
                   replaceFile tildeBackup (unPathKey key) text' >>
-                  return (Modified name text'))
+                  return (Modified (moduleName m) key text'))
              (replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m)
-updateSource _ _ _ _ _ = error "updateSource"
+updateSource _ _ _ = error "updateSource"
 
 -- | Compare the old and new import sets and if they differ clip out
 -- the imports from the sourceText and insert the new ones.

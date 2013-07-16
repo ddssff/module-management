@@ -5,7 +5,6 @@ import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
 import Language.Haskell.Modules (modifyTestMode, noisily, putDirs, putModule, runCleanT, splitModule, splitModuleDecls, withCurrentDirectory, findHsModules)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import Prelude hiding (writeFile)
-import System.Cmd (system)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import Test.HUnit (assertEqual, Test(TestCase, TestList, TestLabel))
 

@@ -29,8 +29,7 @@ import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Map as Map (delete, empty, insert, keys, lookup, Map)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (fromList, Set)
-import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), parseFileWithComments)
-import Language.Haskell.Exts.Annotated.Simplify (sModuleName)
+import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Extension (Extension)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename), ParseResult)
@@ -47,12 +46,19 @@ data ModuleInfo
       { module_ :: A.Module SrcSpanInfo
       , text_ :: String
       , comments_ :: [Comment]
-      , path_ :: PathKey }
+      , key_ :: PathKey }
     deriving (Eq, Ord, Show)
 
+{-
 moduleName :: A.Module a -> S.ModuleName
 moduleName (A.Module _ (Just (A.ModuleHead _ x _ _)) _ _ _) = sModuleName x
 moduleName _ = S.ModuleName "Main"
+-}
+
+moduleName :: ModuleInfo -> S.ModuleName
+moduleName (ModuleInfo (A.Module _ mh _ _ _) _ _ _) =
+    S.ModuleName $ maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh
+moduleName (ModuleInfo m _ _ _) = error $ "Unsupported Module: " ++ show m
 
 data ModuVerseState =
     ModuVerseState { moduleNames_ :: Maybe (Map S.ModuleName ModuleInfo)
@@ -142,10 +148,9 @@ loadModule key =
        modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (ModuleInfo parsed text comments key) (moduleInfo_ x)})
        return (ModuleInfo parsed text comments key)
 
-unloadModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ()
-unloadModule path =
-    do key <- pathKey path
-       modifyModuVerse (\ x -> x {moduleInfo_ = Map.delete key (moduleInfo_ x)})
+unloadModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ()
+unloadModule key =
+    modifyModuVerse (\ x -> x {moduleInfo_ = Map.delete key (moduleInfo_ x)})
 
 -- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))

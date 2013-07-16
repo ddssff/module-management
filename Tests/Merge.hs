@@ -2,7 +2,7 @@ module Tests.Merge where
 
 import Control.Monad as List (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
-import Language.Haskell.Modules (mergeModules, modifyTestMode, noisily, putDirs, putModule, runCleanT, withCurrentDirectory, findHsModules, splitModuleDecls)
+import Language.Haskell.Modules (mergeModules, modifyTestMode, noisily, putDirs, putModule, runCleanT, withCurrentDirectory, findHsModules)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
@@ -86,7 +86,7 @@ test6 =
          _ <- withCurrentDirectory "tmp" $
               findHsModules ["Test.hs", "A.hs", "B/C.hs", "B/D.hs"] >>= \ modules ->
               runCleanT $ noisily $ noisily $ noisily $
-              do mapM putModule modules
+              do mapM_ putModule modules
                  mergeModules [S.ModuleName "B.C", S.ModuleName "A"] (S.ModuleName "A")
-         (code, out, err) <- diff "testdata/merge6" "tmp"
+         (code, out, err) <- diff "testdata/merge6-expected" "tmp"
          assertEqual "merge6" (ExitSuccess, "", "") (code, out, err)

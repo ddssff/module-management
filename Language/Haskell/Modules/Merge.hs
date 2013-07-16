@@ -8,7 +8,7 @@ import Control.Monad as List (mapM, when)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
 import Data.Foldable (fold)
 import Data.Generics (Data, everywhere, mkT, Typeable)
-import Data.List as List (intercalate, map)
+import Data.List as List (intercalate, map, find)
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.Monoid ((<>), mempty)
 import Data.Sequence as Seq ((<|), null, Seq, (|>))
@@ -21,7 +21,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, impor
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.Internal (doResult, fixExport, ModuleResult(..), MonadClean)
-import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), parseModule, parseModuleMaybe)
+import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), parseModule, parseModuleMaybe, moduleName)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, pathKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 
@@ -39,9 +39,9 @@ mergeModules inNames outName =
             results <- List.mapM (doModule inNames outName) allNames >>= List.mapM doResult >>= List.mapM reportResult
             cleanResults results
     where
-      reportResult x@(Modified (S.ModuleName name) _) = qLnPutStr ("mergeModules: modifying " ++ name) >> return x
-      reportResult x@(Created (S.ModuleName name) _) = qLnPutStr ("mergeModules: creating " ++ name) >> return x
-      reportResult x@(Removed (S.ModuleName name)) = qLnPutStr ("mergeModules: removing " ++ name) >> return x
+      reportResult x@(Modified _ key _) = qLnPutStr ("mergeModules: modifying " ++ show key) >> return x
+      reportResult x@(Created name _) = qLnPutStr ("mergeModules: creating " ++ show name) >> return x
+      reportResult x@(Removed _ key) = qLnPutStr ("mergeModules: removing " ++ show key) >> return x
       reportResult x = return x
 
 -- Process one of the modules in the moduVerse and return the result.
@@ -56,16 +56,17 @@ doModule :: MonadClean m =>
 doModule inNames@(_ : _) outName thisName =
     do -- The new module will be based on the first input module,
        -- though its name will be changed to outModule.
-       inInfo@(firstInfo@(ModuleInfo _ text _ _) : _) <-
+       inInfo@(firstInfo : _) <-
            List.mapM (\ name -> pathKey (modulePathBase "hs" name) >>= parseModule) inNames
              `IO.catch` (\ (_ :: IOError) -> error $ "mergeModules - failure reading input modules: " ++ show inNames)
        outInfo <- pathKeyMaybe (modulePathBase "hs" outName) >>= parseModuleMaybe
        thisInfo <- pathKeyMaybe (modulePathBase "hs" thisName) >>= parseModuleMaybe
-       let baseInfo@(ModuleInfo {module_ = A.Module _ mh _ _ _}) = fromMaybe firstInfo thisInfo
+       let baseInfo@(ModuleInfo {module_ = A.Module _ _ _ _ _}) = fromMaybe firstInfo thisInfo
        when (isJust outInfo && notElem outName inNames) (error "mergeModules - if output module exist it must also be one of the input modules")
-       case thisName /= outName && elem thisName inNames of
-         True -> return (Removed thisName)
-         False ->
+       case (thisName /= outName, List.find (\ x -> moduleName x == thisName) inInfo) of 
+         (True, Just info) ->
+             return (Removed thisName (key_ info))
+         _ ->
            let header =
                    fold (foldHeader echo2 echo (if thisName == outName
                                                 then \ _ pref _ suff r -> r |> pref <> prettyPrint outName <> suff
@@ -88,7 +89,7 @@ doModule inNames@(_ : _) outName thisName =
                                  else fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 baseInfo mempty)
                              rparen = fold (foldExports ignore2 ignore (<|) baseInfo mempty) in
                          lparen <> newExports <> rparen
-                     ModuleInfo {module_ = A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _} -> "where\n"
+                     ModuleInfo {module_ = A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _} -> "where\n\n"
                      _ -> ""
                imports =
                    if thisName == outName
@@ -101,7 +102,12 @@ doModule inNames@(_ : _) outName thisName =
                    then fromMaybe "" (foldDecls (\ _ _ _ _ r -> Just (fromMaybe (unlines (List.map (moduleDecls inNames outName thisName) inInfo)) r)) (\ s r -> Just (maybe s (<> s) r)) baseInfo Nothing)
                    else moduleDecls inNames outName thisName baseInfo
                text' = header <> exports <> imports <> decls in
-           return $ if text' /= text then Modified thisName text' else Unchanged thisName
+           return $ case thisInfo of
+                      Just (ModuleInfo {text_ = text, key_ = key}) ->
+                          if text' /= text then Modified thisName key text' else Unchanged thisName key
+                      Nothing ->
+                          Created thisName text'
+           -- return $ if text' /= text then Modified thisName (key_ thisInfo) text' else Unchanged thisName (key_ thisInfo)
 doModule [] _ _ = error "doModule: no inputs"
 
 moduleImports :: SrcInfo loc =>

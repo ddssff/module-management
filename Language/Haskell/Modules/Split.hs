@@ -77,15 +77,15 @@ splitModuleDecls path =
 splitModuleBy :: MonadClean m => (Maybe S.Name -> S.ModuleName) -> ModuleInfo -> m [ModuleResult]
 splitModuleBy _ (ModuleInfo (A.XmlPage {}) _ _ _) = error "XmlPage"
 splitModuleBy _ (ModuleInfo (A.XmlHybrid {}) _ _ _) = error "XmlPage"
-splitModuleBy _ (ModuleInfo (m@(A.Module _ _ _ _ [])) _ _ _) = return [Unchanged (moduleName m)] -- No declarations - nothing to split
-splitModuleBy _ (ModuleInfo (m@(A.Module _ _ _ _ [_])) _ _ _) = return [Unchanged (moduleName m)] -- One declaration - nothing to split (but maybe we should anyway?)
+splitModuleBy _ m@(ModuleInfo (A.Module _ _ _ _ []) _ _ key) = return [Unchanged (moduleName m) key] -- No declarations - nothing to split
+splitModuleBy _ m@(ModuleInfo (A.Module _ _ _ _ [_]) _ _ key) = return [Unchanged (moduleName m) key] -- One declaration - nothing to split (but maybe we should anyway?)
 splitModuleBy _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = throw $ userError $ "splitModule: no explicit header"
-splitModuleBy symToModule inInfo@(ModuleInfo m _ _ _) =
-    do qLnPutStr ("Splitting " ++ prettyPrint (moduleName m))
+splitModuleBy symToModule inInfo =
+    do qLnPutStr ("Splitting " ++ prettyPrint (moduleName inInfo))
        quietly $
          do eiMap <- getParams >>= return . extraImports
             -- The name of the module to be split
-            let inName = moduleName m
+            let inName = moduleName inInfo
             allNames <- getNames >>= return . Set.union outNames
             changes <- List.mapM (doModule symToModule eiMap inInfo inName outNames) (toList allNames)
             -- No good reason to use sets here
@@ -101,9 +101,9 @@ splitModuleBy symToModule inInfo@(ModuleInfo m _ _ _) =
           then error ("One or more module to be created by splitModule already exists: " ++ show (Set.toList illegal))
           else s -}
 
-      reportResult x@(Modified (S.ModuleName name) _) = qLnPutStr ("splitModule: modifying " ++ name) >> return x
+      reportResult x@(Modified (S.ModuleName _) key _) = qLnPutStr ("splitModule: modifying " ++ show key) >> return x
       reportResult x@(Created (S.ModuleName name) _) = qLnPutStr ("splitModule: creating " ++ name) >> return x
-      reportResult x@(Removed (S.ModuleName name)) = qLnPutStr ("splitModule: removing " ++ name) >> return x
+      reportResult x@(Removed (S.ModuleName _) key) = qLnPutStr ("splitModule: removing " ++ show key) >> return x
       reportResult x = return x
 
       outNames = Set.map symToModule (union (declared inInfo) (exported inInfo))
@@ -116,18 +116,17 @@ doModule :: MonadClean m =>
 doModule symToModule eiMap inInfo inName outNames thisName =
     case () of
       _ | member thisName outNames ->
-            return $ if thisName == inName then Modified thisName newModule else Created thisName newModule
-        | thisName == inName -> return (Removed thisName)
+            return $ if thisName == inName then Modified thisName (key_ inInfo) newModule else Created thisName newModule
+        | thisName == inName -> return (Removed thisName (key_ inInfo))
         | True ->
             pathKey (modulePathBase "hs" thisName) >>= parseModule >>= \ oldInfo@(ModuleInfo _ oldText _ _) ->
             let newText = updateImports oldInfo in
-            return $ if newText /= oldText then Modified thisName newText else Unchanged thisName
+            return $ if newText /= oldText then Modified thisName (key_ oldInfo) newText else Unchanged thisName (key_ oldInfo)
     where
       -- Build a new module given its name and the list of
       -- declarations it should contain.
       newModule :: String
       newModule = newHeader <> newExports <> newImports <> newDecls
-
 
       -- Change the module name in the header
       newHeader =
@@ -328,7 +327,7 @@ isReExported _ = False
 defaultSymbolToModule :: ModuleInfo    -- ^ Parent module name
                       -> Maybe S.Name
                       -> S.ModuleName
-defaultSymbolToModule info@(ModuleInfo m _ _ _) name =
+defaultSymbolToModule info name =
     S.ModuleName (parentModuleName <.>
                              case declClass info name of
                                Instance -> "Instances"
@@ -337,7 +336,7 @@ defaultSymbolToModule info@(ModuleInfo m _ _ _) name =
                                Unknown x -> "Unknown" <.> f x
                                Exported x -> f x)
     where
-      S.ModuleName parentModuleName = moduleName m
+      S.ModuleName parentModuleName = moduleName info
       f (S.Symbol s) = g s
       f (S.Ident s) = g s
       -- Any symbol that starts with a letter is converted to a module name

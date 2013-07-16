@@ -26,7 +26,7 @@ import Language.Haskell.Exts.Annotated.Simplify (sExportSpec)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl, ModuleName(..))
 import Language.Haskell.Modules.ModuVerse (delName, ModuVerse(..), moduVerseInit, ModuVerseState, putModuleAnew, unloadModule)
-import Language.Haskell.Modules.SourceDirs (modulePath, modulePathBase)
+import Language.Haskell.Modules.SourceDirs (PathKey(..), modulePath)
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
@@ -117,9 +117,9 @@ markForDelete :: MonadClean m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk = insert x (junk p)})
 
 data ModuleResult
-    = Unchanged S.ModuleName
-    | Removed S.ModuleName
-    | Modified S.ModuleName String
+    = Unchanged S.ModuleName PathKey
+    | Removed S.ModuleName PathKey
+    | Modified S.ModuleName PathKey String
     | Created S.ModuleName String
     deriving (Show, Eq, Ord)
 
@@ -128,21 +128,20 @@ data ModuleResult
 -- so that all the compiles required for import cleaning succeed.  On
 -- the other hand, we might be able to maintain the moduVerse here.
 doResult :: (ModuVerse m, MonadDryRun m, MonadVerbosity m) => ModuleResult -> m ModuleResult
-doResult x@(Unchanged name) =
-    do quietly (qLnPutStr ("unchanged: " ++ show name))
+doResult x@(Unchanged _name key) =
+    do quietly (qLnPutStr ("unchanged: " ++ show key))
        return x
-doResult x@(Removed name) =
-    do quietly (qLnPutStr ("removed: " ++ show name))
-       let rel = modulePathBase "hs" name
-       path <- modulePath "hs" name
-       unloadModule rel
+doResult x@(Removed name key) =
+    do quietly (qLnPutStr ("removed: " ++ show key))
+       let path = unPathKey key
+       unloadModule key
        -- I think this event handler is redundant.
        removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
        delName name
        return x
 
-doResult x@(Modified m@(S.ModuleName name) text) =
-    do quietly (qLnPutStr ("modified: " ++ show name))
+doResult x@(Modified m@(S.ModuleName name) key text) =
+    do quietly (qLnPutStr ("modified: " ++ show key))
        path <- modulePath "hs" m
        -- qLnPutStr ("modifying " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
@@ -151,7 +150,7 @@ doResult x@(Modified m@(S.ModuleName name) text) =
        return x
 
 doResult x@(Created m@(S.ModuleName name) text) =
-    do quietly (qLnPutStr ("created: " ++ show name))
+    do quietly (qLnPutStr ("created: " ++ name))
        path <- modulePath "hs" m
        -- qLnPutStr ("creating " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
