@@ -14,7 +14,7 @@ import Data.Monoid ((<>), mempty)
 import Data.Sequence as Seq ((<|), null, Seq, (|>))
 import Data.Set as Set (fromList, toList, union)
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sImportDecl, sModuleName)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl), Module(Module))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl), Module(Module), ModuleHead(ModuleHead))
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, importModule), ModuleName(..))
@@ -61,7 +61,7 @@ doModule inNames@(_ : _) outName thisName =
              `IO.catch` (\ (_ :: IOError) -> error $ "mergeModules - failure reading input modules: " ++ show inNames)
        outInfo <- pathKeyMaybe (modulePathBase "hs" outName) >>= parseModuleMaybe
        thisInfo <- pathKeyMaybe (modulePathBase "hs" thisName) >>= parseModuleMaybe
-       let baseInfo = fromMaybe firstInfo thisInfo
+       let baseInfo@(ModuleInfo {module_ = A.Module _ mh _ _ _}) = fromMaybe firstInfo thisInfo
        when (isJust outInfo && notElem outName inNames) (error "mergeModules - if output module exist it must also be one of the input modules")
        case thisName /= outName && elem thisName inNames of
          True -> return (Removed thisName)
@@ -72,19 +72,24 @@ doModule inNames@(_ : _) outName thisName =
                                                 else echo)
                                                echo baseInfo mempty)
                exports =
-                   let lparen = fold (foldExports (<|) ignore ignore2 baseInfo mempty)
-                       newExports =
-                           if thisName == outName
-                           then -- This should be a reasonable string
-                                -- to join two export lists.
-                                let sep = map (\ c -> if c == '(' then ',' else c) lparen in
-                                -- The output module gets modified
-                                -- copies of all the input module
-                                -- export lists.
-                                intercalate sep $ filter (/= "") $ List.map (\ (_, info) -> fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 info mempty)) (zip inNames inInfo)
-                           else fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 baseInfo mempty)
-                       rparen = fold (foldExports ignore2 ignore (<|) baseInfo mempty) in
-                   lparen <> newExports <> rparen
+                   case baseInfo of
+                     -- Is there an export list?
+                     ModuleInfo {module_ = A.Module _ (Just (A.ModuleHead _ _ _ (Just _))) _ _ _} ->
+                         let lparen = fold (foldExports (<|) ignore ignore2 baseInfo mempty)
+                             newExports =
+                                 if thisName == outName
+                                 then -- This should be a reasonable string
+                                      -- to join two export lists.
+                                      let sep = map (\ c -> if c == '(' then ',' else c) lparen in
+                                      -- The output module gets modified
+                                      -- copies of all the input module
+                                      -- export lists.
+                                      intercalate sep $ filter (/= "") $ List.map (\ (_, info) -> fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 info mempty)) (zip inNames inInfo)
+                                 else fold (foldExports ignore2 (fixExport inNames outName thisName) ignore2 baseInfo mempty)
+                             rparen = fold (foldExports ignore2 ignore (<|) baseInfo mempty) in
+                         lparen <> newExports <> rparen
+                     ModuleInfo {module_ = A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _} -> "where\n"
+                     _ -> ""
                imports =
                    if thisName == outName
                    then let pre = fold (foldImports (\ _ pref _ _ r -> if Seq.null r then r |> pref else r) baseInfo mempty)
