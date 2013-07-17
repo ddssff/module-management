@@ -15,27 +15,18 @@ Bugs:
      and the resulting file will not compile.  "deriving instance Show bar"
      will work correctly.
 
-  2. If the symbols used by a standalone derived instance are imported by an
-     import line with no specs, cleanImports with fail.  Add explicit imports
-     by hand before running cleanImports.
+  2. Leaves behind some .imports files
 
-  3. Leaves behind some .imports files
+  3. Template haskell will occasionally mess it up
 
-  4. Template haskell will occasionally mess it up
+  4. When it modifies an export list, all comments get stripped out.
 
-  5. It will fail if there are CPP directives
-
-  6. It is very, very slow.  Apart from running GHC a lot, the real slowdown
-     is probably due to using the wrong folds in various places.
+  5. When it modifies an export list, some export symbols get re-ordered.
 
 To Do:
 
-  1. Make sure original file is left as backup, not some intermediate
-  5. Do global check whether export symbols are imported anywhere, and
-     if not remove them.
-  6. Make cleanImports do a list of modules all at once, to avoid repeat compiles
-
-Features:
-
-  1. If a module that contains instances is split up, the new Instances module is
-     imported everywhere the old module was with an empty import spec list.
+  1. Make sure original file is left as backup, not some intermediate.
+     Or eliminate backup files, you should really run this on files
+     under version control.
+  2. Do global check whether exported symbols are imported anywhere,
+     and if not make them private.
