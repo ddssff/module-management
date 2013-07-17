@@ -99,10 +99,9 @@ module Language.Haskell.Modules
 
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Imports (cleanImports)
-import Language.Haskell.Modules.Internal (CleanT, MonadClean, runCleanT)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.ModuVerse (findModule, modifyExtensions, putModule)
-import Language.Haskell.Modules.Params (modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode)
+import Language.Haskell.Modules.Params (CleanT, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode, MonadClean, runCleanT)
 import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, SourceDirs(putDirs))
 import Language.Haskell.Modules.Split (defaultSymbolToModule, splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)

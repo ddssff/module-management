@@ -35,11 +35,12 @@ Library
     Language.Haskell.Modules.Util.Temp,
     Language.Haskell.Modules.Util.Test
   Other-Modules:
-    Language.Haskell.Modules.Internal,
     Tests.Fold,
     Tests.Imports,
     Tests.Merge,
     Tests.Split
+    Tests.SrcLoc
+    Tests.Symbols
   Build-Depends:
     applicative-extras,
     base >= 4 && < 5,
