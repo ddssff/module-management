@@ -36,8 +36,6 @@
 --   merges two or more modules into a new or existing module, updating
 --   imports of the moduVerse elements as necessary.
 --
--- * 'Language.Haskell.Modules.Params' - Functions to control modes of operation
---
 -- Examples:
 --
 -- * Use 'findHsFiles' and 'cleanImports' to clean up the import lists
@@ -51,7 +49,7 @@
 --   @:m +Language.Haskell.Exts.Syntax
 --    findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
 --      mapM putModule modules >>
---      splitModuleDecls \"Language/Haskell/Modules/Common.hs\" >>
+--      splitModuleDecls \"Language\/Haskell\/Modules\/Common.hs\" >>
 --      mergeModules [ModuleName \"Language.Haskell.Modules.Common.WithCurrentDirectory\",
 --                    ModuleName \"Language.Haskell.Modules.Common.Internal.ToEq\"]
 --                   (ModuleName \"Language.Haskell.Modules.Common\")@
@@ -65,7 +63,7 @@
 --      splitModule (\\ n -> if elem n [Just (Ident \"ModuleResult\"), Just (Ident \"doResult\")]
 --                          then ModuleName \"Tmp\"
 --                          else ModuleName \"Language.Haskell.Modules.Internal\")
---                  (ModuleName \"Language/Haskell/Modules/Internal.hs\") >>
+--                  (ModuleName \"Language\/Haskell\/Modules\/Internal.hs\") >>
 --      mergeModules [ModuleName \"Language.Haskell.Modules.Common\", ModuleName \"Tmp\"]
 --                   (ModuleName \"Language.Haskell.Modules.Common\")@
 module Language.Haskell.Modules
