@@ -6,19 +6,15 @@ module Language.Haskell.Modules.Util.Symbols
     , symbols
     , exports
     , imports
-    , tests
     ) where
 
 import Data.List (sort)
 import Data.Maybe (mapMaybe)
 import Data.Set as Set (empty, insert, Set, toList)
 import Language.Haskell.Exts.Annotated.Simplify (sName)
-import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), Exp(..), ExportSpec(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name(..), Pat(..), PatField(..), QName(..), QualConDecl(..), Rhs(..), RPat(..), Type(..))
-import Language.Haskell.Exts.Pretty (prettyPrint)
-import Language.Haskell.Exts.SrcLoc (SrcSpan(..), SrcSpanInfo(..))
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), ExportSpec(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name, Pat(..), PatField(..), QName(..), QualConDecl(..), RPat(..))
 import qualified Language.Haskell.Exts.Syntax as S (CName(..), ExportSpec(..), ImportSpec(..), Name(..), QName(..))
 import Language.Haskell.Modules.Util.SrcLoc ()
-import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 -- | Do a fold over the names that are declared in a declaration (not
 -- every name that appears, just the ones that the declaration is
@@ -188,18 +184,3 @@ instance FoldDeclared (A.FieldDecl l) where
 
 instance FoldDeclared (A.GadtDecl l) where
     foldDeclared f r (A.GadtDecl _ x _) = foldDeclared f r x
-
-tests :: Test
-tests = TestList [test1, test2, test3, test4]
-
-test1 :: Test
-test1 = TestCase (assertEqual "DefaultDecl" " \ndefault (foo)" (prettyPrint (A.DefaultDecl def [A.TyVar def (A.Ident def "foo")] :: A.Decl SrcSpanInfo)))
-test2 :: Test
-test2 = TestCase (assertEqual "PatBind" "pvar :: typ = unqualrhs" (prettyPrint (A.PatBind def (A.PVar def (A.Ident def "pvar")) (Just (A.TyVar def (A.Ident def "typ"))) (A.UnGuardedRhs def (A.Var def (A.UnQual def (A.Ident def "unqualrhs")))) Nothing :: A.Decl SrcSpanInfo)))
-test3 :: Test
-test3 = TestCase (assertEqual "Pat" "pvar" (prettyPrint (A.PVar def (A.Ident def "pvar") :: A.Pat SrcSpanInfo)))
-test4 :: Test
-test4 = TestCase (assertEqual "Pat" "unqual pvar" (prettyPrint (A.PApp def (A.UnQual def (A.Ident def "unqual")) [A.PVar def (A.Ident def "pvar")] :: A.Pat SrcSpanInfo)))
-
-def :: SrcSpanInfo
-def = SrcSpanInfo (SrcSpan "test" 1 1 1 1) []

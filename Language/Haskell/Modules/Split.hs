@@ -26,7 +26,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(.
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.Internal (doResult, ModuleResult(..), MonadClean(getParams), Params(extraImports))
-import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), moduleName, parseModule, findModule)
+import Language.Haskell.Modules.ModuVerse (findModule, getNames, ModuleInfo(..), moduleName, parseModule)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)

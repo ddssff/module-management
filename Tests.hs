@@ -20,6 +20,7 @@ import qualified Tests.Imports as Imports (tests)
 import qualified Tests.Merge as Merge (tests)
 import qualified Tests.Split as Split (slow, tests)
 import qualified Tests.SrcLoc as SrcLoc (tests)
+import qualified Tests.Symbols as Symbols (tests)
 
 main :: IO ()
 main =
@@ -45,6 +46,7 @@ withTestData f path = withCurrentDirectory "testdata/debian" $
 
 tests :: Test
 tests = TestList [ Main.test1
+                 , TestLabel "Symbols" SrcLoc.tests
                  , TestLabel "SrcLoc" SrcLoc.tests
                  , TestLabel "Fold" Fold.tests
                  , TestLabel "Imports" Imports.tests
