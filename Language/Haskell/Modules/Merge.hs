@@ -18,10 +18,11 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportD
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, importModule), ModuleName(..))
+import Language.Haskell.Modules.Common (doResult, fixExport, ModuleResult(..))
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), moduleName, parseModule, parseModuleMaybe)
-import Language.Haskell.Modules.Params (doResult, fixExport, ModuleResult(..), MonadClean)
+import Language.Haskell.Modules.Params (MonadClean)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, pathKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 

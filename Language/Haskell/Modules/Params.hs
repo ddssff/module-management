@@ -2,14 +2,13 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Params
-    ( runCleanT
-    , markForDelete
-    , Params(..)
+    ( Params(Params, dryRun, extraImports, hsFlags, junk, moduVerse,
+       removeEmptyImports, scratchDir, testMode, verbosity)
     , CleanT
     , MonadClean(getParams, putParams)
-    , ModuleResult(..)
-    , doResult
-    , fixExport
+    , modifyParams
+    , runCleanT
+    , markForDelete
     , modifyRemoveEmptyImports
     , modifyHsFlags
     , modifyDryRun
@@ -17,26 +16,18 @@ module Language.Haskell.Modules.Params
     ) where
 
 import Control.Exception (SomeException, try)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
+import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Map as Map (empty, Map)
-import Data.Monoid ((<>))
-import Data.Sequence as Seq (Seq, (|>))
 import Data.Set as Set (empty, insert, Set, toList)
-import qualified Language.Haskell.Exts.Annotated as A (ExportSpec)
-import Language.Haskell.Exts.Annotated.Simplify (sExportSpec)
-import Language.Haskell.Exts.Pretty (prettyPrint)
-import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl, ModuleName(..))
-import Language.Haskell.Modules.ModuVerse (delName, ModuVerse(..), moduVerseInit, ModuVerseState, putModuleAnew, unloadModule)
-import Language.Haskell.Modules.SourceDirs (modulePath, PathKey(..))
-import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
-import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qLnPutStr, quietly)
+import qualified Language.Haskell.Exts.Syntax as S (ImportDecl, ModuleName)
+import Language.Haskell.Modules.ModuVerse (ModuVerse(..), moduVerseInit, ModuVerseState)
+import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..))
+import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import Prelude hiding (writeFile, writeFile)
 import System.Directory (removeFile)
-import System.FilePath (dropExtension, takeDirectory)
-import System.IO.Error (isDoesNotExistError)
 
 -- | This contains the information required to run the state monad for
 -- import cleaning and module spliting/mergeing.
@@ -119,64 +110,6 @@ runCleanT action =
 markForDelete :: MonadClean m => FilePath -> m ()
 markForDelete x = modifyParams (\ p -> p {junk = insert x (junk p)})
 
-data ModuleResult
-    = Unchanged S.ModuleName PathKey
-    | Removed S.ModuleName PathKey
-    | Modified S.ModuleName PathKey String
-    | Created S.ModuleName String
-    deriving (Show, Eq, Ord)
-
--- | It is tempting to put import cleaning into these operations, but
--- that needs to be done after all of these operations are completed
--- so that all the compiles required for import cleaning succeed.  On
--- the other hand, we might be able to maintain the moduVerse here.
-doResult :: (ModuVerse m, MonadDryRun m, MonadVerbosity m) => ModuleResult -> m ModuleResult
-doResult x@(Unchanged _name key) =
-    do quietly (qLnPutStr ("unchanged: " ++ show key))
-       return x
-doResult x@(Removed name key) =
-    do quietly (qLnPutStr ("removed: " ++ show key))
-       let path = unPathKey key
-       unloadModule key
-       -- I think this event handler is redundant.
-       removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-       delName name
-       return x
-
-doResult x@(Modified m@(S.ModuleName name) key text) =
-    do quietly (qLnPutStr ("modified: " ++ show key))
-       path <- modulePath "hs" m
-       -- qLnPutStr ("modifying " ++ show path)
-       -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
-       replaceFile tildeBackup path text
-       putModuleAnew name
-       return x
-
-doResult x@(Created m@(S.ModuleName name) text) =
-    do quietly (qLnPutStr ("created: " ++ name))
-       path <- modulePath "hs" m
-       -- qLnPutStr ("creating " ++ show path)
-       -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
-       createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
-       replaceFile tildeBackup path text
-       putModuleAnew name
-       return x
-
--- | Update an export spec.  The only thing we might need to change is
--- re-exports, of the form "module Foo".
-fixExport :: [S.ModuleName] -> S.ModuleName -> S.ModuleName
-          -> A.ExportSpec l -> String -> String -> String -> Seq String -> Seq String
-fixExport inNames outName thisName e pref s suff r =
-    case sExportSpec e of
-      S.EModuleContents name
-          -- when building the output module, omit re-exports of input modules
-          | thisName == outName && elem name inNames -> r
-          -- when building other modules, update re-exports of input
-          -- modules to be a re-export of the output module.
-          | elem name inNames -> r |> pref <> prettyPrint (S.EModuleContents outName) <> suff
-          -- Anything else is unchanged
-      _ -> r |> pref <> s <> suff
-
 -- | If this flag is set, imports that become empty are removed.
 -- Sometimes this will lead to errors, specifically when an instance
 -- in the removed import that was required is no longer be available.
@@ -202,4 +135,3 @@ modifyDryRun f = modifyParams (\ p -> p {dryRun = f (dryRun p)})
 -- split or cat.  Default is False.
 modifyTestMode :: MonadClean m => (Bool -> Bool) -> m ()
 modifyTestMode f = modifyParams (\ p -> p {testMode = f (testMode p)})
-
