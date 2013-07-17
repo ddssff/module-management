@@ -114,10 +114,10 @@ doModule :: MonadClean m =>
          -> Map S.ModuleName (Set S.ImportDecl)
          -> ModuleInfo -> S.ModuleName
          -> Set S.ModuleName -> S.ModuleName -> m ModuleResult
-doModule symToModule eiMap inInfo inName outNames thisName@(S.ModuleName nameString) =
+doModule symToModule eiMap inInfo inName outNames thisName =
     case () of
       _ | member thisName outNames ->
-            findModule nameString >>= \ thisInfo ->
+            findModule thisName >>= \ thisInfo ->
             return $ if thisName == inName
                      then Modified thisName (key_ inInfo) newModule
                      else case thisInfo of

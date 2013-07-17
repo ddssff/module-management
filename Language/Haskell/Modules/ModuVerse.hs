@@ -87,14 +87,14 @@ getInfo name = getModuVerse >>= return . Map.lookup name . fromMaybe (error "No 
 putName :: ModuVerse m => S.ModuleName -> ModuleInfo -> m ()
 putName name info = modifyModuVerse (\ s -> s {moduleNames_ = Just (Map.insert name info (fromMaybe Map.empty (moduleNames_ s)))})
 
-putModule :: (ModuVerse m, MonadVerbosity m) => String -> m ()
-putModule name = pathKey (modulePathBase "hs" (S.ModuleName name)) >>= parseModule >>= putName (S.ModuleName name)
+putModule :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m ()
+putModule name = pathKey (modulePathBase "hs" name) >>= parseModule >>= putName name
 
-putModuleAnew :: (ModuVerse m, MonadVerbosity m) => String -> m ()
-putModuleAnew name = pathKey (modulePathBase "hs" (S.ModuleName name)) >>= loadModule >>= putName (S.ModuleName name)
+putModuleAnew :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m ()
+putModuleAnew name = pathKey (modulePathBase "hs" name) >>= loadModule >>= putName name
 
-findModule :: (ModuVerse m, MonadVerbosity m) => String -> m (Maybe ModuleInfo)
-findModule name = pathKeyMaybe (modulePathBase "hs" (S.ModuleName name)) >>= parseModuleMaybe
+findModule :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m (Maybe ModuleInfo)
+findModule name = pathKeyMaybe (modulePathBase "hs" name) >>= parseModuleMaybe
 
 delName :: ModuVerse m => S.ModuleName -> m ()
 delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Map.delete name (fromMaybe Map.empty (moduleNames_ s)))

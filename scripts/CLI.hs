@@ -5,7 +5,6 @@ import Control.Monad as List (mapM_)
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (intercalate, isPrefixOf)
 import Data.Set.Extra as Set (Set, toList)
-import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules
 import Language.Haskell.Modules.ModuVerse (getNames)
 import Language.Haskell.Modules.SourceDirs (getDirs)
@@ -60,7 +59,7 @@ verse args =
       find s =
           do ms <- liftIO (findHsModules [s])
              case ms of
-               [] -> return [s]
+               [] -> return [ModuleName s]
                _ -> return ms
 
 showVerse :: Set ModuleName -> String

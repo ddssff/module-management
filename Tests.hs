@@ -46,7 +46,7 @@ withTestData f path = withCurrentDirectory "testdata/debian" $
 
 tests :: Test
 tests = TestList [ Main.test1
-                 , TestLabel "Symbols" SrcLoc.tests
+                 , TestLabel "Symbols" Symbols.tests
                  , TestLabel "SrcLoc" SrcLoc.tests
                  , TestLabel "Fold" Fold.tests
                  , TestLabel "Imports" Imports.tests
@@ -74,16 +74,16 @@ test1 =
       test parsed comments text = return (exactPrint parsed comments, text)
 
 -- logictest :: String -> ([String] -> CleanT m ()) -> Test
-logictest :: String -> ([String] -> CleanT IO ()) -> Test
+logictest :: String -> ([ModuleName] -> CleanT IO ()) -> Test
 logictest s f =
     TestLabel s $ TestCase $
     do _ <- rsync "testdata/logic" "tmp"
-       _ <- withCurrentDirectory "tmp" $ runCleanT $ noisily $ f logicModules
+       _ <- withCurrentDirectory "tmp" $ runCleanT $ noisily $ f (map ModuleName logicModules)
        (code, out, err) <- diff' ("testdata/" ++ s ++ "-expected") "tmp"
        let out' = unlines (filter (not . isPrefixOf "Binary files") . map (takeWhile (/= '\t')) $ (lines out))
        assertEqual s (ExitSuccess, "", "") (code, out', err)
 
-test2a :: MonadClean m => [String] -> m ()
+test2a :: MonadClean m => [ModuleName] -> m ()
 test2a u =
          do modifyExtensions (++ [MultiParamTypeClasses])
             -- We *must* clean the split results, or there will be
@@ -92,7 +92,7 @@ test2a u =
             _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
             return ()
 
-test2b :: MonadClean m => [String] -> m ()
+test2b :: MonadClean m => [ModuleName] -> m ()
 test2b u =
          do modifyExtensions (++ [MultiParamTypeClasses])
             mapM_ putModule u
@@ -104,7 +104,7 @@ test2b u =
                    (ModuleName "Data.Logic.Classes.FirstOrder")
             return ()
 
-test2c :: MonadClean m => [String] -> m ()
+test2c :: MonadClean m => [ModuleName] -> m ()
 test2c u =
          do modifyExtensions (++ [MultiParamTypeClasses])
             mapM_ putModule u

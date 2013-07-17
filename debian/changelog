@@ -1,3 +1,9 @@
+haskell-module-management (0.14) unstable; urgency=low
+
+  * Use ModuleName type in some places where were were using String.
+
+ -- David Fox <dsf@seereason.com>  Wed, 17 Jul 2013 11:10:49 -0700
+
 haskell-module-management (0.13) unstable; urgency=low
 
   * Changed cleanImports and cleanResults functions to take a list of

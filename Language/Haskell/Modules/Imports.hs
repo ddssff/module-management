@@ -75,14 +75,14 @@ cleanResults results =
                          Removed _ _ -> return Nothing
                          Unchanged _ _ -> return Nothing
                          Modified _ key _ -> return (Just key)
-                         Created (S.ModuleName name) _ -> findModule name >>= return . fmap key_) results >>=
+                         Created name _ -> findModule name >>= return . fmap key_) results >>=
           dumpImports . fromList . catMaybes
       clean =
           mapM (\ x -> case x of
                          Removed _ _ -> return x
                          Unchanged _ _ -> return x
                          Modified _name key _ -> doModule key
-                         Created (S.ModuleName name) _ ->
+                         Created name _ ->
                              do mi <- findModule name
                                 let Just k = fmap key_ mi -- This is pretty sure to be a Just
                                 x' <- doModule k

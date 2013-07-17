@@ -20,7 +20,7 @@ split1 =
       do _ <- rsync "testdata/debian" "tmp"
          _ <- runCleanT $ noisily $ noisily $
            do putDirs ["tmp"]
-              mapM_ putModule repoModules
+              mapM_ putModule (map S.ModuleName repoModules)
               splitModuleDecls "Debian/Repo/Package.hs"
          (code, out, err) <- diff "testdata/split1-expected" "tmp"
          assertEqual "splitModule" (ExitSuccess, "", "") (code, out, err)
@@ -32,7 +32,7 @@ split2a =
        _ <- runCleanT $ noisily $ noisily $
          do modifyTestMode (const True)
             putDirs ["tmp"]
-            putModule "Split"
+            putModule (S.ModuleName "Split")
             splitModuleDecls "Split.hs"
        (code, out, err) <- diff "testdata/split2-expected" "tmp"
        assertEqual "split2" (ExitSuccess, "", "") (code, out, err)
@@ -43,7 +43,7 @@ split2b =
     do _ <- rsync "testdata/split2" "tmp"
        _ <- runCleanT $ noisily $ noisily $
          do putDirs ["tmp"]
-            putModule "Split"
+            putModule (S.ModuleName "Split")
             splitModuleDecls "Split.hs"
        (code, out, err) <- diff "testdata/split2-clean-expected" "tmp"
        -- The output of splitModule is "correct", but it will not be
@@ -57,7 +57,10 @@ split4 =
     TestLabel "Split4" $ TestCase $
     do _ <- rsync "testdata/split4" "tmp"
        _ <- withCurrentDirectory "tmp" $
-         runCleanT $ noisily $ noisily $ modifyTestMode (const True) >> putModule "Split4" >> splitModuleDecls "Split4.hs"
+         runCleanT $ noisily $ noisily $
+           modifyTestMode (const True) >>
+           putModule (S.ModuleName "Split4") >>
+           splitModuleDecls "Split4.hs"
        result <- diff "testdata/split4-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
 
@@ -68,7 +71,7 @@ split4b =
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
            modifyTestMode (const True) >>
-           putModule "Split4" >>
+           putModule (S.ModuleName "Split4") >>
            splitModule f "Split4.hs"
        result <- diff "testdata/split4b-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
@@ -85,7 +88,7 @@ split4c =
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
            modifyTestMode (const True) >>
-           putModule "Split4" >>
+           putModule (S.ModuleName "Split4") >>
            splitModule f "Split4.hs"
        result <- diff "testdata/split4c-expected" "tmp"
        assertEqual "Split4" (ExitSuccess, "", "") result
@@ -101,7 +104,7 @@ split5 =
     do _ <- rsync "testdata/split5" "tmp"
        _ <- withCurrentDirectory "tmp" $
          runCleanT $ noisily $ noisily $
-           List.mapM_ putModule ["A", "B", "C", "D", "E"] >>
+           List.mapM_ (putModule . S.ModuleName) ["A", "B", "C", "D", "E"] >>
            modifyTestMode (const True) >>
            splitModuleDecls "B.hs"
        result <- diff "testdata/split5-expected" "tmp"

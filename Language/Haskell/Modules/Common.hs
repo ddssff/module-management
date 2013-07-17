@@ -56,11 +56,11 @@ data ModuleResult
 -- so that all the compiles required for import cleaning succeed.  On
 -- the other hand, we might be able to maintain the moduVerse here.
 doResult :: (ModuVerse m, MonadDryRun m, MonadVerbosity m) => ModuleResult -> m ModuleResult
-doResult x@(Unchanged _name key) =
-    do quietly (qLnPutStr ("unchanged: " ++ show key))
+doResult x@(Unchanged name _) =
+    do quietly (qLnPutStr ("unchanged: " ++ prettyPrint name))
        return x
 doResult x@(Removed name key) =
-    do quietly (qLnPutStr ("removed: " ++ show key))
+    do qLnPutStr ("removed: " ++ prettyPrint name)
        let path = unPathKey key
        unloadModule key
        -- I think this event handler is redundant.
@@ -68,18 +68,18 @@ doResult x@(Removed name key) =
        delName name
        return x
 
-doResult x@(Modified m@(S.ModuleName name) key text) =
-    do quietly (qLnPutStr ("modified: " ++ show key))
-       path <- modulePath "hs" m
+doResult x@(Modified name _ text) =
+    do qLnPutStr ("modified: " ++ prettyPrint name)
+       path <- modulePath "hs" name
        -- qLnPutStr ("modifying " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
        putModuleAnew name
        return x
 
-doResult x@(Created m@(S.ModuleName name) text) =
-    do quietly (qLnPutStr ("created: " ++ name))
-       path <- modulePath "hs" m
+doResult x@(Created name text) =
+    do qLnPutStr ("created: " ++ prettyPrint name)
+       path <- modulePath "hs" name
        -- qLnPutStr ("creating " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension $ path)

@@ -10,6 +10,7 @@ module Language.Haskell.Modules.Util.Test
 
 import Control.Monad (foldM)
 import Data.List as List (filter, isPrefixOf, isSuffixOf, map)
+import Language.Haskell.Exts.Syntax (ModuleName(..))
 import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents)
 import System.Exit (ExitCode)
 import System.FilePath ((</>))
@@ -135,9 +136,9 @@ findHsFiles tops =
 -- MonadClean and use the value of sourceDirs to remove prefixes from
 -- the module paths.  And then it should look at the module text to
 -- see what the module name really is.
-findHsModules :: [FilePath] -> IO [String]
+findHsModules :: [FilePath] -> IO [ModuleName]
 findHsModules tops =
     findHsFiles tops >>= return . List.map asModuleName
     where
       asModuleName path =
-          List.map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path)
+          ModuleName (List.map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))
