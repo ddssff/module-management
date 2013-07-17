@@ -90,6 +90,9 @@ module Language.Haskell.Modules
     -- * Progress reporting
     , noisily
     , quietly
+    -- * Re-Exports from haskell-src-exts
+    , ModuleName(ModuleName)
+    , Name(Ident, Symbol)
     -- * Helper functions
     , modulePathBase
     , findHsModules
@@ -97,6 +100,7 @@ module Language.Haskell.Modules
     , withCurrentDirectory
     ) where
 
+import Language.Haskell.Exts (ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
