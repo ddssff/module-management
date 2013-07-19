@@ -4,6 +4,7 @@ module Language.Haskell.Modules.Util.Symbols
     ( FoldDeclared(foldDeclared)
     , FoldMembers(foldMembers)
     , symbols
+    , members
     , exports
     , imports
     ) where

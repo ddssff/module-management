@@ -30,7 +30,7 @@ import Language.Haskell.Modules.ModuVerse (findModule, getNames, ModuleInfo(..),
 import Language.Haskell.Modules.Params (MonadClean(getParams), Params(extraImports))
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
-import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols)
+import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols, members)
 import Prelude hiding (writeFile)
 import System.FilePath ((<.>))
 
@@ -187,7 +187,8 @@ doModule symToModule eiMap inInfo inName outNames thisName =
                 Map.filter imported moduleDeclMap
                 where
                   imported pairs =
-                      let declared' = justs (Set.unions (List.map (symbols . fst) pairs)) in
+                      let declared' = justs (Set.unions (List.map (symbols . fst) pairs ++
+                                                         List.map (members . fst) pairs)) in
                       not (Set.null (Set.intersection declared' referenced))
 
       newDecls = concatMap snd modDecls
