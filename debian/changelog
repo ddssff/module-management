@@ -1,3 +1,10 @@
+haskell-module-management (0.15) unstable; urgency=low
+
+  * Implement parsing of files which need the XmlSyntax extension (e.g. files
+    that need the hsx2hs preprocessor.)
+
+ -- David Fox <dsf@seereason.com>  Fri, 19 Jul 2013 09:52:38 -0700
+
 haskell-module-management (0.14) unstable; urgency=low
 
   * Use ModuleName type in some places where were were using String.
