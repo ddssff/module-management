@@ -18,13 +18,12 @@ import Data.Sequence ((|>))
 import Data.Set as Set (empty, fromList, member, Set, singleton, toList, union, unions)
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, sModuleName, sName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleHead(..), ModuleName(..), QName(..), Type(..))
-import Language.Haskell.Exts.Extension (Extension(PackageImports))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (ModuleResult(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
-import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, modifyExtensions, ModuleInfo(..), moduleName, parseModule)
+import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, ModuleInfo(..), moduleName, parseModule)
 import Language.Haskell.Modules.Params (markForDelete, MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
 import Language.Haskell.Modules.SourceDirs (modifyDirs, pathKey, PathKey(..), PathKey(unPathKey), SourceDirs(getDirs, putDirs))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
@@ -130,7 +129,6 @@ checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _) =
        markForDelete importsPath
        (ModuleInfo newImports _ _ _) <-
            withDot $
-             withPackageImportsExtension $
                (parseModule (PathKey importsPath)
                   `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here ->
                                                           throw . userError $ here ++ ": " ++ show e)))
@@ -140,12 +138,6 @@ checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _) =
       isHiddenImport (A.ImportDecl {A.importSpecs = Just (A.ImportSpecList _ True _)}) = True
       isHiddenImport _ = False
 checkImports _ = error "Unsupported module type"
-
-withPackageImportsExtension :: MonadClean m => m a -> m a
-withPackageImportsExtension a =
-    bracket (getExtensions)
-            (modifyExtensions . const)
-            (\ saved -> modifyExtensions (const (PackageImports : saved)) >> a)
 
 withDot :: MonadClean m => m a -> m a
 withDot a =

@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleInstances, StandaloneDeriving #-}
 module Tests.Fold where
 
 import Data.Foldable (fold)
@@ -5,6 +6,9 @@ import Data.Monoid (Monoid(mempty))
 import Data.Sequence as Seq (filter, fromList, Seq, zip, (|>))
 import Data.Set.Extra as Set (fromList)
 import Data.Tree (Tree(..))
+import qualified Language.Haskell.Exts.Annotated as A
+import Language.Haskell.Exts.Annotated.Syntax ({- Eq Module -})
+import qualified Language.Haskell.Exts.Parser as Exts
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldModule)
@@ -14,8 +18,11 @@ import Language.Haskell.Modules.SourceDirs (pathKey)
 import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), makeTree)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
+deriving instance Eq (Exts.ParseResult (A.Module SrcSpanInfo, [A.Comment]))
+deriving instance Show (Exts.ParseMode)
+
 tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test1b, test3, test4, test5, test5b, test6, test7])
+tests = TestLabel "Clean" (TestList [test1, test1b, test3, fold3b, fold3c, test4, test5, test5b, test6, test7])
 
 test1 :: Test
 test1 =
@@ -75,6 +82,28 @@ test3 :: Test
 test3 =
     TestLabel "test3" $ TestCase $ withCurrentDirectory "testdata" $
     do let path = "Equal.hs"
+       mi <- runCleanT $ pathKey path >>= parseModule
+       let (output, original) = test mi
+       assertEqual "echo" original output
+    where
+      test :: ModuleInfo -> (String, String)
+      test m@(ModuleInfo _ text _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
+
+fold3b :: Test
+fold3b =
+    TestLabel "fold3b" $ TestCase $ withCurrentDirectory "testdata" $
+    do let path = "fold8.hs"
+       mi <- runCleanT $ pathKey path >>= parseModule
+       let (output, original) = test mi
+       assertEqual "echo" original output
+    where
+      test :: ModuleInfo -> (String, String)
+      test m@(ModuleInfo _ text _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
+
+fold3c :: Test
+fold3c =
+    TestLabel "fold3c" $ TestCase $
+    do let path = "testdata/fold9.hs"
        mi <- runCleanT $ pathKey path >>= parseModule
        let (output, original) = test mi
        assertEqual "echo" original output
