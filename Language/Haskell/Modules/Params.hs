@@ -13,15 +13,17 @@ module Language.Haskell.Modules.Params
     , modifyHsFlags
     , modifyDryRun
     , modifyTestMode
+    , extraImport
     ) where
 
 import Control.Exception (SomeException, try)
 import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
-import Data.Map as Map (empty, Map)
-import Data.Set as Set (empty, insert, Set, toList)
-import qualified Language.Haskell.Exts.Syntax as S (ImportDecl, ModuleName)
+import Data.Map as Map (empty, Map, insertWith)
+import Data.Set as Set (empty, insert, Set, singleton, toList, union)
+import Language.Haskell.Exts.SrcLoc (SrcLoc(SrcLoc))
+import Language.Haskell.Exts.Syntax as S (ImportDecl(..), ModuleName)
 import Language.Haskell.Modules.ModuVerse (ModuVerse(..), moduVerseInit, ModuVerseState)
 import Language.Haskell.Modules.Util.DryIO (MonadDryRun(..))
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
@@ -135,3 +137,16 @@ modifyDryRun f = modifyParams (\ p -> p {dryRun = f (dryRun p)})
 -- split or cat.  Default is False.
 modifyTestMode :: MonadClean m => (Bool -> Bool) -> m ()
 modifyTestMode f = modifyParams (\ p -> p {testMode = f (testMode p)})
+
+-- | When we write module @m@, insert an extra line that imports the
+-- instances (only) from module @i@.
+extraImport :: MonadClean m => S.ModuleName -> S.ModuleName -> m ()
+extraImport m i =
+    modifyParams (\ p -> p {extraImports = Map.insertWith (union) m (singleton im) (extraImports p)})
+    where im = ImportDecl { importLoc = SrcLoc "<unknown>.hs" 1 1
+                          , importModule = i
+                          , importQualified = False
+                          , importSrc = False
+                          , importPkg = Nothing
+                          , importAs = Nothing
+                          , importSpecs = Just (False, []) }

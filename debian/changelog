@@ -2,6 +2,8 @@ haskell-module-management (0.15) unstable; urgency=low
 
   * Implement parsing of files which need the XmlSyntax extension (e.g. files
     that need the hsx2hs preprocessor.)
+  * Add extraImport m i, which insert an import of module i when
+    generating module m.
 
  -- David Fox <dsf@seereason.com>  Fri, 19 Jul 2013 09:52:38 -0700
 

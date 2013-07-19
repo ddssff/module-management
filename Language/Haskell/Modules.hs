@@ -66,6 +66,10 @@
 --                  (ModuleName \"Language\/Haskell\/Modules\/Internal.hs\") >>
 --      mergeModules [ModuleName \"Language.Haskell.Modules.Common\", ModuleName \"Tmp\"]
 --                   (ModuleName \"Language.Haskell.Modules.Common\")@
+--
+-- * Split a module where one of the result modules needs to import the instances:
+--
+--  @runCleanT $ putModule (ModuleName \"Main\") >> extraImport (ModuleName \"Main.GetPasteById\") (ModuleName \"Main.Instances\") >> splitModuleDecls \"Main.hs\"@
 module Language.Haskell.Modules
     (
     -- * Entry points
@@ -87,6 +91,7 @@ module Language.Haskell.Modules
     , modifyTestMode
     , modifyDirs
     , putDirs
+    , extraImport
     -- * Progress reporting
     , noisily
     , quietly
@@ -105,7 +110,7 @@ import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.ModuVerse (findModule, modifyExtensions, putModule)
-import Language.Haskell.Modules.Params (CleanT, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode, MonadClean, runCleanT)
+import Language.Haskell.Modules.Params (CleanT, extraImport, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode, MonadClean, runCleanT)
 import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, SourceDirs(putDirs))
 import Language.Haskell.Modules.Split (defaultSymbolToModule, splitModule, splitModuleDecls)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
