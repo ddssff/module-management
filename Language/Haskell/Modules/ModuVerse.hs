@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances #-}
+{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
     ( ModuleInfo(..)
@@ -24,8 +24,9 @@ module Language.Haskell.Modules.ModuVerse
     ) where
 
 import Control.Applicative ((<$>))
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
+import Control.Exception.Lifted as IO (catch, throw)
 import Control.Monad.Trans (liftIO, MonadIO)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Map as Map (delete, empty, insert, keys, lookup, Map)
 import Data.Maybe (fromMaybe)
 import Data.Set as Set (fromList, Set)
@@ -110,7 +111,7 @@ delName :: ModuVerse m => S.ModuleName -> m ()
 delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Map.delete name (fromMaybe Map.empty (moduleNames_ s)))
                                          , moduleInfo_ = Map.empty })
 
-class (MonadIO m, MonadCatchIO m, Functor m) => ModuVerse m where
+class (MonadIO m, MonadBaseControl IO m, Functor m) => ModuVerse m where
     getModuVerse :: m ModuVerseState
     modifyModuVerse :: (ModuVerseState -> ModuVerseState) -> m ()
 

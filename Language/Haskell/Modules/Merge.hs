@@ -5,7 +5,7 @@ module Language.Haskell.Modules.Merge
     ) where
 
 import Control.Monad as List (mapM, when)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch)
+import Control.Exception.Lifted as IO (catch)
 import Data.Foldable (fold)
 import Data.Generics (Data, everywhere, mkT, Typeable)
 import Data.List as List (find, intercalate, map)

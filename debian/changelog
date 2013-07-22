@@ -4,6 +4,8 @@ haskell-module-management (0.15) unstable; urgency=low
     that need the hsx2hs preprocessor.)
   * Add extraImport m i, which insert an import of module i when
     generating module m.
+  * Use lifted-base and monad-control instead of the deprecated library
+    MonadCatchIO-mtl.
 
  -- David Fox <dsf@seereason.com>  Fri, 19 Jul 2013 09:52:38 -0700
 

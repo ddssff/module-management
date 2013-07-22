@@ -1,5 +1,5 @@
 -- | Functions to control the state variables of 'MonadClean'.
-{-# LANGUAGE FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
+{-# LANGUAGE FlexibleContexts, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Params
     ( Params(Params, dryRun, extraImports, hsFlags, junk, moduVerse,
@@ -17,7 +17,7 @@ module Language.Haskell.Modules.Params
     ) where
 
 import Control.Exception (SomeException, try)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (MonadCatchIO)
+import Control.Monad.Trans.Control as IO (MonadBaseControl)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Map as Map (empty, Map, insertWith)
@@ -72,14 +72,14 @@ instance MonadClean m => ModuVerse m where
     getModuVerse = getParams >>= return . moduVerse
     modifyModuVerse f = modifyParams (\ p -> p {moduVerse = f (moduVerse p)})
 
-class (MonadIO m, MonadCatchIO m, Functor m) => MonadClean m where
+class (MonadIO m, MonadBaseControl IO m, Functor m) => MonadClean m where
     getParams :: m Params
     putParams :: Params -> m ()
 
 modifyParams :: MonadClean m => (Params -> Params) -> m ()
 modifyParams f = getParams >>= putParams . f
 
-instance (MonadCatchIO m, Functor m) => MonadClean (CleanT m) where
+instance (MonadIO m, MonadBaseControl IO m, Functor m) => MonadClean (CleanT m) where
     getParams = get
     putParams = put
 
@@ -94,7 +94,7 @@ instance MonadClean m => MonadDryRun m where
 -- | Create the environment required to do import cleaning and module
 -- splitting/merging.  This environment, StateT Params m a, is an
 -- instance of MonadClean.
-runCleanT :: MonadCatchIO m => CleanT m a -> m a
+runCleanT :: (MonadIO m, MonadBaseControl IO m) => CleanT m a -> m a
 runCleanT action =
     withTempDirectory "." "scratch" $ \ scratch ->
     do (result, params) <- runStateT action (Params {scratchDir = scratch,

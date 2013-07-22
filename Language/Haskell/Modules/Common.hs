@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, FlexibleInstances, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.Common
     ( groupBy'
@@ -8,9 +8,9 @@ module Language.Haskell.Modules.Common
     , fixExport
     ) where
 
-import "MonadCatchIO-mtl" Control.Monad.CatchIO (bracket, MonadCatchIO)
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
-import Control.Monad.Trans (liftIO)
+import Control.Exception.Lifted as IO (bracket, catch, throw)
+import Control.Monad.Trans (MonadIO, liftIO)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.List (groupBy, sortBy)
 import Data.Monoid ((<>))
 import Data.Sequence as Seq (Seq, (|>))
@@ -38,7 +38,7 @@ toEq cmp a b =
 groupBy' :: Ord a => (a -> a -> Ordering) -> [a] -> [[a]]
 groupBy' cmp xs = groupBy (toEq cmp) $ sortBy cmp xs
 
-withCurrentDirectory :: MonadCatchIO m => FilePath -> m a -> m a
+withCurrentDirectory :: (MonadIO m, MonadBaseControl IO m) => FilePath -> m a -> m a
 withCurrentDirectory path action =
     bracket (liftIO getCurrentDirectory >>= \ save -> liftIO (setCurrentDirectory path) >> return save)
             (liftIO . setCurrentDirectory)

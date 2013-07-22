@@ -6,7 +6,7 @@ module Language.Haskell.Modules.Imports
     ) where
 
 import Control.Applicative ((<$>))
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (bracket, catch, throw)
+import Control.Exception.Lifted as IO (bracket, catch, throw)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
 import Data.Foldable (fold)

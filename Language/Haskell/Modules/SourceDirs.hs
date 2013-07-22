@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, PackageImports, ScopedTypeVariables, StandaloneDeriving #-}
+{-# LANGUAGE CPP, FlexibleContexts, PackageImports, ScopedTypeVariables, StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.SourceDirs
     ( SourceDirs(..)
@@ -10,13 +10,14 @@ module Language.Haskell.Modules.SourceDirs
     , modulePathBase
     ) where
 
-import "MonadCatchIO-mtl" Control.Monad.CatchIO as IO (catch, MonadCatchIO, throw)
+import Control.Exception.Lifted as IO (catch, throw)
 import Control.Monad.Trans (liftIO, MonadIO)
+import Control.Monad.Trans.Control (MonadBaseControl)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import System.Directory (canonicalizePath, doesFileExist, getCurrentDirectory)
 import System.FilePath ((<.>), (</>))
 
-class MonadCatchIO m => SourceDirs m where
+class (MonadIO m, MonadBaseControl IO m) => SourceDirs m where
     putDirs :: [FilePath] -> m ()
     getDirs :: m [FilePath]
 
