@@ -23,12 +23,12 @@ import Language.Haskell.Exts.Annotated.Simplify (sExportSpec, sImportDecl, sImpo
 import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(..), Module(..), ModuleName(..), Name(..))
-import Language.Haskell.Modules.Common (doResult, ModuleResult(..))
+import Language.Haskell.Modules.Common (doResult, ModuleResult(..), reportResult)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.ModuVerse (findModule, getNames, ModuleInfo(..), moduleName, parseModule)
 import Language.Haskell.Modules.Params (MonadClean(getParams), Params(extraImports))
-import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey)
+import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols, members)
 import Prelude hiding (writeFile)
@@ -66,13 +66,13 @@ splitModule :: MonadClean m =>
             -> FilePath
             -> m [ModuleResult]
 splitModule symToModule path =
-    do info <- pathKey path >>= parseModule
+    do info <- pathKey (APath path) >>= parseModule
        splitModuleBy symToModule info
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
 splitModuleDecls :: MonadClean m => FilePath -> m [ModuleResult]
 splitModuleDecls path =
-    do info <- pathKey path >>= parseModule
+    do info <- pathKey (APath path) >>= parseModule
        splitModuleBy (defaultSymbolToModule info) info
 
 splitModuleBy :: MonadClean m => (Maybe S.Name -> S.ModuleName) -> ModuleInfo -> m [ModuleResult]
@@ -82,7 +82,7 @@ splitModuleBy _ m@(ModuleInfo (A.Module _ _ _ _ []) _ _ key) = return [Unchanged
 splitModuleBy _ m@(ModuleInfo (A.Module _ _ _ _ [_]) _ _ key) = return [Unchanged (moduleName m) key] -- One declaration - nothing to split (but maybe we should anyway?)
 splitModuleBy _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = throw $ userError $ "splitModule: no explicit header"
 splitModuleBy symToModule inInfo =
-    do qLnPutStr ("Splitting " ++ prettyPrint (moduleName inInfo))
+    do qLnPutStr ("Splitting module " ++ prettyPrint (moduleName inInfo))
        quietly $
          do eiMap <- getParams >>= return . extraImports
             -- The name of the module to be split
@@ -91,21 +91,16 @@ splitModuleBy symToModule inInfo =
             changes <- List.mapM (doModule symToModule eiMap inInfo inName outNames) (toList allNames)
             -- No good reason to use sets here
             -- changes <- doSplit symToModule info >>= return . collisionCheck univ
-            List.mapM_ doResult changes           -- Write the new modules
-            List.mapM_ reportResult changes
+            changes' <- List.mapM doResult changes           -- Write the new modules
+            List.mapM_ (\ x -> qLnPutStr ("splitModule: " ++ reportResult x)) changes'
             -- Clean the new modules after all edits are finished
-            cleanResults changes
+            cleanResults changes'
     where
 
 {-    collisionCheck univ s =
           if (not $ Set.null $ Set.intersection univ $ Set.filter isCreated s)
           then error ("One or more module to be created by splitModule already exists: " ++ show (Set.toList illegal))
           else s -}
-
-      reportResult x@(Modified (S.ModuleName _) key _) = qLnPutStr ("splitModule: modifying " ++ show key) >> return x
-      reportResult x@(Created (S.ModuleName name) _) = qLnPutStr ("splitModule: creating " ++ name) >> return x
-      reportResult x@(Removed (S.ModuleName _) key) = qLnPutStr ("splitModule: removing " ++ show key) >> return x
-      reportResult x = return x
 
       outNames = Set.map symToModule (union (declared inInfo) (exported inInfo))
 
@@ -119,16 +114,16 @@ doModule symToModule eiMap inInfo inName outNames thisName =
       _ | member thisName outNames ->
             findModule thisName >>= \ thisInfo ->
             return $ if thisName == inName
-                     then Modified thisName (key_ inInfo) newModule
+                     then ToBeModified thisName (key_ inInfo) newModule
                      else case thisInfo of
                             Just (ModuleInfo {key_ = key}) ->
                                 error $ "splitModule: output module already exists: " ++ show key
-                            _ -> Created thisName newModule
-        | thisName == inName -> return (Removed thisName (key_ inInfo))
+                            _ -> ToBeCreated thisName newModule
+        | thisName == inName -> return (ToBeRemoved thisName (key_ inInfo))
         | True ->
             pathKey (modulePathBase "hs" thisName) >>= parseModule >>= \ oldInfo@(ModuleInfo _ oldText _ _) ->
             let newText = updateImports oldInfo in
-            return $ if newText /= oldText then Modified thisName (key_ oldInfo) newText else Unchanged thisName (key_ oldInfo)
+            return $ if newText /= oldText then ToBeModified thisName (key_ oldInfo) newText else Unchanged thisName (key_ oldInfo)
     where
       -- Build a new module given its name and the list of
       -- declarations it should contain.

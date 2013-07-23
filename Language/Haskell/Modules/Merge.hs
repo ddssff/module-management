@@ -4,7 +4,7 @@ module Language.Haskell.Modules.Merge
     ( mergeModules
     ) where
 
-import Control.Monad as List (mapM, when)
+import Control.Monad as List (mapM, mapM_, when)
 import Control.Exception.Lifted as IO (catch)
 import Data.Foldable (fold)
 import Data.Generics (Data, everywhere, mkT, Typeable)
@@ -18,7 +18,7 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportD
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, importModule), ModuleName(..))
-import Language.Haskell.Modules.Common (doResult, fixExport, ModuleResult(..))
+import Language.Haskell.Modules.Common (doResult, fixExport, ModuleResult(..), reportResult)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), moduleName, parseModule, parseModuleMaybe)
@@ -37,13 +37,10 @@ mergeModules inNames outName =
        quietly $
          do univ <- getNames
             let allNames = toList $ union univ (Set.fromList (outName : inNames))
-            results <- List.mapM (doModule inNames outName) allNames >>= List.mapM doResult >>= List.mapM reportResult
-            cleanResults results
-    where
-      reportResult x@(Modified _ key _) = qLnPutStr ("mergeModules: modifying " ++ show key) >> return x
-      reportResult x@(Created name _) = qLnPutStr ("mergeModules: creating " ++ show name) >> return x
-      reportResult x@(Removed _ key) = qLnPutStr ("mergeModules: removing " ++ show key) >> return x
-      reportResult x = return x
+            results <- List.mapM (doModule inNames outName) allNames
+            results' <- List.mapM doResult results
+            List.mapM_ (\ x -> qLnPutStr ("mergeModules: " ++ reportResult x)) results'
+            cleanResults results'
 
 -- Process one of the modules in the moduVerse and return the result.
 -- The output module may not (yet) be an element of the moduVerse, in
@@ -66,7 +63,7 @@ doModule inNames@(_ : _) outName thisName =
        when (isJust outInfo && notElem outName inNames) (error "mergeModules - if output module exist it must also be one of the input modules")
        case (thisName /= outName, List.find (\ x -> moduleName x == thisName) inInfo) of 
          (True, Just info) ->
-             return (Removed thisName (key_ info))
+             return (ToBeRemoved thisName (key_ info))
          _ ->
            let header =
                    fold (foldHeader echo2 echo (if thisName == outName
@@ -105,9 +102,9 @@ doModule inNames@(_ : _) outName thisName =
                text' = header <> exports <> imports <> decls in
            return $ case thisInfo of
                       Just (ModuleInfo {text_ = text, key_ = key}) ->
-                          if text' /= text then Modified thisName key text' else Unchanged thisName key
+                          if text' /= text then ToBeModified thisName key text' else Unchanged thisName key
                       Nothing ->
-                          Created thisName text'
+                          ToBeCreated thisName text'
            -- return $ if text' /= text then Modified thisName (key_ thisInfo) text' else Unchanged thisName (key_ thisInfo)
 doModule [] _ _ = error "doModule: no inputs"
 

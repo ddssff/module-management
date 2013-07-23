@@ -3,8 +3,9 @@
 module Language.Haskell.Modules.Common
     ( groupBy'
     , withCurrentDirectory
-    , ModuleResult(Created, Modified, Removed, Unchanged)
+    , ModuleResult(..)
     , doResult
+    , reportResult
     , fixExport
     ) where
 
@@ -19,7 +20,7 @@ import Language.Haskell.Exts.Annotated.Simplify (sExportSpec)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
 import Language.Haskell.Modules.ModuVerse (delName, ModuVerse, putModuleAnew, unloadModule)
-import Language.Haskell.Modules.SourceDirs (modulePath, PathKey(..))
+import Language.Haskell.Modules.SourceDirs (modulePath, PathKey(..), APath(..))
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qLnPutStr, quietly)
 import Prelude hiding (writeFile, writeFile)
@@ -46,10 +47,22 @@ withCurrentDirectory path action =
 
 data ModuleResult
     = Unchanged S.ModuleName PathKey
-    | Removed S.ModuleName PathKey
-    | Modified S.ModuleName PathKey String
-    | Created S.ModuleName String
+    | ToBeRemoved S.ModuleName PathKey
+    | JustRemoved S.ModuleName PathKey
+    | ToBeModified S.ModuleName PathKey String
+    | JustModified S.ModuleName PathKey
+    | ToBeCreated S.ModuleName String
+    | JustCreated S.ModuleName PathKey
     deriving (Show, Eq, Ord)
+
+reportResult :: ModuleResult -> String
+reportResult (Unchanged _ key) = "unchanged " ++ show key
+reportResult (JustModified _ key) = "modified " ++ show key
+reportResult (JustCreated _ key) = "created " ++ show key
+reportResult (JustRemoved _ key) = "removed " ++ show key
+reportResult (ToBeModified _ key _) = "to be modified " ++ show key
+reportResult (ToBeCreated name _) = "to be created " ++ show name
+reportResult (ToBeRemoved _ key) = "to be removed: " ++ show key
 
 -- | It is tempting to put import cleaning into these operations, but
 -- that needs to be done after all of these operations are completed
@@ -59,33 +72,36 @@ doResult :: (ModuVerse m, MonadDryRun m, MonadVerbosity m) => ModuleResult -> m 
 doResult x@(Unchanged name _) =
     do quietly (qLnPutStr ("unchanged: " ++ prettyPrint name))
        return x
-doResult x@(Removed name key) =
-    do qLnPutStr ("removed: " ++ prettyPrint name)
+doResult (ToBeRemoved name key) =
+    do qLnPutStr ("removing: " ++ prettyPrint name)
        let path = unPathKey key
        unloadModule key
        -- I think this event handler is redundant.
        removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
        delName name
-       return x
+       return $ JustRemoved name key
 
-doResult x@(Modified name _ text) =
-    do qLnPutStr ("modified: " ++ prettyPrint name)
-       path <- modulePath "hs" name
+doResult (ToBeModified name key text) =
+    do qLnPutStr ("modifying: " ++ prettyPrint name)
+       let path = unPathKey key
        -- qLnPutStr ("modifying " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
-       putModuleAnew name
-       return x
+       _key <- putModuleAnew name
+       return $ JustModified name key
 
-doResult x@(Created name text) =
-    do qLnPutStr ("created: " ++ prettyPrint name)
+doResult (ToBeCreated name text) =
+    do qLnPutStr ("creating: " ++ prettyPrint name)
        path <- modulePath "hs" name
        -- qLnPutStr ("creating " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
-       createDirectoryIfMissing True (takeDirectory . dropExtension $ path)
-       replaceFile tildeBackup path text
-       putModuleAnew name
-       return x
+       createDirectoryIfMissing True (takeDirectory . dropExtension . unAPath $ path)
+       replaceFile tildeBackup (unAPath path) text
+       key <- putModuleAnew name
+       return $ JustCreated name key
+doResult x@(JustCreated {}) = return x
+doResult x@(JustModified {}) = return x
+doResult x@(JustRemoved {}) = return x
 
 -- | Update an export spec.  The only thing we might need to change is
 -- re-exports, of the form "module Foo".

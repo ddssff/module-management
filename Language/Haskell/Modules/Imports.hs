@@ -25,7 +25,7 @@ import Language.Haskell.Modules.Common (ModuleResult(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, ModuleInfo(..), moduleName, parseModule)
 import Language.Haskell.Modules.Params (markForDelete, MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
-import Language.Haskell.Modules.SourceDirs (modifyDirs, pathKey, PathKey(..), PathKey(unPathKey), SourceDirs(getDirs, putDirs))
+import Language.Haskell.Modules.SourceDirs (modifyDirs, pathKey, APath(..), PathKey(..), PathKey(unPathKey), SourceDirs(getDirs, putDirs))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
@@ -60,7 +60,7 @@ cleanBuildImports lbi =
 -- | Clean up the imports of a source file.
 cleanImports :: MonadClean m => [FilePath] -> m [ModuleResult]
 cleanImports paths =
-    do keys <- mapM pathKey paths >>= return . fromList
+    do keys <- mapM (pathKey . APath) paths >>= return . fromList
        dumpImports keys
        mapM (\ key -> parseModule key >>= checkImports) (toList keys)
 
@@ -71,25 +71,23 @@ cleanResults results =
     where
       dump =
           mapM (\ x -> case x of
-                         Removed _ _ -> return Nothing
+                         JustRemoved _ _ -> return Nothing
                          Unchanged _ _ -> return Nothing
-                         Modified _ key _ -> return (Just key)
-                         Created name _ -> findModule name >>= return . fmap key_) results >>=
+                         JustModified _ key -> return (Just key)
+                         JustCreated name _ -> findModule name >>= return . fmap key_
+                         _ -> error $ "cleanResults - unexpected ModuleResult " ++ show x) results >>=
           dumpImports . fromList . catMaybes
       clean =
           mapM (\ x -> case x of
-                         Removed _ _ -> return x
+                         JustRemoved _ _ -> return x
                          Unchanged _ _ -> return x
-                         Modified _name key _ -> doModule key
-                         Created name _ ->
-                             do mi <- findModule name
-                                let Just k = fmap key_ mi -- This is pretty sure to be a Just
-                                x' <- doModule k
-                                return $ toCreated x') results
+                         JustModified _name key -> doModule key
+                         JustCreated _name key -> doModule key >>= return . toCreated
+                         _ -> error $ "cleanResults - unexpected ModuleResult " ++ show x) results
       -- The cleaning may have turned a Created result into Modified,
       -- turn it back into Created.
-      toCreated (Modified name _key text) = Created name text
-      toCreated x@(Created {}) = x
+      toCreated (JustModified name key) = JustCreated name key
+      toCreated x@(JustCreated {}) = x
       toCreated _ = error "toCreated"
       -- Update the cached version of the now modified module and then
       -- clean its import list.
@@ -154,7 +152,7 @@ updateSource m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ key) (A.Module _ _ 
              (\ text' ->
                   qLnPutStr ("cleanImports: modifying " ++ show key) >>
                   replaceFile tildeBackup (unPathKey key) text' >>
-                  return (Modified (moduleName m) key text'))
+                  return (JustModified (moduleName m) key))
              (replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m)
 updateSource _ _ _ = error "updateSource"
 

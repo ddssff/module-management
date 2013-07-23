@@ -148,7 +148,7 @@ exports x = case (justs (symbols x), justs (members x)) of
               ([], []) -> []
               ([], _) -> error "exports: members with no top level name"
               (ns, []) -> map (S.EVar . S.UnQual) ns
-              (_ns, _ms) -> error "exports: multiple top level names and member names"
+              y -> error $ "exports: multiple top level names and member names: " ++ show y
 
 imports :: (FoldDeclared a, FoldMembers a) => a -> [S.ImportSpec]
 imports x = case (justs (symbols x), justs (members x)) of
@@ -157,9 +157,10 @@ imports x = case (justs (symbols x), justs (members x)) of
               ([], []) -> []
               ([], _ms) -> error "exports: members with no top level name"
               (ns, []) -> map S.IVar ns
-              (_ns, _ms) -> error "exports: multiple top level names and member names"
+              y -> error $ "imports: multiple top level names and member names: " ++ show y
 
--- | Fold over the declared members - e.g. the method names of a class declaration, the constructors of a data declaration.
+-- | Fold over the declared members - e.g. the method names of a class
+-- declaration, the constructors of a data declaration.
 class FoldMembers a where
     foldMembers :: forall r. (Maybe S.Name -> r -> r) -> r -> a -> r
 

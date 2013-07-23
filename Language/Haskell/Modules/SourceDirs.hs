@@ -1,16 +1,23 @@
-{-# LANGUAGE CPP, FlexibleContexts, PackageImports, ScopedTypeVariables, StandaloneDeriving #-}
+{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.SourceDirs
     ( SourceDirs(..)
     , modifyDirs
+    , withDirs
+    , RelPath(..)
     , PathKey(..)
+    , APath(..)
+    , pathKey
+#if 0
     , pathKey
     , pathKeyMaybe
+#endif
+    , Path(..)
     , modulePath
     , modulePathBase
     ) where
 
-import Control.Exception.Lifted as IO (catch, throw)
+import Control.Exception.Lifted as IO (catch, throw, bracket)
 import Control.Monad.Trans (liftIO, MonadIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
@@ -24,33 +31,35 @@ class (MonadIO m, MonadBaseControl IO m) => SourceDirs m where
 modifyDirs :: SourceDirs m => ([FilePath] -> [FilePath]) -> m ()
 modifyDirs f = getDirs >>= putDirs . f
 
+withDirs :: SourceDirs m => [FilePath] -> m a -> m a
+withDirs dirs action = bracket (getDirs >>= \ save -> putDirs dirs >> return save) putDirs (const action)
+
 -- | A FilePath that can be assumed to be unique.
 newtype PathKey = PathKey {unPathKey :: FilePath} deriving (Eq, Ord, Show)
 
-pathKey :: SourceDirs m => FilePath -> m PathKey
--- pathKey path = PathKey <$> liftIO (canonicalizePath path)
-pathKey path = findFile path >>= liftIO . canonicalizePath >>= return . PathKey
+-- | A FilePath that is relative to the SourceDir list
+newtype RelPath = RelPath {unRelPath :: FilePath} deriving (Eq, Ord, Show)
 
-pathKeyMaybe :: SourceDirs m => FilePath -> m (Maybe PathKey)
-pathKeyMaybe path = findFileMaybe path >>= maybe (return Nothing) (\ path' -> liftIO (canonicalizePath path') >>= return . Just . PathKey)
+-- | A regular filepath with a wrapper
+newtype APath = APath {unAPath :: FilePath} deriving (Eq, Ord, Show)
 
 -- | Search the path directory list, preferring an already existing file, but
 -- if there is none construct one using the first element of the directory list.
-modulePath :: SourceDirs m => String -> S.ModuleName -> m FilePath
+modulePath :: SourceDirs m => String -> S.ModuleName -> m APath
 modulePath ext name =
     findFile path `IO.catch` (\ (_ :: IOError) -> makePath)
     where
       makePath =
           do dirs <- getDirs
              case dirs of
-               [] -> return path -- should this be an error?
-               (d : _) -> return $ d </> path
+               [] -> error "Empty $PATH" -- return (APath (unRelPath path)) -- should this be an error?
+               (d : _) -> return . APath $ d </> unRelPath path
       path = modulePathBase ext name
 
 -- | Construct the base of a module path.
-modulePathBase :: String -> S.ModuleName -> FilePath
+modulePathBase :: String -> S.ModuleName -> RelPath
 modulePathBase ext (S.ModuleName name) =
-    base <.> ext
+    RelPath (base <.> ext)
     where base = case ext of
                    "hs" -> map f name
                    "lhs" -> map f name
@@ -59,22 +68,41 @@ modulePathBase ext (S.ModuleName name) =
           f '.' = '/'
           f c = c
 
--- | Search the path directory list for a source file that already exists.
--- FIXME: this should return a Maybe.
-findFile :: SourceDirs m => FilePath -> m FilePath
+class Path a where
+    findFileMaybe :: SourceDirs m => a -> m (Maybe APath)
+    pathKeyMaybe :: SourceDirs m => a -> m (Maybe PathKey)
+
+instance Path RelPath where
+    findFileMaybe (RelPath path) =
+        getDirs >>= f
+        where
+          f (dir : dirs) =
+              do let x = dir </> path
+                 exists <- liftIO $ doesFileExist x
+                 if exists then return (Just (APath x)) else f dirs
+          f [] = return Nothing
+    pathKeyMaybe path =
+        findFileMaybe path >>= maybe (return Nothing) (\ (APath path') -> liftIO (canonicalizePath path') >>= return . Just . PathKey)
+
+instance Path PathKey where
+    findFileMaybe (PathKey x) = return (Just (APath x))
+    pathKeyMaybe x = return (Just x)
+
+instance Path APath where
+    findFileMaybe (APath x) =
+        do exists <- liftIO $ doesFileExist x
+           return $ if exists then Just (APath x) else Nothing
+    pathKeyMaybe x =
+        do mpath <- findFileMaybe x
+           maybe (return Nothing) (\ (APath x) -> liftIO (canonicalizePath x) >>= return . Just . PathKey) mpath
+
+findFile :: (SourceDirs m, Path p, Show p) => p -> m APath
 findFile path =
     findFileMaybe path >>=
     maybe (do here <- liftIO getCurrentDirectory
               dirs <- getDirs
-              liftIO . throw . userError $ "findFile failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ path)
+              liftIO . throw . userError $ "findFile failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ show path)
           return
 
-findFileMaybe :: SourceDirs m => FilePath -> m (Maybe FilePath)
-findFileMaybe path =
-    getDirs >>= f
-    where
-      f (dir : dirs) =
-          do let x = dir </> path
-             exists <- liftIO $ doesFileExist x
-             if exists then return (Just x) else f dirs
-      f [] = return Nothing
+pathKey :: (SourceDirs m, Path p, Show p) => p -> m PathKey
+pathKey path = findFile path >>= liftIO . canonicalizePath . unAPath >>= return . PathKey

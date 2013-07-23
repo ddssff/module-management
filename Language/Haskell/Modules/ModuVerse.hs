@@ -37,7 +37,7 @@ import Language.Haskell.Exts.Fixity (baseFixities)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename, fixities), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
-import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, PathKey(..), pathKeyMaybe, SourceDirs(..))
+import Language.Haskell.Modules.SourceDirs (modulePathBase, PathKey(..), Path(..), pathKey, SourceDirs(..))
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
@@ -101,8 +101,11 @@ putName name info = modifyModuVerse (\ s -> s {moduleNames_ = Just (Map.insert n
 putModule :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m ()
 putModule name = pathKey (modulePathBase "hs" name) >>= parseModule >>= putName name
 
-putModuleAnew :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m ()
-putModuleAnew name = pathKey (modulePathBase "hs" name) >>= loadModule >>= putName name
+putModuleAnew :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m PathKey
+putModuleAnew name =
+    do key <- pathKey (modulePathBase "hs" name)
+       loadModule key >>= putName name
+       return key
 
 findModule :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m (Maybe ModuleInfo)
 findModule name = pathKeyMaybe (modulePathBase "hs" name) >>= parseModuleMaybe
