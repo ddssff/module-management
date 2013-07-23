@@ -9,16 +9,21 @@ module Data.Logic.Types.Harrison.FOL
 
 import Data.Generics (Data, Typeable)
 import Data.List (intersperse)
+import Data.Logic.Classes.Arity
 import Data.Logic.Classes.Apply (Apply(..), Predicate)
-import Data.Logic.Classes.Arity (Arity(..))
-import Data.Logic.Classes.Constants (asBool, Constants(fromBool))
-import Data.Logic.Classes.Pretty (Fixity(..), FixityDirection(..), HasFixity(..), Pretty(pretty))
+--import Data.Logic.Classes.Combine (Combination(..), BinOp(..))
+import Data.Logic.Classes.Constants (Constants(fromBool), asBool)
+--import Data.Logic.Classes.FirstOrder (foldAtomsFirstOrder, mapAtomsFirstOrder)
+--import qualified Data.Logic.Classes.Formula as C
+import Data.Logic.Classes.Pretty (Pretty(pretty), HasFixity(..), Fixity(..), FixityDirection(..))
 import Data.Logic.Classes.Skolem (Skolem(..))
 import Data.Logic.Classes.Term (Term(vt, foldTerm, fApp))
-import qualified Data.Logic.Classes.Term as C (Function, Term(zipTerms))
-import qualified Data.Logic.Types.Common ()
+import qualified Data.Logic.Classes.Term as C
+--import qualified Data.Logic.Classes.FirstOrder as C
+--import Data.Logic.Types.Harrison.Formulas.FirstOrder (Formula(..))
+import qualified Data.Logic.Types.Common ({- instance Variable String -})
 import Prelude hiding (pred)
-import Text.PrettyPrint (cat, text)
+import Text.PrettyPrint (text, cat)
 
 -- -------------------------------------------------------------------------
 -- Terms.                                                                   

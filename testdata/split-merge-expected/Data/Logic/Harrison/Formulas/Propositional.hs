@@ -8,10 +8,11 @@ module Data.Logic.Harrison.Formulas.Propositional
     , atom_union
     ) where
 
-import Data.Logic.Classes.Combine (binop, BinOp(..), Combination(..))
+import qualified Data.Set as Set
+--import Data.Logic.Classes.Constants (Constants(..))
+import Data.Logic.Classes.Combine (Combination(..), BinOp(..), binop)
 import Data.Logic.Classes.Negate ((.~.))
 import Data.Logic.Classes.Propositional (PropositionalFormula(..))
-import qualified Data.Set as Set (empty, Set, union)
 
 -- ------------------------------------------------------------------------- 
 -- General parsing of iterated infixes.                                      

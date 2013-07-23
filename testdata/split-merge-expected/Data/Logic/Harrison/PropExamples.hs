@@ -8,18 +8,18 @@ module Data.Logic.Harrison.PropExamples
     ) where
 
 import Data.Bits (Bits, shiftR)
-import Data.Logic.Classes.Combine ((.&.), (.<=>.), (.=>.), (.|.), BinOp(..), Combinable, Combination(..))
-import Data.Logic.Classes.Constants (false, true)
-import qualified Data.Logic.Classes.Formula as C (Formula(atomic))
+import Data.Logic.Classes.Combine ((.<=>.), (.=>.), (.&.), (.|.), Combinable, Combination(..), BinOp(..))
+import Data.Logic.Classes.Constants (true, false)
+import qualified Data.Logic.Classes.Formula as C
 import Data.Logic.Classes.Negate ((.~.))
-import Data.Logic.Classes.Pretty (botFixity, HasFixity(..), Pretty(pretty))
+import Data.Logic.Classes.Pretty (Pretty(pretty), HasFixity(..), botFixity)
 import Data.Logic.Classes.Propositional (PropositionalFormula(..))
 import Data.Logic.Harrison.Lib (allsets)
-import Data.Logic.Harrison.Prop (list_conj, list_disj, psimplify, tautology)
+import Data.Logic.Harrison.Prop (tautology, list_conj, list_disj, psimplify)
 import Data.Logic.Types.Propositional (Formula(..))
-import qualified Data.Set as Set (fromList, map, Set, toAscList)
+import qualified Data.Set as Set
 import Prelude hiding (sum)
-import Test.HUnit (assertEqual, Test(TestCase, TestList))
+import Test.HUnit
 import Text.PrettyPrint (text)
 
 tests :: Test

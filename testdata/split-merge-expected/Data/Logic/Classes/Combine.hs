@@ -20,7 +20,7 @@ module Data.Logic.Classes.Combine
     ) where
 
 import Data.Generics (Data, Typeable)
-import Data.Logic.Classes.Negate ((.~.), Negatable)
+import Data.Logic.Classes.Negate (Negatable, (.~.))
 import Data.Logic.Classes.Pretty (Pretty(pretty))
 import Text.PrettyPrint (Doc, text)
 

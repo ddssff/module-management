@@ -27,10 +27,12 @@ module Data.Boolean.SatSolver (
 
   ) where
 
-import Control.Monad.Writer (guard, MonadPlus(mplus), MonadWriter(tell), WriterT(runWriterT))
-import Data.Boolean (Boolean(..), booleanToCNF, Clause, CNF, invLiteral, isPositiveLiteral, Literal(..), literalVar)
-import qualified Data.IntMap as IM (empty, insert, IntMap, lookup)
-import Data.List (sortBy)
+import Data.List
+import Data.Boolean
+
+import Control.Monad.Writer
+
+import qualified Data.IntMap as IM
 
 -- | A @SatSolver@ can be used to solve boolean formulas.
 -- 

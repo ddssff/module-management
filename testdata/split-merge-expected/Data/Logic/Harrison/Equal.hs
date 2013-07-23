@@ -1,15 +1,7 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings, RankNTypes, ScopedTypeVariables, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wall #-}
 module Data.Logic.Harrison.Equal
-{-  ( function_congruence
-    , equalitize
-    ) -} where
-
--- ========================================================================= 
--- First order logic with equality.                                          
---                                                                           
--- Copyright (co) 2003-2007, John Harrison. (See "LICENSE.txt" for details.)  
--- ========================================================================= 
+where
 
 import Data.Logic.Classes.Arity (Arity(..))
 import Data.Logic.Classes.Combine ((⇒), (∧))

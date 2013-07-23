@@ -9,8 +9,8 @@ module Data.Logic.Classes.Atom
     ) where
 
 import Control.Applicative.Error (Failing)
-import qualified Data.Map as Map (Map)
-import qualified Data.Set as Set (Set)
+import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 {-
 class Formula formula term v | formula -> term v where

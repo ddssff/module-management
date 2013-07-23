@@ -28,14 +28,14 @@ module Data.Logic.Classes.Propositional
     , mapAtomsPropositional
     ) where
 
-import Data.Logic.Classes.Combine (binop, BinOp(..), Combinable((.&.), (.<=>.), (.=>.), (.|.)), Combination(..), combine, prettyBinOp)
-import Data.Logic.Classes.Constants (asBool, Constants(fromBool), prettyBool)
+import Data.Logic.Classes.Combine
+import Data.Logic.Classes.Constants (Constants(fromBool), asBool, prettyBool)
 import Data.Logic.Classes.Formula (Formula(atomic))
-import Data.Logic.Classes.Negate ((.~.), Negatable, negated)
-import Data.Logic.Classes.Pretty (Fixity(Fixity), FixityDirection(..), HasFixity(fixity), Pretty)
+import Data.Logic.Classes.Negate
+import Data.Logic.Classes.Pretty (Pretty, HasFixity(fixity), Fixity(Fixity), FixityDirection(..))
 import Data.SafeCopy (base, deriveSafeCopy)
-import qualified Data.Set.Extra as Set (distrib, empty, filter, intersection, isProperSubsetOf, map, null, or, partition, Set, singleton, toList, union)
-import Text.PrettyPrint ((<>), Doc, text)
+import qualified Data.Set.Extra as Set
+import Text.PrettyPrint (Doc, text, (<>))
 
 -- |A type class for propositional logic.  If the type we are writing
 -- an instance for is a zero-order (aka propositional) logic type

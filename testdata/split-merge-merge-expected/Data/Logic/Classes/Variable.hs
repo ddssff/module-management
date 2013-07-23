@@ -6,7 +6,7 @@ module Data.Logic.Classes.Variable
 
 import Data.Data (Data)
 import Data.Logic.Classes.Pretty (Pretty)
-import qualified Data.Set as Set (empty, insert, Set)
+import qualified Data.Set as Set
 import Data.String (IsString)
 import Text.PrettyPrint (Doc)
 

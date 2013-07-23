@@ -1,12 +1,6 @@
 {-# LANGUAGE FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, ScopedTypeVariables #-}
 module Data.Logic.Harrison.DefCNF
-    {- ( Atom
-    , NumAtom(ma, ai)
-    , defcnfs
-    , defcnf1
-    , defcnf2
-    , defcnf3
-    ) -} where
+where
 
 import Data.Logic.Classes.Combine ((.&.), (.<=>.), (.|.), BinOp(..), Combination(..))
 import Data.Logic.Classes.Formula (Formula(atomic))
