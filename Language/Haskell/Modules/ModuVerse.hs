@@ -121,6 +121,9 @@ class (MonadIO m, MonadBaseControl IO m, Functor m) => ModuVerse m where
 getExtensions :: ModuVerse m => m [Extension]
 getExtensions = getModuVerse >>= return . extensions_
 
+-- | Modify the list of extensions passed to GHC when dumping the
+-- minimal imports.  Note that GHC will also use the extensions in the
+-- module's LANGUAGE pragma, so this can usually be left alone.
 modifyExtensions :: ModuVerse m => ([Extension] -> [Extension]) -> m ()
 modifyExtensions f = modifyModuVerse (\ s -> s {extensions_ = f (extensions_ s)})
 

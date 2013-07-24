@@ -57,13 +57,33 @@ cleanBuildImports lbi =
           if exists then return path else toFilePath dirs m
 -}
 
--- | Clean up the imports of a source file.
+-- | Clean up the imports of a source file.  This means:
+--
+--    * All import lines get an explict list of symbols
+--
+--    * Imports of unused symbols are removed
+--
+--    * Imports of modules whose symbol list becomse empty are
+--      removed, unless the 'removeEmptyImports' flag is set to
+--      @False@.  However, imports that started out with an empty
+--      import list @()@ are retained
+--
+--    * Repeated imports are merged
+--
+--    * Imports are alphabetized by module name
+--
+--    * Imported symbols are alphabetized by symbol name
+--
+--    * Imported constructors and field accessors are alphabetized
 cleanImports :: MonadClean m => [FilePath] -> m [ModuleResult]
 cleanImports paths =
     do keys <- mapM (pathKey . APath) paths >>= return . fromList
        dumpImports keys
        mapM (\ key -> parseModule key >>= checkImports) (toList keys)
 
+-- | Do import cleaning in response to the values returned by the
+-- split and merge operations.  Module import lists are cleaned if the
+-- module is modified or created.
 cleanResults :: MonadClean m => [ModuleResult] -> m [ModuleResult]
 cleanResults results =
     do mode <- getParams >>= return . testMode

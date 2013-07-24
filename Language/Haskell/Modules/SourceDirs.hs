@@ -26,8 +26,13 @@ import System.FilePath ((<.>), (</>))
 
 class (MonadIO m, MonadBaseControl IO m) => SourceDirs m where
     putDirs :: [FilePath] -> m ()
+    -- ^ Set the list of directories that will be searched for
+    -- imported modules.  Similar to the Hs-Source-Dirs field in the
+    -- cabal file.
     getDirs :: m [FilePath]
 
+-- | Modify the list of directories that will be searched for imported
+-- modules.
 modifyDirs :: SourceDirs m => ([FilePath] -> [FilePath]) -> m ()
 modifyDirs f = getDirs >>= putDirs . f
 
@@ -56,7 +61,12 @@ modulePath ext name =
                (d : _) -> return . APath $ d </> unRelPath path
       path = modulePathBase ext name
 
--- | Construct the base of a module path.
+-- | Derive a relative FilePath from a module name based on the file
+-- type inferred by the extension.  Thus, @modulePathBase "hs"
+-- (ModuleName "System.Control.Monad")@ returns
+-- @"System/Control/Monad.hs"@, while @modulePathBase "imports"
+-- (ModuleName "System.Control.Monad")@ returns
+-- @"System.Control.Monad.imports"@.
 modulePathBase :: String -> S.ModuleName -> RelPath
 modulePathBase ext (S.ModuleName name) =
     RelPath (base <.> ext)

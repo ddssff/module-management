@@ -34,6 +34,26 @@ import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols, members
 import Prelude hiding (writeFile)
 import System.FilePath ((<.>))
 
+-- | Split the declarations of the module in the input file into new
+-- modules as specified by the 'symToModule' function, which maps
+-- symbol name's to module names.  It is permissable for the output
+-- function to map one or more symbols to the original module.  The
+-- modules will be written into files whose names are constructed from
+-- the module name in the usual way, but with a prefix taken from the
+-- first element of the list of directories in the 'SourceDirs' list.
+-- This list is just @["."]@ by default.
+splitModule :: MonadClean m =>
+               (Maybe S.Name -> S.ModuleName)
+            -- ^ Map each symbol name to the module it will be moved
+            -- to.  The name @Nothing@ is used for instance
+            -- declarations.
+            -> FilePath
+            -- ^ The file containing the input module.
+            -> m [ModuleResult]
+splitModule symToModule path =
+    do info <- pathKey (APath path) >>= parseModule
+       splitModuleBy symToModule info
+
 -- | Split each of a module's declarations into a new module.  Update
 -- the imports of all the modules in the moduVerse to reflect the split.
 -- For example, if you have a module like
@@ -59,23 +79,22 @@ import System.FilePath ((<.>))
 -- If we had imported and then re-exported a symbol in Start it would
 -- go into a module named @Start.ReExported@.  Any instance declarations
 -- would go into @Start.Instances@.
-splitModule :: MonadClean m =>
-               (Maybe S.Name -> S.ModuleName)
-               -- ^ Map declaration to new module name.   The name @Nothing@
-               -- is used for instance declarations.
-            -> FilePath
-            -> m [ModuleResult]
-splitModule symToModule path =
-    do info <- pathKey (APath path) >>= parseModule
-       splitModuleBy symToModule info
-
--- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
-splitModuleDecls :: MonadClean m => FilePath -> m [ModuleResult]
+splitModuleDecls :: MonadClean m =>
+                    FilePath
+                 -- ^ The file containing the input module.
+                 -> m [ModuleResult]
 splitModuleDecls path =
     do info <- pathKey (APath path) >>= parseModule
        splitModuleBy (defaultSymbolToModule info) info
 
-splitModuleBy :: MonadClean m => (Maybe S.Name -> S.ModuleName) -> ModuleInfo -> m [ModuleResult]
+-- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
+splitModuleBy :: MonadClean m =>
+                 (Maybe S.Name -> S.ModuleName)
+              -- ^ Function mapping symbol names of the input module
+              -- to destination module name.
+              -> ModuleInfo
+              -- ^ The parsed input module.
+              -> m [ModuleResult]
 splitModuleBy _ (ModuleInfo (A.XmlPage {}) _ _ _) = error "XmlPage"
 splitModuleBy _ (ModuleInfo (A.XmlHybrid {}) _ _ _) = error "XmlPage"
 splitModuleBy _ m@(ModuleInfo (A.Module _ _ _ _ []) _ _ key) = return [Unchanged (moduleName m) key] -- No declarations - nothing to split
@@ -96,12 +115,6 @@ splitModuleBy symToModule inInfo =
             -- Clean the new modules after all edits are finished
             cleanResults changes'
     where
-
-{-    collisionCheck univ s =
-          if (not $ Set.null $ Set.intersection univ $ Set.filter isCreated s)
-          then error ("One or more module to be created by splitModule already exists: " ++ show (Set.toList illegal))
-          else s -}
-
       outNames = Set.map symToModule (union (declared inInfo) (exported inInfo))
 
 doModule :: MonadClean m =>
@@ -325,8 +338,8 @@ isReExported :: DeclClass -> Bool
 isReExported (ReExported _) = True
 isReExported _ = False
 
--- | This can be used to build function parameter of splitModule, it
--- determines which module should a symbol be moved to.
+-- | This can be used to build the function parameter of 'splitModule',
+-- it determines which module should a symbol be moved to.
 defaultSymbolToModule :: ModuleInfo    -- ^ Parent module name
                       -> Maybe S.Name
                       -> S.ModuleName

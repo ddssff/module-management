@@ -69,7 +69,10 @@
 --
 -- * Split a module where one of the result modules needs to import the instances:
 --
---  @runCleanT $ putModule (ModuleName \"Main\") >> extraImport (ModuleName \"Main.GetPasteById\") (ModuleName \"Main.Instances\") >> splitModuleDecls \"Main.hs\"@
+--  @runCleanT $
+--      putModule (ModuleName \"Main\") >>
+--      extraImport (ModuleName \"Main.GetPasteById\") (ModuleName \"Main.Instances\") >>
+--      splitModuleDecls \"Main.hs\"@
 module Language.Haskell.Modules
     (
     -- * Entry points

@@ -39,6 +39,7 @@ toEq cmp a b =
 groupBy' :: Ord a => (a -> a -> Ordering) -> [a] -> [[a]]
 groupBy' cmp xs = groupBy (toEq cmp) $ sortBy cmp xs
 
+-- | Perform an action with the working directory set to @path@.
 withCurrentDirectory :: (MonadIO m, MonadBaseControl IO m) => FilePath -> m a -> m a
 withCurrentDirectory path action =
     bracket (liftIO getCurrentDirectory >>= \ save -> liftIO (setCurrentDirectory path) >> return save)

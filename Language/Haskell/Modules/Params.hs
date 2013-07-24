@@ -92,8 +92,8 @@ instance MonadClean m => MonadDryRun m where
     putDry x = modifyParams (\ p -> p {dryRun = x})
 
 -- | Create the environment required to do import cleaning and module
--- splitting/merging.  This environment, StateT Params m a, is an
--- instance of MonadClean.
+-- splitting/merging.  This environment, @StateT Params m a@, is an
+-- instance of 'MonadClean'.
 runCleanT :: (MonadIO m, MonadBaseControl IO m) => CleanT m a -> m a
 runCleanT action =
     withTempDirectory "." "scratch" $ \ scratch ->
@@ -134,7 +134,9 @@ modifyDryRun :: MonadClean m => (Bool -> Bool) -> m ()
 modifyDryRun f = modifyParams (\ p -> p {dryRun = f (dryRun p)})
 
 -- | If TestMode is turned on no import cleaning will occur after a
--- split or cat.  Default is False.
+-- split or cat.  Default is False.  Note that the modules produced
+-- with this option will often fail to compile to to circular imports.
+-- (Does this seem counterintuitive to anyone else?)
 modifyTestMode :: MonadClean m => (Bool -> Bool) -> m ()
 modifyTestMode f = modifyParams (\ p -> p {testMode = f (testMode p)})
 

@@ -23,6 +23,7 @@ class MonadIO m => MonadVerbosity m where
 modifyVerbosity :: MonadVerbosity m => (Int -> Int) -> m ()
 modifyVerbosity f = getVerbosity >>= putVerbosity . f
 
+-- | Decrease the amount of progress reporting during an action.
 quietly :: MonadVerbosity m => m a -> m a
 quietly action =
     do modifyVerbosity (\x->x-1)
@@ -30,6 +31,7 @@ quietly action =
        modifyVerbosity (+ 1)
        return result
 
+-- | Increase the amount of progress reporting during an action.
 noisily :: MonadVerbosity m => m a -> m a
 noisily action =
     do modifyVerbosity (+ 1)
