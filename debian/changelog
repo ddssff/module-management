@@ -1,3 +1,9 @@
+haskell-module-management (0.15.1) unstable; urgency=low
+
+  * Documentation updates.
+
+ -- David Fox <dsf@seereason.com>  Wed, 24 Jul 2013 09:45:11 -0700
+
 haskell-module-management (0.15) unstable; urgency=low
 
   * Implement parsing of files which need the XmlSyntax extension (e.g. files
