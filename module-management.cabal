@@ -64,7 +64,8 @@ Library
     temporary
 
 Executable hmm
-  Main-is: scripts/CLI.hs
+  Main-is: CLI.hs
+  Hs-source-dirs: scripts
   Build-Depends:
     base,
     containers,
@@ -80,7 +81,9 @@ Executable hmm
     process,
     set-extra,
     syb,
-    temporary
+    temporary,
+    haskeline == 0.7.*,
+    transformers-base
 
 Executable tests
   Main-is: Tests.hs
