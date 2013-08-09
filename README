@@ -23,6 +23,20 @@ Bugs:
 
   5. When it modifies an export list, some export symbols get re-ordered.
 
+Bugs in CLI.hs:
+
+  0. with haskeline sometimes there is no newline added before the
+     prompt
+
+  1. split Main.hs when file Main exists leads to crashes
+
+  2. UI: split could take the module name too
+
+  3. completion might be extended to accept regex / wildcards
+
+  4. don't quit when something goes wrong, it should be possible to
+     start over with what the previous settings were (dir and verse)
+
 To Do:
 
   1. Make sure original file is left as backup, not some intermediate.
