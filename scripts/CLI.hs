@@ -7,7 +7,8 @@ import Control.Monad as List (mapM_)
 import Control.Monad.Trans (MonadIO(liftIO), MonadTrans(..))
 import Data.List (intercalate, isPrefixOf, stripPrefix)
 import Data.Maybe (maybeToList)
-import qualified Data.Set as S (member, toList)
+import Data.Char (toLower)
+import qualified Data.Set as S (member, toList, map)
 import Data.Set.Extra as Set (Set, toList)
 import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, runCleanT, splitModuleDecls)
 import Language.Haskell.Modules.ModuVerse (getNames)
@@ -44,9 +45,14 @@ compl (xs,ys) | cmd: _ <- words (reverse xs),
             | takesModuleNames cmd -> do
                 ns <- getNames
                 let complAllModules = map (simpleCompletion . moduleNameToStr) (S.toList ns)
+                    nsLower = S.map (ModuleName . map toLower . moduleNameToStr) ns
+                    transform
+                        | nsLower == ns = map toLower
+                        | otherwise = id
                 return $ case span (/=' ') xs of
                     (reverse -> cw @ (_:_), rest) ->
-                        case filter (cw `isPrefixOf`) (moduleNameToStr `map` S.toList ns) of
+                        case filter (isPrefixOf (transform cw) . transform)
+                                        (moduleNameToStr `map` S.toList ns) of
                             -- this first case isn't really needed: it should do the same as the
                             -- next case but possibly be more efficient
                             _ | ModuleName cw `S.member` ns -> (rest, [simpleCompletion cw])
