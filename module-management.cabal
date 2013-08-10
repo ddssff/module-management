@@ -40,7 +40,11 @@ Library
     Tests.Merge,
     Tests.Split
     Tests.SrcLoc
-    Tests.Symbols
+    Tests.Symbols,
+
+    Fixities,
+    FixitiesInst,
+    GetFixities
   Build-Depends:
     applicative-extras,
     base >= 4 && < 5,
@@ -61,7 +65,9 @@ Library
     set-extra >= 1.3.1,
     syb,
     system-fileio,
-    temporary
+    temporary,
+    template-haskell,
+    th-lift
 
 Executable hmm
   Main-is: CLI.hs
