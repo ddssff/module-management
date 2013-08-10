@@ -1,3 +1,8 @@
+Fork of <http://hackage.haskell.org/package/module-management>
+improving hmm & knowledge of more fixities (Data.Lens). Dependency
+on template-haskell is definitely not to be taken seriously.
+
+
 Unsupported:
 
    CPP directives.  It is difficult to see how this could be implemented.
