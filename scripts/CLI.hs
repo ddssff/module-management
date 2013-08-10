@@ -2,6 +2,8 @@
 {-# LANGUAGE ViewPatterns, PatternGuards #-}
 module Main where
 
+import System.Environment
+import System.Directory
 import CLI.HaskelineTransAdapter ()
 import Control.Monad as List (mapM_)
 import Control.Monad.Trans (MonadIO(liftIO), MonadTrans(..))
@@ -18,7 +20,12 @@ import System.Console.Haskeline (completeFilename, CompletionFunc, defaultSettin
 import System.IO (hPutStrLn, stderr)
 
 main :: IO ()
-main = runCleanT $ noisily $ runInputT (setComplete compl defaultSettings) cli
+main = do
+    args <- mapM canonicalizePath =<< getArgs
+    runCleanT $ noisily $ runInputT (setComplete compl defaultSettings) $ do
+        lift (verse args)
+        cli
+
 
 -- | these versions of quietly and noisily play well with 'lift'
 quietly', noisily' :: (Monad (t m), MonadTrans t, MonadClean m) => t m b -> t m b
