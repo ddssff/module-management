@@ -33,8 +33,6 @@ import Data.Set as Set (fromList, Set)
 import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Extension (Extension(..))
--- import Language.Haskell.Exts.Fixity (baseFixities)
-import Fixities (fixities)
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename, fixities), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
@@ -175,4 +173,4 @@ parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Modul
 parseFileWithComments path =
     liftIO (A.parseFileWithComments mode path)
     where
-      mode = Exts.defaultParseMode {Exts.extensions = hseExtensions, Exts.parseFilename = path, Exts.fixities = Just fixities}
+      mode = Exts.defaultParseMode {Exts.extensions = hseExtensions, Exts.parseFilename = path, Exts.fixities = Nothing }
