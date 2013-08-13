@@ -78,16 +78,22 @@ main = do
             let modules0 = args ++ (map moduleNameToStr $ Cabal.getModules =<< maybeToList pkgDesc')
             when (not (null modules0)) $ verse modules0
 
-    pkgDesc' <- runCleanT $ runInputT (setComplete (compl conf) defaultSettings) $ do
-        lift initState
+
+        execCmdM :: CmdM a -> IO (Maybe GenericPackageDescription)
+        execCmdM x = runCleanT
+            $ flip execStateT pkgDesc'
+            $ runInputT (setComplete (fmap lift $ compl conf) defaultSettings) x
+
+    pkgDesc' <- execCmdM $ do
+        lift $ lift initState
         let step = cli
-            loop = catch step (\e @ SomeException {} -> case () of
+            loop = catch (do step; loop) $ \e @ SomeException {} -> case () of
                     _ | Just e <- fromException e -> throwIO (e `asTypeOf` ExitSuccess)
                       | Just (Callback _msg f) <- fromException e -> f loop
                     _ -> do
                         liftIO (print e)
-                        loop)
-        execStateT loop pkgDesc'
+                        loop
+        loop
 
     traverse_ (uncurry Cabal.writeGenericPackageDescription)
         $ liftM2 (,) (cabalFile conf) pkgDesc'
@@ -145,9 +151,9 @@ takesModuleNames x = x `elem` ["merge"]
 
 
 cli :: CmdM ()
-cli = cmd . concatMap words . maybeToList =<< lift (getInputLine "> ")
+cli = cmd . concatMap words . maybeToList =<< getInputLine "> "
 
-type CmdM a = StateT (Maybe GenericPackageDescription) (InputT (CleanT IO)) a
+type CmdM a = InputT (StateT (Maybe GenericPackageDescription) (CleanT IO)) a
 
 cmd :: [String] -> CmdM ()
 cmd [] = cli
@@ -232,7 +238,7 @@ clean args = cleanImports args >> return ()
 split :: [FilePath] -> CmdM ()
 split [arg] = do
     r <- lift (lift (splitModuleDecls arg))
-    modify (Cabal.update r)
+    lift (modify (Cabal.update r))
     return ()
 split _ = liftIO $ hPutStrLn stderr "Usage: split <modulepath>"
 
@@ -241,5 +247,5 @@ merge args =
     case splitAt (length args - 1) args of
       (inputs, [output]) -> do
             r <- lift $ lift $ mergeModules (map ModuleName inputs) (ModuleName output)
-            modify (Cabal.update r)
+            lift (modify (Cabal.update r))
       _ -> liftIO $ hPutStrLn stderr "Usage: merge <inputmodulename1> <inputmodulename2> ... <outputmodulename>"
