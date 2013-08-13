@@ -84,7 +84,13 @@ Executable hmm
     syb,
     temporary,
     haskeline == 0.7.*,
-    transformers-base
+    transformers-base,
+    Cabal,
+    cmdargs,
+    lens,
+    template-haskell
+
+  ghc-options: -O0
 
 Executable tests
   Main-is: Tests.hs

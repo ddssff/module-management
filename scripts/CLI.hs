@@ -1,6 +1,7 @@
-{-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE ViewPatterns, PatternGuards #-}
+{- # OPTIONS_GHC -Wall #-}
+{-# LANGUAGE ViewPatterns, PatternGuards, DeriveDataTypeable #-}
 module Main where
+import Control.Monad.State
 
 import System.Environment
 import System.Directory
@@ -19,30 +20,95 @@ import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
 import System.Console.Haskeline (completeFilename, CompletionFunc, defaultSettings, getInputLine, InputT, noCompletion, runInputT, setComplete, simpleCompletion)
 import System.IO (hPutStrLn, stderr)
 
+import System.Console.CmdArgs
+import Control.Lens
+import Data.Maybe
+
+
+import Distribution.PackageDescription (GenericPackageDescription)
+
+import qualified CLI.Cabal as Cabal
+import qualified Distribution.Verbosity
+import Data.Data
+
+import Data.Foldable(traverse_)
+import System.Console.Haskeline.MonadException
+import Control.Exception (fromException)
+
+import System.Exit
+
+data HMM = CLI
+  { verbosity :: Verbosity,
+    verbosityCabal :: Int,
+    caseSensitiveCompletion :: Bool,
+    cabalFile :: Maybe FilePath,
+    otherFiles :: [FilePath] }
+    deriving (Data,Typeable,Show)
+
+defaultHMM = CLI
+  { Main.verbosity = Loud,
+    verbosityCabal = fromEnum (maxBound :: Distribution.Verbosity.Verbosity),
+    caseSensitiveCompletion = False,
+    cabalFile = Nothing,
+    otherFiles = [] &= args }
+
+
+toEnumBounded :: (Bounded e, Enum e) => Int -> e
+toEnumBounded i =
+    let r | i > iMax = maxBound
+          | i < iMin = minBound
+          | otherwise = toEnum i
+        iMax = fromEnum (maxBound `asTypeOf` r)
+        iMin = fromEnum (minBound `asTypeOf` r)
+    in r
+
 main :: IO ()
 main = do
-    args <- mapM canonicalizePath =<< getArgs
-    runCleanT $ noisily $ runInputT (setComplete compl defaultSettings) $ do
-        lift (verse args)
-        cli
+    conf <- cmdArgs defaultHMM
+    args <- mapM canonicalizePath (otherFiles conf)
+
+    pkgDesc' <-
+        traverse (Cabal.readPackageDescription (toEnumBounded (verbosityCabal conf)))
+            (cabalFile conf)
+
+
+    let initState = do
+            traverse (dir . Cabal.getSrcDirs) pkgDesc'
+            modifyVerbosity $ \ _ -> fromEnum (Main.verbosity conf)
+            let modules0 = args ++ (map moduleNameToStr $ Cabal.getModules =<< maybeToList pkgDesc')
+            when (not (null modules0)) $ verse modules0
+
+    pkgDesc' <- runCleanT $ runInputT (setComplete (compl conf) defaultSettings) $ do
+        lift initState
+        let step = cli
+            loop = catch step (\e @ SomeException {} -> case () of
+                    _ | Just e <- fromException e -> throwIO (e `asTypeOf` ExitSuccess)
+                      | Just (Callback _msg f) <- fromException e -> f loop
+                    _ -> do
+                        liftIO (print e)
+                        loop)
+        execStateT loop pkgDesc'
+
+    traverse_ (uncurry Cabal.writeGenericPackageDescription)
+        $ liftM2 (,) (cabalFile conf) pkgDesc'
 
 
 -- | these versions of quietly and noisily play well with 'lift'
-quietly', noisily' :: (Monad (t m), MonadTrans t, MonadClean m) => t m b -> t m b
+quietly', noisily' :: CmdM a -> CmdM a
 quietly' act = do
-    lift (modifyVerbosity (\x -> x - 1))
+    lift (lift (modifyVerbosity (\x -> x - 1)))
     r <- act
-    lift (modifyVerbosity (+ 1))
+    lift (lift (modifyVerbosity (+ 1)))
     return r
 
 noisily' act = do
-    lift (modifyVerbosity (+ 1))
+    lift (lift (modifyVerbosity (+ 1)))
     r <- act
-    lift (modifyVerbosity (\x -> x - 1))
+    lift (lift (modifyVerbosity (\x -> x - 1)))
     return r
 
-compl ::  CompletionFunc (CleanT IO)
-compl (xs,ys) | cmd: _ <- words (reverse xs),
+compl ::  HMM -> CompletionFunc (CleanT IO)
+compl conf (xs,ys) | cmd: _ <- words (reverse xs),
     matchingCommands <- filter (cmd `isPrefixOf`) commandNames = case matchingCommands of
         _:_:_ | Nothing <- stripPrefix " " =<< stripPrefix cmd (reverse xs) ->
                 return ("", map simpleCompletion matchingCommands)
@@ -54,6 +120,7 @@ compl (xs,ys) | cmd: _ <- words (reverse xs),
                 let complAllModules = map (simpleCompletion . moduleNameToStr) (S.toList ns)
                     nsLower = S.map (ModuleName . map toLower . moduleNameToStr) ns
                     transform
+                        | caseSensitiveCompletion conf = id
                         | nsLower == ns = map toLower
                         | otherwise = id
                 return $ case span (/=' ') xs of
@@ -68,7 +135,7 @@ compl (xs,ys) | cmd: _ <- words (reverse xs),
                     _ -> (xs, complAllModules)
             | otherwise  -> completeFilename (xs,ys)
         _ -> noCompletion (xs,ys)
-compl x = noCompletion x
+compl _ x = noCompletion x
 
 moduleNameToStr :: ModuleName -> String
 moduleNameToStr (ModuleName x) = x
@@ -77,13 +144,14 @@ takesModuleNames :: String -> Bool
 takesModuleNames x = x `elem` ["merge"]
 
 
-cli :: InputT (CleanT IO) ()
-cli = cmd . concatMap words . maybeToList =<< getInputLine "> "
-  where
+cli :: CmdM ()
+cli = cmd . concatMap words . maybeToList =<< lift (getInputLine "> ")
 
-  cmd :: [String] -> InputT (CleanT IO) ()
-  cmd [] = cli
-  cmd (s : args) =
+type CmdM a = StateT (Maybe GenericPackageDescription) (InputT (CleanT IO)) a
+
+cmd :: [String] -> CmdM ()
+cmd [] = cli
+cmd (s : args) =
       case filter (any (== s) . fst) cmds of
         [(_, f)] -> f
         -- No exact matches - look for prefix matches
@@ -95,25 +163,36 @@ cli = cmd . concatMap words . maybeToList =<< getInputLine "> "
                                 show s ++ " ambiguous - expected " ++ intercalate ", " (concatMap fst xs)) >> cli
         _ -> error $ "Internal error - multiple definitions for " ++ show s
         where
-        cmds = cmds_ args cli
+        cmds = cmds_ args
+
+
+data Callback = Callback String (CmdM () -> CmdM ()) deriving (Typeable)
+instance Show Callback where
+    show (Callback x _) = x
+instance Exception Callback
 
 commandNames :: [String]
-commandNames = concatMap fst (cmds_ undefined cli)
+commandNames = concatMap fst (cmds_ undefined)
 
-cmds_ args next =
-          [(["quit", "exit", "bye", "."],	liftIO (hPutStrLn stderr "Exiting")),
-           (["v"], do
-                liftIO (hPutStrLn stderr "Increasing verbosity level")
-                noisily' next),
-           (["q"], do
-                liftIO (hPutStrLn stderr "Decreasing verbosity level")
-                quietly' next),
-           (["help"],				liftIO (hPutStrLn stderr "help text") >> next),
-           (["verse"],				lift(verse args) >> next),
-           (["clean"],				lift(clean args) >> next),
-           (["dir"],				lift(dir args) >> next),
-           (["split"],				lift(split args) >> next),
-           (["merge"],				lift(merge args) >> next)]
+cmds_ :: [String] -> [([String], CmdM ())]
+cmds_ args =
+          [(["quit", "exit", "bye", ".", "\EOT"], do
+                liftIO (hPutStrLn stderr "Exiting")
+                throwIO ExitSuccess),
+           (["v"], throwIO . Callback "louder" $ \next -> do
+                    liftIO (hPutStrLn stderr "Increasing Verbosity")
+                    noisily' next),
+           (["q"], throwIO . Callback "quieter" $ \next -> do
+                    liftIO (hPutStrLn stderr "Decreasing Verbosity")
+                    quietly' next),
+           (["help"],  liftIO (hPutStrLn stderr "help text")),
+           (["verse"], l2 (verse args)),
+           (["clean"], l2 (clean args)),
+           (["dir"],   l2 (dir args)),
+           (["split"], split args),
+           (["merge"], merge args)]
+
+    where l2 = lift . lift
 
 unModuleName :: ModuleName -> String
 unModuleName (ModuleName x) = x
@@ -150,12 +229,17 @@ clean :: MonadClean m => [FilePath] -> m ()
 clean [] = liftIO $ hPutStrLn stderr "Usage: clean <modulepath1> <modulepath2> ..."
 clean args = cleanImports args >> return ()
 
-split :: MonadClean m => [FilePath] -> m ()
-split [arg] = splitModuleDecls arg >> return ()
+split :: [FilePath] -> CmdM ()
+split [arg] = do
+    r <- lift (lift (splitModuleDecls arg))
+    modify (Cabal.update r)
+    return ()
 split _ = liftIO $ hPutStrLn stderr "Usage: split <modulepath>"
 
-merge :: MonadClean m => [String] -> m ()
+merge :: [String] -> CmdM ()
 merge args =
     case splitAt (length args - 1) args of
-      (inputs, [output]) -> mergeModules (map ModuleName inputs) (ModuleName output) >> return ()
+      (inputs, [output]) -> do
+            r <- lift $ lift $ mergeModules (map ModuleName inputs) (ModuleName output)
+            modify (Cabal.update r)
       _ -> liftIO $ hPutStrLn stderr "Usage: merge <inputmodulename1> <inputmodulename2> ... <outputmodulename>"
