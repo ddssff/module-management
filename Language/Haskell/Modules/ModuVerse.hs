@@ -32,13 +32,25 @@ import Data.Maybe (fromMaybe)
 import Data.Set as Set (fromList, Set)
 import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
 import Language.Haskell.Exts.Comments (Comment(..))
+#if MIN_VERSION_haskell_src_exts(1,14,0)
+import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
+#else
 import Language.Haskell.Exts.Extension (Extension(..))
+#endif
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename, fixities), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
 import Language.Haskell.Modules.SourceDirs (modulePathBase, PathKey(..), Path(..), pathKey, SourceDirs(..))
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
+
+#if MIN_VERSION_haskell_src_exts(1,14,0)
+deriving instance Ord Extension
+deriving instance Ord KnownExtension
+nameToExtension x = EnableExtension x
+#else
+nameToExtension x = id x
+#endif
 
 deriving instance Ord Comment
 
@@ -76,17 +88,21 @@ moduVerseInit :: ModuVerseState
 moduVerseInit =
     ModuVerseState { moduleNames_ = Nothing
                    , moduleInfo_ = Map.empty
-                   , extensions_ = Exts.extensions Exts.defaultParseMode ++ [StandaloneDeriving] -- allExtensions
+                   , extensions_ = Exts.extensions Exts.defaultParseMode ++ [nameToExtension StandaloneDeriving] -- allExtensions
                    , sourceDirs_ = ["."] }
 
 -- | From hsx2hs, but removing Arrows because it makes test case fold3c and others fail.
 hseExtensions :: [Extension]
-hseExtensions =
+hseExtensions = map nameToExtension
     [ RecursiveDo, ParallelListComp, MultiParamTypeClasses, FunctionalDependencies, RankNTypes, ExistentialQuantification
     , ScopedTypeVariables, ImplicitParams, FlexibleContexts, FlexibleInstances, EmptyDataDecls, KindSignatures
     , BangPatterns, TemplateHaskell, ForeignFunctionInterface, {- Arrows, -} Generics, NamedFieldPuns, PatternGuards
     , MagicHash, TypeFamilies, StandaloneDeriving, TypeOperators, RecordWildCards, GADTs, UnboxedTuples
-    , PackageImports, QuasiQuotes, TransformListComp, ViewPatterns, XmlSyntax, RegularPatterns ]
+    , PackageImports, QuasiQuotes, TransformListComp, ViewPatterns, XmlSyntax, RegularPatterns,
+#if MIN_VERSION_haskell_src_exts(1,14,0)
+    , ExplicitNamespaces
+#endif
+    ]
 
 getNames :: ModuVerse m => m (Set S.ModuleName)
 getNames = getModuVerse >>= return . Set.fromList . keys . fromMaybe (error "No modules in ModuVerse, use putModule") . moduleNames_

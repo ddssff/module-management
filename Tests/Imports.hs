@@ -1,7 +1,7 @@
-{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE CPP, PackageImports #-}
 module Tests.Imports where
 
-import Language.Haskell.Exts.Extension (Extension(FlexibleInstances, StandaloneDeriving, TypeSynonymInstances))
+
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules (cleanImports, modifyExtensions, modifyTestMode, modulePathBase, putDirs, runCleanT, withCurrentDirectory)
 import Language.Haskell.Modules.SourceDirs (RelPath(unRelPath))
@@ -10,6 +10,16 @@ import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (assertEqual, Test(..))
+
+#if MIN_VERSION_haskell_src_exts(1,14,0)
+import Language.Haskell.Exts.Extension (KnownExtension(FlexibleInstances, StandaloneDeriving, TypeSynonymInstances),Extension(EnableExtension))
+nameToExtension x = EnableExtension x
+
+#else
+import Language.Haskell.Exts.Extension (Extension(FlexibleInstances, StandaloneDeriving, TypeSynonymInstances))
+nameToExtension x = x
+
+#endif
 
 tests :: Test
 tests = TestLabel "Clean" (TestList [test1, test2, test3, test4, test5, test6, test7])
@@ -77,7 +87,7 @@ test5 =
       (do _ <- rsync "testdata/imports5" "tmp"
           _ <- runCleanT
                  (putDirs ["tmp"] >>
-                  modifyExtensions (++ [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
+                  modifyExtensions (++ map nameToExtension [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
                   cleanImports ["tmp/Deriving.hs"])
           (code, out, err) <- diff "testdata/imports5" "tmp"
           assertEqual "standalone deriving"
