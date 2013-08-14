@@ -34,6 +34,7 @@ Bugs in CLI.hs:
      prompt
 
   1. split Main.hs when file Main exists leads to crashes
+     (fixed?)
 
   2. UI: split could take the module name too
 
@@ -41,6 +42,13 @@ Bugs in CLI.hs:
 
   4. don't quit when something goes wrong, it should be possible to
      start over with what the previous settings were (dir and verse)
+     (slightly done now?)
+
+  5. options for: skip files that don't parse?
+
+  6. \EOT doesn't work
+
+  7. move cabal-file related items into library
 
 To Do:
 
