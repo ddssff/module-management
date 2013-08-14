@@ -87,8 +87,7 @@ Executable hmm
     transformers-base,
     Cabal,
     cmdargs,
-    lens,
-    template-haskell
+    lens
 
   ghc-options: -O0
 
