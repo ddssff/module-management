@@ -41,7 +41,7 @@ import Control.Exception (fromException)
 import System.Exit
 
 data HMM = CLI
-  { verbosity :: Verbosity,
+  { verbosity :: Int,
     verbosityCabal :: Int,
     caseSensitiveCompletion :: Bool,
     cabalFile :: Maybe FilePath,
@@ -49,11 +49,34 @@ data HMM = CLI
     deriving (Data,Typeable,Show)
 
 defaultHMM = CLI
-  { Main.verbosity = Loud,
-    verbosityCabal = fromEnum (maxBound :: Distribution.Verbosity.Verbosity),
-    caseSensitiveCompletion = False,
-    cabalFile = Nothing,
-    otherFiles = [] &= args }
+  { Main.verbosity = fromEnum Loud
+            &= enumHelp "module-management verbosity" (undefined :: Verbosity)
+                        (Main.verbosity defaultHMM),
+    verbosityCabal = fromEnum (maxBound :: Distribution.Verbosity.Verbosity)
+            &= enumHelp "cabal file parser verbosity"
+                        (undefined :: Distribution.Verbosity.Verbosity)
+                        (verbosityCabal defaultHMM),
+    caseSensitiveCompletion = False
+            &= help "should completion of module names be case-sensitive?"
+            &= name "s",
+    cabalFile = Nothing
+            &= typFile
+            &= name "f"
+            &= help ".cabal file to load. Modules listed there will be loaded\
+                \ and when modules are split the .cabal file will be updated\
+                \ when you quit or use the cabalWrite command",
+    otherFiles = []
+            &= typFile
+            &= args }
+
+
+enumHelp item proxy def =
+    help ("Level of "++item++". Takes values from " ++
+            rangeOfBounded (undefined `asTypeOf` proxy) ++
+            ". Default is "++ show def ++ ".")
+rangeOfBounded proxy = show (fromEnum (minBound `asTypeOf` proxy))
+    ++ " to "
+    ++ show (fromEnum (maxBound `asTypeOf` proxy))
 
 
 toEnumBounded :: (Bounded e, Enum e) => Int -> e
@@ -77,7 +100,7 @@ main = do
 
     let initState = do
             traverse (dir . (".":) . Cabal.getSrcDirs) pkgDesc'
-            modifyVerbosity $ \ _ -> fromEnum (Main.verbosity conf)
+            modifyVerbosity $ \ _ -> Main.verbosity conf
             let modules0 = args ++ (map moduleNameToStr $ Cabal.getModules =<< maybeToList pkgDesc')
             when (not (null modules0)) $ verse modules0
 
