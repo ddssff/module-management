@@ -1,6 +1,8 @@
 {- # OPTIONS_GHC -Wall #-}
 {-# LANGUAGE ViewPatterns, PatternGuards, DeriveDataTypeable #-}
 module Main where
+
+import System.Console.Haskeline
 import Control.Monad.State
 
 import System.Environment
@@ -8,7 +10,7 @@ import System.Directory
 import CLI.HaskelineTransAdapter ()
 import Control.Monad as List (mapM_)
 import Control.Monad.Trans (MonadIO(liftIO), MonadTrans(..))
-import Data.List (intercalate, isPrefixOf, stripPrefix)
+import Data.List
 import Data.Maybe (maybeToList)
 import Data.Char (toLower)
 import qualified Data.Set as S (member, toList, map)
@@ -24,6 +26,7 @@ import System.Console.CmdArgs
 import Control.Lens
 import Data.Maybe
 
+import Control.Monad.Reader
 
 import Distribution.PackageDescription (GenericPackageDescription)
 
@@ -73,7 +76,7 @@ main = do
 
 
     let initState = do
-            traverse (dir . Cabal.getSrcDirs) pkgDesc'
+            traverse (dir . (".":) . Cabal.getSrcDirs) pkgDesc'
             modifyVerbosity $ \ _ -> fromEnum (Main.verbosity conf)
             let modules0 = args ++ (map moduleNameToStr $ Cabal.getModules =<< maybeToList pkgDesc')
             when (not (null modules0)) $ verse modules0
@@ -82,10 +85,11 @@ main = do
         execCmdM :: CmdM a -> IO (Maybe GenericPackageDescription)
         execCmdM x = runCleanT
             $ flip execStateT pkgDesc'
-            $ runInputT (setComplete (fmap lift $ compl conf) defaultSettings) x
+            $ flip runReaderT conf
+            $ runInputT (setComplete ((lift . lift) `fmap` compl conf) defaultSettings) x
 
     pkgDesc' <- execCmdM $ do
-        lift $ lift initState
+        liftCT initState
         let step = cli
             loop = catch (do step; loop) $ \e @ SomeException {} -> case () of
                     _ | Just e <- fromException e -> throwIO (e `asTypeOf` ExitSuccess)
@@ -95,6 +99,8 @@ main = do
                         loop
         loop
 
+    -- this gets bypassed when the ExitCode is re-thrown.
+    -- Should it be run on ExitFailures or just success?
     traverse_ (uncurry Cabal.writeGenericPackageDescription)
         $ liftM2 (,) (cabalFile conf) pkgDesc'
 
@@ -102,15 +108,15 @@ main = do
 -- | these versions of quietly and noisily play well with 'lift'
 quietly', noisily' :: CmdM a -> CmdM a
 quietly' act = do
-    lift (lift (modifyVerbosity (\x -> x - 1)))
+    liftCT (modifyVerbosity (\x -> x - 1))
     r <- act
-    lift (lift (modifyVerbosity (+ 1)))
+    liftCT (modifyVerbosity (+ 1))
     return r
 
 noisily' act = do
-    lift (lift (modifyVerbosity (+ 1)))
+    liftCT (modifyVerbosity (+ 1))
     r <- act
-    lift (lift (modifyVerbosity (\x -> x - 1)))
+    liftCT (modifyVerbosity (\x -> x - 1))
     return r
 
 compl ::  HMM -> CompletionFunc (CleanT IO)
@@ -153,7 +159,17 @@ takesModuleNames x = x `elem` ["merge"]
 cli :: CmdM ()
 cli = cmd . concatMap words . maybeToList =<< getInputLine "> "
 
-type CmdM a = InputT (StateT (Maybe GenericPackageDescription) (CleanT IO)) a
+type CmdM a = InputT (ReaderT HMM (StateT (Maybe GenericPackageDescription) (CleanT IO))) a
+
+askConf :: CmdM HMM
+askConf = lift ask
+
+liftCT :: CleanT IO a -> CmdM a
+liftCT = lift . lift . lift
+
+liftS :: StateT (Maybe GenericPackageDescription) (CleanT IO) a -> CmdM a
+liftS  = lift . lift
+
 
 cmd :: [String] -> CmdM ()
 cmd [] = cli
@@ -192,13 +208,49 @@ cmds_ args =
                     liftIO (hPutStrLn stderr "Decreasing Verbosity")
                     quietly' next),
            (["help"],  liftIO (hPutStrLn stderr "help text")),
-           (["verse"], l2 (verse args)),
-           (["clean"], l2 (clean args)),
-           (["dir"],   l2 (dir args)),
+           (["verse"], liftCT (verse args)),
+           (["clean"], liftCT (clean args)),
+           (["dir"],   liftCT (dir args)),
            (["split"], split args),
-           (["merge"], merge args)]
+           (["merge"], merge args),
+           (["cabalPrint"], cabalPrint),
+           (["cabalRead"], cabalRead args),
+           (["cabalWrite"], cabalWrite args)]
 
-    where l2 = lift . lift
+cabalPrint :: CmdM ()
+cabalPrint = do
+    pkgDesc <- liftS get
+    liftIO $ putStrLn $ case pkgDesc of
+        Nothing -> "No cabal file loaded"
+        Just x -> Cabal.showGenericPackageDescription x
+
+cabalWrite, cabalRead :: [String] -> CmdM ()
+cabalWrite [f] = do
+    pkgDesc <- liftS get
+    liftIO $ case pkgDesc of
+        Nothing -> putStrLn "cabalWrite: no cabal file was loaded"
+        Just x -> Cabal.writeGenericPackageDescription f x
+cabalWrite [] = do
+    conf <- askConf
+    case cabalFile conf of
+        Nothing -> liftIO $ putStrLn "Usage: cabalWrite <file.cabal>"
+        Just f -> cabalWrite [f] -- goto previous case
+cabalWrite _ = liftIO $ putStrLn "Usage: cabalWrite <file.cabal>"
+
+cabalRead [f] = throwIO . Callback "cabalRead" $ \next -> do
+    conf <- askConf
+    pd <- liftIO $ Cabal.readPackageDescription (toEnumBounded (verbosityCabal conf)) f
+
+    liftCT $ do
+        ds <- getDirs
+        let ds' = Cabal.getSrcDirs pd
+        unless (null $ ds' \\ ds) $ dir ds'
+
+        verse (unModuleName `map` Cabal.getModules pd)
+
+    mapInputT (local (\x -> x{ cabalFile = Just f })) next
+
+cabalRead _ = liftIO $ putStrLn "Usage: cabalRead <file.cabal>"
 
 unModuleName :: ModuleName -> String
 unModuleName (ModuleName x) = x
@@ -206,14 +258,14 @@ unModuleName (ModuleName x) = x
 verse :: MonadClean m => [String] -> m ()
 verse [] =
     do modules <- getNames
-       liftIO $ hPutStrLn stderr ("Usage: verse <pathormodule1> <pathormodule2> ...\n" ++
+       liftIO $ putStrLn ("Usage: verse <pathormodule1> <pathormodule2> ...\n" ++
                                   "Add the module or all the modules below a directory to the moduVerse\n" ++
                                   "Currently:\n  " ++ showVerse modules)
 verse args =
     do new <- mapM (liftIO . find) args
        List.mapM_ (List.mapM_ putModule) new
        modules <- getNames
-       liftIO (hPutStrLn stderr $ "moduVerse updated:\n  " ++ showVerse modules)
+       liftIO (putStrLn $ "moduVerse updated:\n  " ++ showVerse modules)
     where
       find s =
           do ms <- liftIO (findHsModules [s])
@@ -229,23 +281,23 @@ dir [] = putDirs []
 dir xs =
     do modifyDirs (++ xs)
        xs' <- getDirs
-       liftIO (hPutStrLn stderr $ "sourceDirs updated:\n  [ " ++ intercalate "\n  , " xs' ++ " ]")
+       liftIO (putStrLn $ "sourceDirs updated:\n  [ " ++ intercalate "\n  , " xs' ++ " ]")
 
 clean :: MonadClean m => [FilePath] -> m ()
-clean [] = liftIO $ hPutStrLn stderr "Usage: clean <modulepath1> <modulepath2> ..."
+clean [] = liftIO $ putStrLn "Usage: clean <modulepath1> <modulepath2> ..."
 clean args = cleanImports args >> return ()
 
 split :: [FilePath] -> CmdM ()
 split [arg] = do
-    r <- lift (lift (splitModuleDecls arg))
+    r <- liftCT (splitModuleDecls arg)
     lift (modify (Cabal.update r))
     return ()
-split _ = liftIO $ hPutStrLn stderr "Usage: split <modulepath>"
+split _ = liftIO $ putStrLn "Usage: split <modulepath>"
 
 merge :: [String] -> CmdM ()
 merge args =
     case splitAt (length args - 1) args of
       (inputs, [output]) -> do
-            r <- lift $ lift $ mergeModules (map ModuleName inputs) (ModuleName output)
-            lift (modify (Cabal.update r))
-      _ -> liftIO $ hPutStrLn stderr "Usage: merge <inputmodulename1> <inputmodulename2> ... <outputmodulename>"
+            r <- liftCT $ mergeModules (map ModuleName inputs) (ModuleName output)
+            liftS (modify (Cabal.update r))
+      _ -> liftIO $ putStrLn "Usage: merge <inputmodulename1> <inputmodulename2> ... <outputmodulename>"

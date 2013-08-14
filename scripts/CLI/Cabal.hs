@@ -7,6 +7,7 @@ module CLI.Cabal (
 
     readPackageDescription,
     writeGenericPackageDescription,
+    showGenericPackageDescription,
     ) where
 
 import CLI.Cabal.Instances
