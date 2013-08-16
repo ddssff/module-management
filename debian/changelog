@@ -2,9 +2,9 @@ haskell-module-management (0.16) unstable; urgency=low
 
   * Use haskeline in the hmm program (Adam Vogt)
   * use case insensitive completion when it is unambiguous (Adam Vogt)
-  * Clean up issues involving fixities
-  * Preliminary support for cabal files
-  * And more...
+  * Clean up issues involving fixities (Adam Vogt)
+  * Preliminary support for cabal files (Adam Vogt)
+  * And more by Adam...
 
  -- David Fox <dsf@seereason.com>  Fri, 16 Aug 2013 08:48:58 -0700
 
