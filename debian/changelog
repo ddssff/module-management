@@ -1,3 +1,9 @@
+haskell-module-management (0.16.1) unstable; urgency=low
+
+  * Add missing CLI files to extra-source-files list
+
+ -- David Fox <dsf@seereason.com>  Fri, 16 Aug 2013 11:17:34 -0700
+
 haskell-module-management (0.16) unstable; urgency=low
 
   * Use haskeline in the hmm program (Adam Vogt)
