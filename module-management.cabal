@@ -89,7 +89,7 @@ Executable hmm
     cmdargs,
     lens
 
-  ghc-options: -O0
+  ghc-options: -O2
 
 Executable tests
   Main-is: Tests.hs

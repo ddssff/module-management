@@ -230,7 +230,8 @@ cmds_ args =
            (["q"], throwIO . Callback "quieter" $ \next -> do
                     liftIO (hPutStrLn stderr "Decreasing Verbosity")
                     quietly' next),
-           (["help"],  liftIO (hPutStrLn stderr "help text")),
+           -- The error message is more helpful
+           -- (["help"],  liftIO (hPutStrLn stderr "help text")),
            (["verse"], liftCT (verse args)),
            (["clean"], liftCT (clean args)),
            (["dir"],   liftCT (dir args)),
