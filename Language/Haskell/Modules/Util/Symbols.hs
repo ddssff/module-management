@@ -47,7 +47,11 @@ instance FoldDeclared (A.Decl a) where
     foldDeclared f r (A.WarnPragmaDecl _ _) = f Nothing r
     foldDeclared f r (A.InlineSig _ _ _ x) = foldDeclared f r x
     foldDeclared f r (A.InlineConlikeSig _ _ x) = foldDeclared f r x
+#if MIN_VERSION_haskell_src_exts(1,14,0)
+    foldDeclared f r (A.SpecSig _ _ x _) = foldDeclared f r x
+#else
     foldDeclared f r (A.SpecSig _ x _) = foldDeclared f r x
+#endif
     foldDeclared f r (A.SpecInlineSig _ _ _ x _) = foldDeclared f r x
     foldDeclared f r (A.InstSig _ _ x) = foldDeclared f r x
     foldDeclared f r (A.AnnPragma _ _) = f Nothing r
@@ -80,7 +84,11 @@ instance FoldDeclared (A.Pat a) where
     foldDeclared f r (A.PNPlusK _ x _) = foldDeclared f r x	-- n+k pattern
     foldDeclared f r (A.PInfixApp _ p1 _qn p2) = let r' = foldDeclared f r p1 in foldDeclared f r' p2	-- pattern with an infix data constructor
     foldDeclared f r (A.PApp _ _ ps) = foldl (foldDeclared f) r ps	-- data constructor and argument patterns
+#if MIN_VERSION_haskell_src_exts(1,14,0)
+    foldDeclared f r (A.PTuple _ _ ps) = foldl (foldDeclared f) r ps	-- tuple pattern
+#else
     foldDeclared f r (A.PTuple _ ps) = foldl (foldDeclared f) r ps	-- tuple pattern
+#endif
     foldDeclared f r (A.PList _ ps) = foldl (foldDeclared f) r ps	-- list pattern
     foldDeclared f r (A.PParen _ x) = foldDeclared f r x	-- parenthesized pattern
     foldDeclared f r (A.PRec _ _qn fs) = foldl (foldDeclared f) r fs	-- labelled pattern, record style

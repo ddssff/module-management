@@ -1,5 +1,5 @@
 Name:               module-management
-Version:            0.16.1
+Version:            0.17
 Synopsis:           Clean up module imports, split and merge modules
 Description:        Clean up module imports, split and merge modules.
 Homepage:           http://src.seereason.com/module-management

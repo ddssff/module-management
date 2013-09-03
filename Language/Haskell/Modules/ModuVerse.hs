@@ -45,10 +45,10 @@ import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
 #if MIN_VERSION_haskell_src_exts(1,14,0)
-deriving instance Ord Extension
-deriving instance Ord KnownExtension
 nameToExtension x = EnableExtension x
 #else
+deriving instance Ord Extension
+deriving instance Ord KnownExtension
 nameToExtension x = id x
 #endif
 
@@ -99,7 +99,7 @@ hseExtensions = map nameToExtension
     , BangPatterns, TemplateHaskell, ForeignFunctionInterface, {- Arrows, -} Generics, NamedFieldPuns, PatternGuards
     , MagicHash, TypeFamilies, StandaloneDeriving, TypeOperators, RecordWildCards, GADTs, UnboxedTuples
     , PackageImports, QuasiQuotes, TransformListComp, ViewPatterns, XmlSyntax, RegularPatterns, TupleSections
-#if MIN_VERSION_haskell_src_exts(1,14,0)
+#if MIN_VERSION_haskell_src_exts(1,15,0)
     , ExplicitNamespaces
 #endif
     ]

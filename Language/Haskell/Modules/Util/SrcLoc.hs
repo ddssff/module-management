@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, FlexibleInstances, ScopedTypeVariables, UndecidableInstances #-}
+{-# LANGUAGE BangPatterns, CPP, FlexibleInstances, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.Util.SrcLoc
     ( HasSpanInfo(..)
@@ -117,7 +117,11 @@ instance HasSpanInfo Decl where
     spanInfo (A.WarnPragmaDecl l _) = l
     spanInfo (A.InlineSig l _ _ _) = l
     spanInfo (A.InlineConlikeSig l _ _) = l
+#if MIN_VERSION_haskell_src_exts(1,14,0)
+    spanInfo (A.SpecSig l _ _ _) = l
+#else
     spanInfo (A.SpecSig l _ _) = l
+#endif
     spanInfo (A.SpecInlineSig l _ _ _ _) = l
     spanInfo (A.InstSig l _ _) = l
     spanInfo (A.AnnPragma l _) = l
