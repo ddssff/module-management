@@ -1,5 +1,5 @@
 Name:               module-management
-Version:            0.17
+Version:            0.17.1
 Synopsis:           Clean up module imports, split and merge modules
 Description:        Clean up module imports, split and merge modules.
 Homepage:           http://src.seereason.com/module-management
@@ -89,7 +89,17 @@ Executable hmm
     cmdargs,
     lens
 
-  ghc-options: -O2
+  -- This prevents one of two failures: either a GHC out of memory error,
+  -- or an out of simplifier ticks error:
+  -- ghc: panic! (the 'impossible' happened)
+  --   (GHC version 7.6.3 for x86_64-unknown-linux):
+  -- 	Simplifier ticks exhausted
+  --     When trying RuleFired Class op pure
+  --     To increase the limit, use -fsimpl-tick-factor=N (default 100)
+  --     If you need to do this, let GHC HQ know, and what factor you needed
+  --     To see detailed counts use -ddump-simpl-stats
+  --     Total ticks: 1186241
+  ghc-options: -O0
 
 Executable tests
   Main-is: Tests.hs

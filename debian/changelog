@@ -1,3 +1,9 @@
+haskell-module-management (0.17.1) unstable; urgency=low
+
+  * Restore the -O0 option to the build of hmm.
+
+ -- David Fox <dsf@seereason.com>  Wed, 04 Sep 2013 06:38:41 -0700
+
 haskell-module-management (0.17) unstable; urgency=low
 
   * Changes for haskell-src-exts-1.14.0
