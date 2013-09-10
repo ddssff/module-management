@@ -91,7 +91,7 @@ toEnumBounded i =
 main :: IO ()
 main = do
     conf <- cmdArgs defaultHMM
-    args <- mapM canonicalizePath (otherFiles conf)
+    let args = otherFiles conf
 
     pkgDesc' <-
         traverse (Cabal.readPackageDescription (toEnumBounded (verbosityCabal conf)))
