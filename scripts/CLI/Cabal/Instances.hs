@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -54,6 +55,10 @@ deriving instance Generic VersionRange
 
 deriving instance (Generic a, Generic b, Generic c) => Generic (CondTree a b c)
 
+#if MIN_VERSION_Cabal(1,18,0)
+-- cabal 1.18 has these instances. There should be
+-- a way to derive instance-if-doesn't-exist-already
+#else
 deriving instance Typeable3 CondTree
 deriving instance Typeable1 Condition
 
@@ -88,6 +93,9 @@ deriving instance Typeable TestType
 deriving instance Typeable VersionRange
 
 deriving instance Typeable ModuleName
+#endif
+
+
 instance Generic ModuleName where
     type Rep ModuleName = Rep [String]
     from = from . components
