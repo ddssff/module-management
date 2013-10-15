@@ -1,3 +1,9 @@
+haskell-module-management (0.17.3) unstable; urgency=low
+
+  * Make changelog visible in hackage2.
+
+ -- David Fox <dsf@seereason.com>  Tue, 15 Oct 2013 07:43:41 -0700
+
 haskell-module-management (0.17.2) unstable; urgency=low
 
   * Changes from Adam Vogt for cabal-1.18, nicer path completion.

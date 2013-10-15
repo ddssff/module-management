@@ -1,5 +1,5 @@
 Name:               module-management
-Version:            0.17.2
+Version:            0.17.3
 Synopsis:           Clean up module imports, split and merge modules
 Description:        Clean up module imports, split and merge modules.
 Homepage:           http://src.seereason.com/module-management
@@ -10,7 +10,7 @@ Category:           Editor, Haskell, IDE
 Stability:          experimental
 Build-type:         Simple
 Cabal-version:      >=1.8
-Extra-Source-Files: testdata.tar.gz, debian/changelog, scripts/CleanModules.hs, scripts/CLI/Cabal.hs, scripts/CLI/Cabal/Instances.hs, scripts/CLI/HaskelineTransAdapter.hs
+Extra-Source-Files: testdata.tar.gz, changelog, scripts/CleanModules.hs, scripts/CLI/Cabal.hs, scripts/CLI/Cabal/Instances.hs, scripts/CLI/HaskelineTransAdapter.hs
 
 Flag build-tests
   Description: build the test executable
