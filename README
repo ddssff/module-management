@@ -55,5 +55,5 @@ To Do:
   1. Make sure original file is left as backup, not some intermediate.
      Or eliminate backup files, you should really run this on files
      under version control.
-  2. Do global check whether exported symbols are imported anywhere,
-     and if not make them private.
+  2. Global cleanups: eliminate exports that are never imported
+  3. Global cleanups: eliminate declarations that are not exported.

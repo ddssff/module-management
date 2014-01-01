@@ -98,7 +98,7 @@ hseExtensions = map nameToExtension
     , ScopedTypeVariables, ImplicitParams, FlexibleContexts, FlexibleInstances, EmptyDataDecls, KindSignatures
     , BangPatterns, TemplateHaskell, ForeignFunctionInterface, {- Arrows, -} Generics, NamedFieldPuns, PatternGuards
     , MagicHash, TypeFamilies, StandaloneDeriving, TypeOperators, RecordWildCards, GADTs, UnboxedTuples
-    , PackageImports, QuasiQuotes, TransformListComp, ViewPatterns, XmlSyntax, RegularPatterns, TupleSections
+    , PackageImports, QuasiQuotes, {-TransformListComp,-} ViewPatterns, XmlSyntax, RegularPatterns, TupleSections
 #if MIN_VERSION_haskell_src_exts(1,15,0)
     , ExplicitNamespaces
 #endif

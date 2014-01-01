@@ -1,3 +1,10 @@
+haskell-module-management (0.18) unstable; urgency=low
+
+  * Turn off the TransformListComp extension for parsing, it makes "group"
+    a keyword.
+
+ -- David Fox <dsf@seereason.com>  Wed, 01 Jan 2014 09:55:19 -0800
+
 haskell-module-management (0.17.3) unstable; urgency=low
 
   * Make changelog visible in hackage2.
