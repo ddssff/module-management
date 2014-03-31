@@ -89,8 +89,8 @@ Executable hmm
     cmdargs,
     lens
 
-  -- This prevents one of two failures: either a GHC out of memory error,
-  -- or an out of simplifier ticks error:
+  -- In ghc-7.6.3, -O0 prevents one of two failures: either a GHC out
+  -- of memory error, or an out of simplifier ticks error:
   -- ghc: panic! (the 'impossible' happened)
   --   (GHC version 7.6.3 for x86_64-unknown-linux):
   -- 	Simplifier ticks exhausted
@@ -99,7 +99,8 @@ Executable hmm
   --     If you need to do this, let GHC HQ know, and what factor you needed
   --     To see detailed counts use -ddump-simpl-stats
   --     Total ticks: 1186241
-  ghc-options: -O0
+  -- In 7.8.1 increasing the context stack size from 20 to 60 seems necessary.
+  ghc-options: -O0 -fcontext-stack=60
 
 Executable tests
   Main-is: Tests.hs
