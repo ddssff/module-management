@@ -4,7 +4,7 @@ import Distribution.Simple
 import Distribution.Simple.LocalBuildInfo (LocalBuildInfo(buildDir))
 -- import Language.Haskell.Imports.Clean (cleanBuildImports)
 -- import Language.Haskell.Imports.Params (runParamsT)
-import System.Cmd (system)
+import System.Process (system)
 import System.Exit (ExitCode(ExitSuccess))
 import System.Directory (setCurrentDirectory, copyFile)
 import System.FilePath ((</>))
