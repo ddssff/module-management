@@ -1,3 +1,9 @@
+haskell-module-management (0.19) unstable; urgency=low
+
+  * Increase the context-stack size from 20 to 60 to avoid crashing ghc-7.8.1
+
+ -- David Fox <dsf@seereason.com>  Mon, 31 Mar 2014 08:53:21 -0700
+
 haskell-module-management (0.18) unstable; urgency=low
 
   * Turn off the TransformListComp extension for parsing, it makes "group"
