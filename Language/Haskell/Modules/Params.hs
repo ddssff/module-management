@@ -96,7 +96,7 @@ instance MonadClean m => MonadDryRun m where
 -- instance of 'MonadClean'.
 runCleanT :: (MonadIO m, MonadBaseControl IO m) => CleanT m a -> m a
 runCleanT action =
-    withTempDirectory "." "scratch" $ \ scratch ->
+    withTempDirectory "." "hmm" $ \ scratch ->
     do (result, params) <- runStateT action (Params {scratchDir = scratch,
                                                      dryRun = False,
                                                      verbosity = 1,

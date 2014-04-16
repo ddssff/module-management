@@ -1,3 +1,10 @@
+haskell-module-management (0.20) unstable; urgency=low
+
+  * GHC-7.8 honors the -outputdir flag for dumped imports, so look for
+    them there.
+
+ -- David Fox <dsf@seereason.com>  Wed, 16 Apr 2014 12:33:25 -0700
+
 haskell-module-management (0.19) unstable; urgency=low
 
   * Increase the context-stack size from 20 to 60 to avoid crashing ghc-7.8.1

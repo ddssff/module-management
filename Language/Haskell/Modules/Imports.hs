@@ -32,6 +32,7 @@ import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
 import Language.Haskell.Modules.Util.Symbols (symbols)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 import System.Exit (ExitCode(..))
+import System.FilePath ((</>))
 import System.Process (readProcessWithExitCode, showCommandForUser)
 
 #if MIN_VERSION_haskell_src_exts(1,14,0)
@@ -152,7 +153,14 @@ dumpImports keys =
 -- their members are imported too.
 checkImports :: MonadClean m => ModuleInfo -> m ModuleResult
 checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _) =
-    do let importsPath = maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh ++ ".imports"
+    do
+#if __GLASGOW_HASKELL__ >= 708
+       scratch <- scratchDir <$> getParams
+#else
+       let scratch = "."
+#endif
+       let importsPath = scratch </> maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh ++ ".imports"
+
        -- The .imports file will appear in the real current directory,
        -- ignore the source dir path.  This may change in future
        -- versions of GHC, see http://ghc.haskell.org/trac/ghc/ticket/7957
