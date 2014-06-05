@@ -1,3 +1,10 @@
+haskell-module-management (0.20.1) unstable; urgency=low
+
+  * Evidently ExplicitNamespaces didn't make it into
+    haskell-src-exts-1.15.0, so don't try to use it.
+
+ -- David Fox <dsf@seereason.com>  Thu, 05 Jun 2014 15:24:17 -0700
+
 haskell-module-management (0.20) unstable; urgency=low
 
   * GHC-7.8 honors the -outputdir flag for dumped imports, so look for

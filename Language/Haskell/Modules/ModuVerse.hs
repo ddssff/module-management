@@ -99,7 +99,7 @@ hseExtensions = map nameToExtension
     , BangPatterns, TemplateHaskell, ForeignFunctionInterface, {- Arrows, -} Generics, NamedFieldPuns, PatternGuards
     , MagicHash, TypeFamilies, StandaloneDeriving, TypeOperators, RecordWildCards, GADTs, UnboxedTuples
     , PackageImports, QuasiQuotes, {-TransformListComp,-} ViewPatterns, XmlSyntax, RegularPatterns, TupleSections
-#if MIN_VERSION_haskell_src_exts(1,15,0)
+#if MIN_VERSION_haskell_src_exts(1,16,0)
     , ExplicitNamespaces
 #endif
     ]
