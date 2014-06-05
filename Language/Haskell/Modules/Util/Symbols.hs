@@ -103,7 +103,9 @@ instance FoldDeclared (A.Pat a) where
     foldDeclared _f _r (A.PXPcdata _ _s) = error "Unimplemented FoldDeclared instance: XPcdata"	-- XML PCDATA pattern
     foldDeclared _f _r (A.PXPatTag _ _p) = error "Unimplemented FoldDeclared instance: PXPatTag"	-- XML embedded pattern
     foldDeclared _f _r (A.PXRPats _ _rps) = error "Unimplemented FoldDeclared instance: PXRPats"	-- XML regular list pattern
+#if !MIN_VERSION_haskell_src_exts(1,15,0)
     foldDeclared _f _r (A.PExplTypeArg _ _n _t) = error "Unimplemented FoldDeclared instance: PExplTypeArg"	-- Explicit generics style type argument e.g. f {| Int |} x = ...
+#endif
     foldDeclared _ r (A.PQuasiQuote _ _ _) = r	-- quasi quote pattern: [$name| string |]
     foldDeclared f r (A.PBangPat _ x) = foldDeclared f r x	-- strict (bang) pattern: f !x = ...
 instance FoldDeclared (A.PatField a) where
