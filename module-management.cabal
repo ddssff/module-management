@@ -10,7 +10,7 @@ Category:           Editor, Haskell, IDE
 Stability:          experimental
 Build-type:         Simple
 Cabal-version:      >=1.8
-Extra-Source-Files: testdata.tar.gz, changelog, scripts/CleanModules.hs, scripts/CLI/Cabal.hs, scripts/CLI/Cabal/Instances.hs, scripts/CLI/HaskelineTransAdapter.hs
+Extra-Source-Files: changelog, scripts/CleanModules.hs, scripts/CLI/Cabal.hs, scripts/CLI/Cabal/Instances.hs, scripts/CLI/HaskelineTransAdapter.hs
 
 Flag build-tests
   Description: build the test executable
