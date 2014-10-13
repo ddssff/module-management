@@ -1,5 +1,5 @@
 {- # OPTIONS_GHC -Wall #-}
-{-# LANGUAGE ViewPatterns, PatternGuards, DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, DeriveGeneric, PatternGuards, StandaloneDeriving, ViewPatterns #-}
 module Main where
 
 import System.Console.Haskeline
@@ -15,6 +15,9 @@ import Data.Maybe (maybeToList)
 import Data.Char (toLower)
 import qualified Data.Set as S (member, toList, map)
 import Data.Set.Extra as Set (Set, toList)
+import Distribution.ModuleExport (ModuleExport(..))
+import Distribution.Package (InstalledPackageId(..))
+import GHC.Generics (Generic)
 import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, runCleanT, splitModuleDecls)
 import Language.Haskell.Modules.ModuVerse (getNames)
 import Language.Haskell.Modules.SourceDirs (getDirs)
@@ -39,6 +42,9 @@ import System.Console.Haskeline.MonadException
 import Control.Exception (fromException)
 
 import System.Exit
+
+deriving instance Generic (ModuleExport m)
+deriving instance Generic InstalledPackageId
 
 data HMM = CLI
   { verbosity :: Int,
