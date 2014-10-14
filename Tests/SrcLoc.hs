@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns, FlexibleInstances, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-module Tests.SrcLoc where
+module SrcLoc where
 
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..))
 import Language.Haskell.Modules.Util.SrcLoc (srcPairText)

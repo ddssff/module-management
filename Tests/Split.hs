@@ -1,4 +1,4 @@
-module Tests.Split where
+module Split where
 
 import Control.Monad as List (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))

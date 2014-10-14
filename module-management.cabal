@@ -1,16 +1,17 @@
 Name:               module-management
-Version:            0.20.1
+Version:            0.20.2
 Synopsis:           Clean up module imports, split and merge modules
 Description:        Clean up module imports, split and merge modules.
-Homepage:           http://src.seereason.com/module-management
+Homepage:           https://github.com/seereason/module-management
 License:            BSD3
 Author:             David Fox
 Maintainer:         David Fox <dsf@seereason.com>
 Category:           Editor, Haskell, IDE
 Stability:          experimental
 Build-type:         Simple
-Cabal-version:      >=1.8
+Cabal-version:      >=1.9
 Extra-Source-Files: changelog, scripts/CleanModules.hs, scripts/CLI/Cabal.hs, scripts/CLI/Cabal/Instances.hs, scripts/CLI/HaskelineTransAdapter.hs
+                    Tests/Fold.hs, Tests/Imports.hs, Tests/Main.hs, Tests/Merge.hs, Tests/Split.hs Tests/SrcLoc.hs Tests/Symbols.hs
 
 Flag build-tests
   Description: build the test executable
@@ -34,13 +35,6 @@ Library
     Language.Haskell.Modules.Util.Symbols,
     Language.Haskell.Modules.Util.Temp,
     Language.Haskell.Modules.Util.Test
-  Other-Modules:
-    Tests.Fold,
-    Tests.Imports,
-    Tests.Merge,
-    Tests.Split
-    Tests.SrcLoc
-    Tests.Symbols
 
   Build-Depends:
     applicative-extras,
@@ -69,25 +63,17 @@ Executable hmm
   Hs-source-dirs: scripts
   Build-Depends:
     base,
+    Cabal,
     containers,
-    data-default,
+    cmdargs,
     directory,
-    filepath,
-    haskell-src-exts,
-    HUnit,
-    lifted-base,
+    haskeline,
+    lens,
     module-management,
     monad-control,
     mtl,
-    process,
     set-extra,
-    syb,
-    temporary,
-    haskeline == 0.7.*,
-    transformers-base,
-    Cabal,
-    cmdargs,
-    lens
+    transformers-base
 
   -- In ghc-7.6.3, -O0 prevents one of two failures: either a GHC out
   -- of memory error, or an out of simplifier ticks error:
@@ -102,34 +88,14 @@ Executable hmm
   -- In 7.8.1 increasing the context stack size from 20 to 60 seems necessary.
   ghc-options: -O0 -fcontext-stack=60
 
-Executable tests
-  Main-is: Tests.hs
-  if flag (build-tests)
-    Buildable: True
-    Build-Depends:
-      ansi-wl-pprint,
-      base,
-      bytestring,
-      Cabal,
-      containers,
-      data-default,
-      debian,
-      directory,
-      Extra,
-      filepath,
-      HUnit,
-      haskell-src-exts,
-      monad-control,
-      module-management,
-      lifted-base,
-      mtl,
-      process,
-      process-progress,
-      pureMD5,
-      regex-compat,
-      set-extra,
-      syb,
-      system-fileio,
-      temporary
-  else
-    Buildable: False
+Executable module-management-tests
+  Hs-Source-Dirs: Tests
+  Main-is: Main.hs
+  Build-Depends:
+    base,
+    containers,
+    filepath,
+    HUnit,
+    haskell-src-exts,
+    module-management,
+    process

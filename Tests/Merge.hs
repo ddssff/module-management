@@ -1,4 +1,4 @@
-module Tests.Merge where
+module Merge where
 
 import Control.Monad as List (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))

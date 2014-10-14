@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, PackageImports #-}
-module Tests.Imports where
+module Imports where
 
 
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))

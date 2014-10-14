@@ -1,10 +1,10 @@
 {-# LANGUAGE FlexibleInstances, StandaloneDeriving #-}
-module Tests.Fold where
+module Fold where
 
 import Data.Foldable (fold)
 import Data.Monoid (Monoid(mempty))
 import Data.Sequence as Seq (filter, fromList, Seq, zip, (|>))
-import Data.Set.Extra as Set (fromList)
+import Data.Set as Set (fromList)
 import Data.Tree (Tree(..))
 import qualified Language.Haskell.Exts.Annotated as A
 import Language.Haskell.Exts.Annotated.Syntax ({- Eq Module -})

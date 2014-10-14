@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns, CPP, FlexibleInstances, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-module Tests.Symbols
+module Symbols
     ( tests
     , test1
     , test2
