@@ -1,12 +1,12 @@
 Name:               module-management
-Version:            0.20.2
+Version:            0.20.2.1
 Synopsis:           Clean up module imports, split and merge modules
 Description:        Clean up module imports, split and merge modules.
 Homepage:           https://github.com/seereason/module-management
 License:            BSD3
 Author:             David Fox
 Maintainer:         David Fox <dsf@seereason.com>
-Category:           Editor, Haskell, IDE
+Category:           Editor, Haskell, IDE, Development, Refactoring
 Stability:          experimental
 Build-type:         Simple
 Cabal-version:      >=1.9
