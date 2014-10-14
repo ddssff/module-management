@@ -8,7 +8,7 @@ import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 tests :: Test
-tests = TestList [test1, test2, test3, test4, test5, test6]
+tests = TestList [{-test1, test2, test3,-} test4, test5, test6]
 
 test1 :: Test
 test1 =

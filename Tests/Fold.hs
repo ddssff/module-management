@@ -27,7 +27,7 @@ tests = TestLabel "Clean" (TestList [test1, test1b, test3, fold3b, fold3c, test4
 test1 :: Test
 test1 =
     TestLabel "test1" $ TestCase $ withCurrentDirectory "testdata/debian" $
-    do let path = APath "Debian/Repo/Orphans.hs"
+    do let path = APath "Debian/Repo/Slice.hs"
        mi <- runCleanT $ pathKey path >>= parseModule
        let (output, original) = test mi
        assertEqual "echo" original output
@@ -38,33 +38,72 @@ test1 =
 test1b :: Test
 test1b =
     TestLabel "test1b" $ TestCase $ withCurrentDirectory "testdata/debian" $
-    do let path = APath "Debian/Repo/Sync.hs"
+    do let path = APath "Debian/Repo/Slice.hs"
        mi <- runCleanT $ pathKey path >>= parseModule
-       let output = test mi
+       let output = parseTestOutput mi
        assertEqual "echo" mempty (Seq.filter (\ (a, b) -> a /= b) (Seq.zip expected output))
     where
       expected :: Seq (String, String, String, String)
       expected = Seq.fromList
-                   [("-- Comment above module head\nmodule ","","",""),
-                    ("","Debian.Repo.Sync"," ","[2.8:2.24]"),
-                    ("","{-# WARNING \"this is a warning\" #-}","\n","[2.25:2.60]"),
+                   [("","","",""),
+                    ("","{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, PackageImports, StandaloneDeriving, TupleSections #-}","\n","[1.1:1.106]"),
+                    ("-- |Types that represent a \"slice\" of a repository, as defined by a\n-- list of DebSource.  This is called a slice because some sections\n-- may be omitted, and because different repositories may be combined\n-- in the list.\nmodule ","Debian.Repo.Slice","\n","[6.8:6.25]"),
                     ("    ( ","","",""),
-                    ("","rsync","\n","[3.7:3.12]"),
-                    ("    , ","foo","\n","[4.7:4.10]"),
-                    ("    -- Comment after last export\n    ) where","","",""),
-                    ("\n\n-- Comment before first import\n\n","import Control.Monad.Trans (MonadIO)","\n","[10.1:10.37]"),
-                    ("","import qualified Data.ByteString as B (empty)","\n","[11.1:11.46]"),
-                    ("","import System.Exit (ExitCode)","\n","[12.1:12.30]"),
-                    ("","import System.FilePath (dropTrailingPathSeparator)","\n","[13.1:13.51]"),
-                    ("-- Comment between two imporrts\n","import System.Process (proc)","\n","[15.1:15.29]"),
-                    ("","import System.Process.Progress (keepResult, runProcessF)","\n","[16.1:16.57]"),
-                    ("\n-- Comment before first decl\n","rsync :: (Functor m, MonadIO m) => [String] -> FilePath -> FilePath -> m ExitCode","\n","[19.1:19.82]"),
-                    ("","rsync extra source dest =\n    do result <- runProcessF (proc \"rsync\" ([\"-aHxSpDt\", \"--delete\"] ++ extra ++\n                                            [dropTrailingPathSeparator source ++ \"/\",\n                                             dropTrailingPathSeparator dest])) B.empty >>= return . keepResult\n       case result of\n         [x] -> return x\n         _ -> error \"Missing or multiple exit codes\"","\n","[20.1:29.0]"),
-                    ("\n-- Comment between two decls\n","foo :: Int","\n","[29.1:29.11]"),
-                    ("","foo = 1","\n","[30.1:30.8]"),
-                    ("\n{-\nhandleExit 1 = \"Syntax or usage error\"\nhandleExit 2 = \"Protocol incompatibility\"\nhandleExit 3 = \"Errors selecting input/output files, dirs\"\nhandleExit 4 = \"Requested action not supported: an attempt was made to manipulate 64-bit files on a platform that cannot support them; or an option was specified that is supported by the client and not by the server.\"\nhandleExit 5 = \"Error starting client-server protocol\"\nhandleExit 6 = \"Daemon unable to append to log-file\"\nhandleExit 10 = \"Error in socket I/O\"\nhandleExit 11 = \"Error in file I/O\"\nhandleExit 12 = \"Error in rsync protocol data stream\"\nhandleExit 13 = \"Errors with program diagnostics\"\nhandleExit 14 = \"Error in IPC code\"\nhandleExit 20 = \"Received SIGUSR1 or SIGINT\"\nhandleExit 21 = \"Some error returned by waitpid()\"\nhandleExit 22 = \"Error allocating core memory buffers\"\nhandleExit 23 = \"Partial transfer due to error\"\nhandleExit 24 = \"Partial transfer due to vanished source files\"\nhandleExit 25 = \"The --max-delete limit stopped deletions\"\nhandleExit 30 = \"Timeout in data send/receive\"\nhandleExit 35 = \"Timeout waiting for daemon connection\"\n-}\n","","","")]
-      test :: ModuleInfo -> Seq (String, String, String, String)
-      test m =
+                    ("","Slice(..)","\n","[7.7:7.16]"),
+                    ("    , ","SliceList(..)","\n","[8.7:8.20]"),
+                    ("    , ","NamedSliceList(..)","\n","[9.7:9.25]"),
+                    ("    , ","sourceSlices","\n","[10.7:10.19]"),
+                    ("    , ","binarySlices","\n","[11.7:11.19]"),
+                    ("    , ","inexactPathSlices","\n","[12.7:12.24]"),
+                    ("    , ","releaseSlices","\n","[13.7:13.20]"),
+                    ("    , ","appendSliceLists","\n","[14.7:14.23]"),
+                    ("    , ","UpdateError(..)","\n","[15.7:15.22]"),
+                    ("    , ","SourcesChangedAction(..)","\n","[16.7:16.31]"),
+                    ("    , ","doSourcesChangedAction","\n","[17.7:17.29]"),
+                    ("    ) where","","",""),
+                    ("\n\n","import Control.Exception (Exception)","\n","[20.1:20.37]"),
+                    ("","import Data.Data (Data)","\n","[21.1:21.24]"),
+                    ("","import Data.List (intersperse)","\n","[22.1:22.31]"),
+                    ("","import Data.Typeable (Typeable)","\n","[23.1:23.32]"),
+                    ("","import Debian.Pretty (PP(..), ppDisplay, ppPrint)","\n","[24.1:24.50]"),
+                    ("","import Debian.Release (ReleaseName(relName))","\n","[25.1:25.45]"),
+                    ("","import Debian.Repo.Prelude (replaceFile)","\n","[26.1:26.41]"),
+                    ("","import Debian.Repo.Prelude.Verbosity (ePutStr, ePutStrLn)","\n","[27.1:27.58]"),
+                    ("","import Debian.Repo.Repo (RepoKey)","\n","[28.1:28.34]"),
+                    ("","import Debian.Sources (DebSource(..), SliceName, SourceType(..))","\n","[29.1:29.65]"),
+                    ("","import System.Directory (createDirectoryIfMissing, removeFile)","\n","[30.1:30.63]"),
+                    ("","import System.IO (hGetLine, stdin)","\n","[31.1:31.35]"),
+                    ("","import System.Unix.Directory (removeRecursiveSafely)","\n","[32.1:32.53]"),
+                    ("","import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), hcat, text)","\n","[33.1:33.67]"),
+                    ("\n","data Slice = Slice {sliceRepoKey :: RepoKey, sliceSource :: DebSource} deriving (Eq, Ord, Show)","\n","[35.1:35.96]"),
+                    ("\n-- | Each line of the sources.list represents a slice of a repository\n","data SliceList = SliceList {slices :: [Slice]} deriving (Eq, Ord, Show)","\n","[38.1:38.72]"),
+                    ("\n","data NamedSliceList\n    = NamedSliceList { sliceList :: SliceList\n                     , sliceListName :: SliceName\n                     } deriving (Eq, Ord, Show)","\n","[40.1:43.48]"),
+                    ("\n","instance Pretty (PP SliceList) where\n    pPrint = hcat . intersperse (text \"\\n\") . map (ppPrint . sliceSource) . slices . unPP","\n","[45.1:48.0]"),
+                    ("\n","instance Pretty (PP NamedSliceList) where\n    pPrint = ppPrint . sliceList . unPP","\n","[48.1:51.0]"),
+                    ("\n","instance Pretty (PP ReleaseName) where\n    pPrint = ppPrint . relName . unPP","\n","[51.1:54.0]"),
+                    ("\n","deriving instance Show SourceType","\n","[54.1:54.34]"),
+                    ("","deriving instance Show DebSource","\n","[55.1:55.33]"),
+                    ("\n","sourceSlices :: SliceList -> SliceList","\n","[57.1:57.39]"),
+                    ("","sourceSlices = SliceList . filter ((== DebSrc) . sourceType . sliceSource) . slices","\n","[58.1:58.84]"),
+                    ("\n","binarySlices :: SliceList -> SliceList","\n","[60.1:60.39]"),
+                    ("","binarySlices = SliceList . filter ((== Deb) . sourceType . sliceSource) . slices","\n","[61.1:61.81]"),
+                    ("\n","inexactPathSlices :: SliceList -> SliceList","\n","[63.1:63.44]"),
+                    ("","inexactPathSlices = SliceList . filter (either (const False) (const True) . sourceDist . sliceSource) . slices","\n","[64.1:64.111]"),
+                    ("\n","releaseSlices :: ReleaseName -> SliceList -> SliceList","\n","[66.1:66.55]"),
+                    ("","releaseSlices release list =\n    SliceList . filter (isRelease . sourceDist . sliceSource) $ (slices list)\n    where isRelease = either (const False) (\\ (x, _) -> x == release)","\n","[67.1:71.0]"),
+                    ("\n","appendSliceLists :: [SliceList] -> SliceList","\n","[71.1:71.45]"),
+                    ("","appendSliceLists lists =\n    SliceList { slices = concat (map slices lists) }","\n","[72.1:73.53]"),
+                    ("\n{-\n-- |Return the list of releases in a repository, which is the\n-- list of directories in the dists subdirectory.  Currently\n-- this is only known to work with Apache.  Note that some of\n-- the returned directories may be symlinks.\nuriSubdirs :: (Maybe EnvRoot) -> URI -> IO [Text]\nuriSubdirs root uri =\n    liftIO (dirFromURI uri') >>= either throw (return . map pack)\n    where\n      uri' = case uriScheme uri of\n               \"file:\" -> uri {uriPath = maybe \"\" rootPath root ++ (uriPath uri)}\n               _ -> uri\n\nreadRelease :: URI -> Text -> IO (Maybe (Paragraph' Text))\nreadRelease uri name =\n    do output <- liftIO (fileFromURI uri')\n       case output of\n         Left e -> throw e\n         Right s -> case parseControl (show uri') (B.concat . L.toChunks $ s) of\n                      Right (Control [paragraph]) -> return (Just (decodeParagraph paragraph))\n                      _ -> return Nothing\n    where\n      uri' = uri {uriPath = uriPath uri </> \"dists\" </> unpack name </> \"Release\"}\n-}\n\n","data UpdateError\n    = Changed ReleaseName FilePath SliceList SliceList\n    | Missing ReleaseName FilePath\n    | Flushed\n    deriving Typeable","\n","[100.1:104.22]"),
+                    ("\n","instance Exception UpdateError","\n","[106.1:106.31]"),
+                    ("\n","instance Show UpdateError where\n    show (Changed r p l1 l2) = unwords [\"Changed\", show r, show p, ppDisplay l1, ppDisplay l2]\n    show (Missing r p) = unwords [\"Missing\", show r, show p]\n    show Flushed = \"Flushed\"","\n","[108.1:113.0]"),
+                    ("\n","data SourcesChangedAction =\n    SourcesChangedError |\n    UpdateSources |\n    RemoveRelease\n    deriving (Eq, Show, Data, Typeable)","\n","[113.1:117.40]"),
+                    ("\n","doSourcesChangedAction :: FilePath -> FilePath -> NamedSliceList -> SliceList -> SourcesChangedAction -> IO ()","\n","[119.1:119.111]"),
+                    ("","doSourcesChangedAction dir sources baseSources fileSources SourcesChangedError = do\n  ePutStrLn (\"The sources.list in the existing '\" ++ (relName . sliceListName $ baseSources) ++ \"' in \" ++ dir ++\n             \" apt-get environment doesn't match the parameters passed to the autobuilder\" ++ \":\\n\\n\" ++\n             sources ++ \":\\n\\n\" ++\n             ppDisplay fileSources ++\n\t     \"\\nRun-time parameters:\\n\\n\" ++\n             ppDisplay baseSources ++ \"\\n\" ++\n\t     \"It is likely that the build environment in\\n\" ++\n             dir ++ \" is invalid and should be rebuilt.\")\n  ePutStr $ \"Remove it and continue (or exit)?  [y/n]: \"\n  result <- hGetLine stdin\n  case result of\n    ('y' : _) ->\n        do removeRecursiveSafely dir\n           createDirectoryIfMissing True dir\n           replaceFile sources (ppDisplay baseSources)\n    _ -> error (\"Please remove \" ++ dir ++ \" and restart.\")\n\ndoSourcesChangedAction dir sources baseSources _fileSources RemoveRelease = do\n  ePutStrLn $ \"Removing suspect environment: \" ++ dir\n  removeRecursiveSafely dir\n  createDirectoryIfMissing True dir\n  replaceFile sources (ppDisplay baseSources)\n\ndoSourcesChangedAction dir sources baseSources _fileSources UpdateSources = do\n  -- The sources.list has changed, but it should be\n  -- safe to update it.\n  ePutStrLn $ \"Updating environment with new sources.list: \" ++ dir\n  removeFile sources\n  replaceFile sources (ppDisplay baseSources)","\n","[120.1:150.0]"),
+                    ("","","","")]
+
+
+parseTestOutput :: ModuleInfo -> Seq (String, String, String, String)
+parseTestOutput m =
           foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m mempty
           where
             pragmaf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))

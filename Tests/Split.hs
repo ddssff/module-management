@@ -9,7 +9,7 @@ import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import Test.HUnit (assertEqual, Test(TestCase, TestList, TestLabel))
 
 tests :: Test
-tests = TestList [split2a, split2b, split4, split4b, split4c, split5, split6]
+tests = TestList [split2a, split2b, split4, split4b, split4c, split5 {-, split6-}]
 
 slow :: Test
 slow = TestList [split1]

@@ -4,6 +4,7 @@ module Imports where
 
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules (cleanImports, modifyExtensions, modifyTestMode, modulePathBase, putDirs, runCleanT, withCurrentDirectory)
+import Language.Haskell.Modules.Params (modifyParams, Params(hsFlags))
 import Language.Haskell.Modules.SourceDirs (RelPath(unRelPath))
 import Language.Haskell.Modules.Util.Test (diff, rsync)
 import System.Exit (ExitCode(..))
@@ -22,34 +23,39 @@ nameToExtension x = x
 #endif
 
 tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test2, test3, test4, test5, test6, test7])
+tests = TestLabel "Clean" (TestList [test1, {-test2,-} test3, test4, test5, test6 {-, test7-}])
 
 test1 :: Test
 test1 =
     TestLabel "imports1" $ TestCase
       (do rsync "testdata/debian" "tmp"
-          let name = S.ModuleName "Debian.Repo.Types.PackageIndex"
+          let name = S.ModuleName "Debian.Repo.PackageIndex"
           let base = modulePathBase "hs" name
           _ <- withCurrentDirectory "tmp" $ (runCleanT (cleanImports [unRelPath base]))
           (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> unRelPath base, "tmp" </> unRelPath base] ""
           assertEqual "cleanImports"
                          (ExitFailure 1,
-                          ["@@ -22,13 +22,13 @@",
-                           "     , prettyPkgVersion",
+                          ["@@ -28,15 +28,15 @@",
+                           "     , sortBinaryPackages",
                            "     ) where",
                            " ",
-                           "-import Data.Text (Text, map)",
-                           "+import Data.Text (Text)",
-                           " import Debian.Arch (Arch(..))",
-                           " import qualified Debian.Control.Text as T (Paragraph)",
+                           "-import Data.List as List (sortBy, map, filter)",
+                           "+import Data.List as List (filter, map, sortBy)",
+                           " import Data.Monoid ((<>))",
+                           "-import Data.Set as Set (map, filter, toList, unions)",
+                           "+import Data.Set as Set (filter, map, toList, unions)",
+                           " import Data.Text (Text)",
+                           "-import Debian.Arch (Arch(..), ArchOS(..), ArchCPU(..), prettyArch)",
+                           "-import qualified Debian.Control.Text as T",
+                           "+import Debian.Arch (Arch(..), ArchCPU(..), ArchOS(..), prettyArch)",
+                           "+import qualified Debian.Control.Text as T (Paragraph)",
+                           "+import Debian.Pretty (PP(..), ppPrint)",
                            " import Debian.Relation (BinPkgName(..), SrcPkgName(..))",
-                           " import qualified Debian.Relation as B (PkgName, Relations)",
-                           " import Debian.Release (Section(..))",
-                           "-import Debian.Repo.Orphans ({- instances -})",
-                           "+import Debian.Repo.Orphans ()",
-                           " import Debian.Version (DebianVersion, prettyDebianVersion)",
-                           " import System.Posix.Types (FileOffset)",
-                           " import Text.PrettyPrint.ANSI.Leijen ((<>), Doc, Pretty(pretty), text)"],
+                           " import qualified Debian.Relation as B (Relations)",
+                           "-import Debian.Pretty (PP(..), ppPrint)",
+                           " import Debian.Release (releaseName', Section(..), sectionName')",
+                           " import Debian.Repo.PackageID (PackageID(packageName, packageVersion), prettyPackageID)",
+                           " import Debian.Repo.Release (Release(..))"],
                           "")
                           (code, drop 2 (lines out), err))
 
@@ -98,10 +104,10 @@ test5 =
                          " ",
                          "-import Data.Text (Text)",
                          "-import Debian.Control (Paragraph(..), Paragraph'(..), Field'(..))",
-                         "+import Debian.Control (Field'(..), Paragraph(..))",
+                         "+",
                          " ",
-                         " deriving instance Show (Field' String)",
-                         " deriving instance Show Paragraph"]),
+                         " {-",
+                         " deriving instance Show (Field' String)"]),
                        "")
                       (code, unlines (drop 3 (lines out)), err))
 
@@ -119,6 +125,9 @@ test7 :: Test
 test7 =
     TestLabel "imports7" $ TestCase
       (do _ <- rsync "testdata/imports7" "tmp"
-          _ <- withCurrentDirectory "tmp" (runCleanT (putDirs [".", ".."] >> modifyTestMode (const True) >> cleanImports ["CLI.hs"]))
+          _ <- withCurrentDirectory "tmp" (runCleanT (putDirs [".", ".."] >>
+                                                      modifyParams (\ m -> m {hsFlags = "-DMIN_VERSION_haskell_src_exts(a,b,c)=1" : hsFlags m}) >>
+                                                      modifyTestMode (const True) >>
+                                                      cleanImports ["CLI.hs"]))
           out <- diff "testdata/imports7-expected" "tmp"
           assertEqual "CLI" (ExitSuccess, "", "") out)

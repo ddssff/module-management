@@ -1,3 +1,11 @@
+haskell-module-management (0.20.2) unstable; urgency=low
+
+  * Fix hmm compile error
+  * Update cabal file
+  * Moved to github
+
+ -- David Fox <dsf@seereason.com>  Tue, 14 Oct 2014 06:21:04 -0700
+
 haskell-module-management (0.20.1) unstable; urgency=low
 
   * Evidently ExplicitNamespaces didn't make it into
