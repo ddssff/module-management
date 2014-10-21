@@ -17,7 +17,7 @@ Bugs:
        deriving instance Show Foo
 
      With this input, cleanImports will remove the "(..)" from the Bar import
-     and the resulting file will not compile.  "deriving instance Show bar"
+     and the resulting file will not compile.  "deriving instance Show Bar"
      will work correctly.
 
   2. Leaves behind some .imports files

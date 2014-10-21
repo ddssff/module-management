@@ -18,6 +18,9 @@ import Data.Sequence ((|>))
 import Data.Set as Set (empty, fromList, member, Set, singleton, toList, union, unions)
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, sModuleName, sName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleHead(..), ModuleName(..), QName(..), Type(..))
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+import qualified Language.Haskell.Exts.Annotated.Syntax as A (InstRule(..))
+#endif
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
@@ -246,19 +249,31 @@ fixNewImports remove m oldImports imports =
           else s
           where
             n = case s of
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+                  (A.IVar _ _ x) -> x
+#else
                   (A.IVar _ x) -> x
+#endif
                   (A.IAbs _ x) -> x
                   (A.IThingAll _ x) -> x
                   (A.IThingWith _ x _) -> x
             s' = case s of
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+                  (A.IVar l _ x) -> A.IThingAll l x
+#else
                   (A.IVar l x) -> A.IThingAll l x
+#endif
                   (A.IAbs l x) -> A.IThingAll l x
                   (A.IThingWith l x _) -> A.IThingAll l x
                   (A.IThingAll _ _) -> s
 
       -- Eliminate imports that became empty
       -- importPred :: ImportDecl -> Bool
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+      importPred (A.ImportDecl _ mn _ _ _ _ _ (Just (A.ImportSpecList _ _ []))) =
+#else
       importPred (A.ImportDecl _ mn _ _ _ _ (Just (A.ImportSpecList _ _ []))) =
+#endif
           not remove || maybe False (isEmptyImport . A.importSpecs) (find ((== (unModuleName mn)) . unModuleName . A.importModule) oldImports)
           where
             isEmptyImport (Just (A.ImportSpecList _ _ [])) = True
@@ -273,6 +288,46 @@ standaloneDerivingTypes (ModuleInfo (A.XmlPage _ _ _ _ _ _ _) _ _ _) = error "st
 standaloneDerivingTypes (ModuleInfo (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ _) = error "standaloneDerivingTypes A.XmlHybrid"
 standaloneDerivingTypes (ModuleInfo (A.Module _ _ _ _ decls) _ _ _) =
     unions (map derivDeclTypes decls)
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+
+-- | Collect the declared types of a standalone deriving declaration.
+class DerivDeclTypes a where
+    derivDeclTypes :: a -> Set (Maybe S.ModuleName, S.Name)
+
+instance DerivDeclTypes (A.Decl l) where
+    derivDeclTypes (A.DerivDecl _ _ x) = derivDeclTypes x
+    derivDeclTypes _ = empty
+
+instance DerivDeclTypes (A.InstRule l) where
+    derivDeclTypes (A.IRule _ _ _ x)  = derivDeclTypes x
+    derivDeclTypes (A.IParen _ x) = derivDeclTypes x
+
+instance DerivDeclTypes (A.InstHead l) where
+    derivDeclTypes (A.IHCon _ _) = empty
+    derivDeclTypes (A.IHParen _ x) = derivDeclTypes x
+    derivDeclTypes (A.IHInfix _ x _op) = derivDeclTypes x
+    derivDeclTypes (A.IHApp _ x y) = union (derivDeclTypes x) (derivDeclTypes y)
+
+instance DerivDeclTypes (A.Type l) where
+    derivDeclTypes (A.TyForall _ _ _ x) = derivDeclTypes x -- qualified type
+    derivDeclTypes (A.TyFun _ x y) = union (derivDeclTypes x) (derivDeclTypes y) -- function type
+    derivDeclTypes (A.TyTuple _ _ xs) = unions (map derivDeclTypes xs) -- tuple type, possibly boxed
+    derivDeclTypes (A.TyList _ x) =  derivDeclTypes x -- list syntax, e.g. [a], as opposed to [] a
+    derivDeclTypes (A.TyApp _ x y) = union (derivDeclTypes x) (derivDeclTypes y) -- application of a type constructor
+    derivDeclTypes (A.TyVar _ _) = empty -- type variable
+    derivDeclTypes (A.TyCon _ (A.Qual _ m n)) = singleton (Just (sModuleName m), sName n) -- named type or type constructor
+       -- Unqualified names refer to imports without "qualified" or "as" values.
+    derivDeclTypes (A.TyCon _ (A.UnQual _ n)) = singleton (Nothing, sName n)
+    derivDeclTypes (A.TyCon _ _) = empty
+    derivDeclTypes (A.TyParen _ x) = derivDeclTypes x -- type surrounded by parentheses
+    derivDeclTypes (A.TyInfix _ x _op y) = union (derivDeclTypes x) (derivDeclTypes y) -- infix type constructor
+    derivDeclTypes (A.TyKind _ x _) = derivDeclTypes x -- type with explicit kind signature
+    derivDeclTypes (A.TyParArray _ x) = derivDeclTypes x
+    derivDeclTypes (A.TyPromoted _ _) = empty
+    derivDeclTypes (A.TyEquals _ _ _) = empty -- a ~ b, not clear how this related to standalone deriving
+    derivDeclTypes (A.TySplice _ _) = empty
+    derivDeclTypes (A.TyBang _ _ x) = derivDeclTypes x
+#else
     where
       -- derivDeclTypes :: Decl -> Set (Maybe S.ModuleName, S.Name)
       derivDeclTypes (A.DerivDecl _ _ (A.IHead _ _ xs)) = unions (map derivDeclTypes' xs) -- Just (moduleName, sName x)
@@ -287,12 +342,13 @@ standaloneDerivingTypes (ModuleInfo (A.Module _ _ _ _ decls) _ _ _) =
       derivDeclTypes' (A.TyApp _ x y) = union (derivDeclTypes' x) (derivDeclTypes' y) -- application of a type constructor
       derivDeclTypes' (A.TyVar _ _) = empty -- type variable
       derivDeclTypes' (A.TyCon _ (A.Qual _ m n)) = singleton (Just (sModuleName m), sName n) -- named type or type constructor
-      -- Unqualified names refer to imports without "qualified" or "as" values.
+       -- Unqualified names refer to imports without "qualified" or "as" values.
       derivDeclTypes' (A.TyCon _ (A.UnQual _ n)) = singleton (Nothing, sName n)
       derivDeclTypes' (A.TyCon _ _) = empty
       derivDeclTypes' (A.TyParen _ x) = derivDeclTypes' x -- type surrounded by parentheses
       derivDeclTypes' (A.TyInfix _ x _op y) = union (derivDeclTypes' x) (derivDeclTypes' y) -- infix type constructor
       derivDeclTypes' (A.TyKind _ x _) = derivDeclTypes' x -- type with explicit kind signature
+#endif
 
 -- | Compare the two import declarations ignoring the things that are
 -- actually being imported.  Equality here indicates that the two

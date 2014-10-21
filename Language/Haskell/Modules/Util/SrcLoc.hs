@@ -83,14 +83,22 @@ instance HasSpanInfo ExportSpecList where
     spanInfo (A.ExportSpecList x _) = x
 
 instance HasSpanInfo ExportSpec where
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+    spanInfo (A.EVar x _ _) = x
+#else
     spanInfo (A.EVar x _) = x
+#endif
     spanInfo (A.EAbs x _) = x
     spanInfo (A.EThingAll x _) = x
     spanInfo (A.EThingWith x _ _) = x
     spanInfo (A.EModuleContents x _) = x
 
 instance HasSpanInfo ImportDecl where
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+    spanInfo (A.ImportDecl x _ _ _ _ _ _ _) = x
+#else
     spanInfo (A.ImportDecl x _ _ _ _ _ _) = x
+#endif
 
 instance HasSpanInfo Decl where
     spanInfo (A.TypeDecl l _ _) = l
@@ -109,7 +117,11 @@ instance HasSpanInfo Decl where
     spanInfo (A.SpliceDecl l _) = l
     spanInfo (A.TypeSig l _ _) = l
     spanInfo (A.FunBind l _) = l
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+    spanInfo (A.PatBind l _ _ _) = l
+#else
     spanInfo (A.PatBind l _ _ _ _) = l
+#endif
     spanInfo (A.ForImp l _ _ _ _ _) = l
     spanInfo (A.ForExp l _ _ _ _) = l
     spanInfo (A.RulePragmaDecl l _) = l
@@ -123,7 +135,11 @@ instance HasSpanInfo Decl where
     spanInfo (A.SpecSig l _ _) = l
 #endif
     spanInfo (A.SpecInlineSig l _ _ _ _) = l
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+    spanInfo (A.InstSig l _) = l
+#else
     spanInfo (A.InstSig l _ _) = l
+#endif
     spanInfo (A.AnnPragma l _) = l
 
 instance HasSpanInfo SrcSpanInfo where

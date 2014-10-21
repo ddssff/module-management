@@ -1,3 +1,9 @@
+haskell-module-management (0.20.3) unstable; urgency=low
+
+  * Changes for haskell-src-exts-1.16
+
+ -- David Fox <dsf@seereason.com>  Tue, 21 Oct 2014 09:12:18 -0700
+
 haskell-module-management (0.20.2) unstable; urgency=low
 
   * Fix hmm compile error

@@ -1,5 +1,5 @@
 Name:               module-management
-Version:            0.20.2.1
+Version:            0.20.3
 Synopsis:           Clean up module imports, split and merge modules
 Description:        Clean up module imports, split and merge modules.
 Homepage:           https://github.com/seereason/module-management
@@ -521,7 +521,7 @@ Library
     data-default,
     directory,
     filepath,
-    haskell-src-exts,
+    haskell-src-exts <= 1.17,
     HUnit,
     lifted-base,
     monad-control,
@@ -573,6 +573,6 @@ Test-Suite module-management-tests
     containers,
     filepath,
     HUnit,
-    haskell-src-exts,
+    haskell-src-exts <= 1.17,
     module-management,
     process
