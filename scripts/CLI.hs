@@ -1,5 +1,5 @@
 {- # OPTIONS_GHC -Wall #-}
-{-# LANGUAGE DeriveDataTypeable, DeriveGeneric, PatternGuards, StandaloneDeriving, ViewPatterns #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, DeriveGeneric, PatternGuards, StandaloneDeriving, ViewPatterns #-}
 module Main where
 
 import System.Console.Haskeline
@@ -15,7 +15,9 @@ import Data.Maybe (maybeToList)
 import Data.Char (toLower)
 import qualified Data.Set as S (member, toList, map)
 import Data.Set.Extra as Set (Set, toList)
-import Distribution.ModuleExport (ModuleExport(..))
+#if MIN_VERSION_Cabal(1,21,0)
+import Distribution.InstalledPackageInfo (ModuleReexport(..))
+#endif
 import Distribution.Package (InstalledPackageId(..))
 import GHC.Generics (Generic)
 import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, runCleanT, splitModuleDecls)
@@ -43,8 +45,9 @@ import Control.Exception (fromException)
 
 import System.Exit
 
-deriving instance Generic (ModuleExport m)
+#if !MIN_VERSION_Cabal(1,21,1)
 deriving instance Generic InstalledPackageId
+#endif
 
 data HMM = CLI
   { verbosity :: Int,
@@ -68,9 +71,10 @@ defaultHMM = CLI
     cabalFile = Nothing
             &= typFile
             &= name "f"
-            &= help ".cabal file to load. Modules listed there will be loaded\
-                \ and when modules are split the .cabal file will be updated\
-                \ when you quit or use the cabalWrite command",
+            &= help (concat
+                     [".cabal file to load. Modules listed there will be loaded",
+                      " and when modules are split the .cabal file will be updated",
+                      " when you quit or use the cabalWrite command"]),
     otherFiles = []
             &= typFile
             &= args }

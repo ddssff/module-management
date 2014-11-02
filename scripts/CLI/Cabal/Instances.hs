@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE StandaloneDeriving #-}
@@ -8,6 +9,7 @@
 module CLI.Cabal.Instances () where
 
 import Data.List
+import Data.Map
 import Data.Typeable
 import Data.Version
 import Distribution.Compiler
@@ -22,6 +24,12 @@ import GHC.Generics
 import Language.Haskell.Extension
 
 deriving instance Generic a => Generic (Condition a)
+#if MIN_VERSION_Cabal(1,21,1)
+instance (Ord k, Generic k, Generic v) => Generic (Map k v) where
+    type Rep (Map k v) = Rep [(k, v)]
+    from = from . toList
+    to = fromList . to
+#else
 deriving instance Generic Arch
 deriving instance Generic Benchmark
 deriving instance Generic BenchmarkInterface
@@ -29,13 +37,10 @@ deriving instance Generic BenchmarkType
 deriving instance Generic BuildInfo
 deriving instance Generic BuildType
 deriving instance Generic CompilerFlavor
-deriving instance Generic ConfVar
 deriving instance Generic Dependency
 deriving instance Generic Executable
 deriving instance Generic Extension
-deriving instance Generic Flag
 deriving instance Generic FlagName
-deriving instance Generic GenericPackageDescription
 deriving instance Generic KnownExtension
 deriving instance Generic Language
 deriving instance Generic Library
@@ -50,8 +55,12 @@ deriving instance Generic SourceRepo
 deriving instance Generic TestSuite
 deriving instance Generic TestSuiteInterface
 deriving instance Generic TestType
-deriving instance Generic Version
 deriving instance Generic VersionRange
+#endif
+deriving instance Generic ConfVar
+deriving instance Generic Flag
+deriving instance Generic GenericPackageDescription
+deriving instance Generic Version
 
 deriving instance (Generic a, Generic b, Generic c) => Generic (CondTree a b c)
 
@@ -62,6 +71,7 @@ deriving instance (Generic a, Generic b, Generic c) => Generic (CondTree a b c)
 deriving instance Typeable3 CondTree
 deriving instance Typeable1 Condition
 
+#if !MIN_VERSION_Cabal(1,21,1)
 deriving instance Typeable Arch
 deriving instance Typeable Benchmark
 deriving instance Typeable BenchmarkInterface
@@ -91,12 +101,14 @@ deriving instance Typeable TestSuite
 deriving instance Typeable TestSuiteInterface
 deriving instance Typeable TestType
 deriving instance Typeable VersionRange
+#endif
 
 deriving instance Typeable ModuleName
 #endif
 
-
+#if !MIN_VERSION_Cabal(1,21,1)
 instance Generic ModuleName where
     type Rep ModuleName = Rep [String]
     from = from . components
     to = fromString . intercalate "." . to
+#endif
