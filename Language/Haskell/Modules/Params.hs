@@ -1,5 +1,5 @@
 -- | Functions to control the state variables of 'MonadClean'.
-{-# LANGUAGE FlexibleContexts, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
+{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, OverloadedStrings, PackageImports, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Params
     ( Params(Params, dryRun, extraImports, hsFlags, junk, moduVerse,
