@@ -204,15 +204,15 @@ liftS  = lift . lift
 cmd :: [String] -> CmdM ()
 cmd [] = cli
 cmd (s : args) =
-      case filter (any (== s) . fst) cmds of
-        [(_, f)] -> f
+      case filter (any (== s) . names) cmds of
+        [x] -> action x
         -- No exact matches - look for prefix matches
-        [] -> case filter (any (isPrefixOf s) . fst) cmds of
-                [(_, f)] -> f
+        [] -> case filter (any (isPrefixOf s) . names) cmds of
+                [x] -> action x
                 [] -> liftIO (hPutStrLn stderr $
-                                show s ++ " invalid - expected " ++ intercalate ", " (concatMap fst cmds)) >> cli
+                                show s ++ " invalid - expected " ++ intercalate ", " (concatMap names cmds)) >> cli
                 xs -> liftIO (hPutStrLn stderr $
-                                show s ++ " ambiguous - expected " ++ intercalate ", " (concatMap fst xs)) >> cli
+                                show s ++ " ambiguous - expected " ++ intercalate ", " (concatMap names xs) ++ "\n\n" ) >> cli
         _ -> error $ "Internal error - multiple definitions for " ++ show s
         where
         cmds = cmds_ args
@@ -223,30 +223,71 @@ instance Show Callback where
     show (Callback x _) = x
 instance Exception Callback
 
-commandNames :: [String]
-commandNames = concatMap fst (cmds_ undefined)
+data Command
+    = Command
+       { names :: [String]
+       , action :: CmdM ()
+       , usage :: String }
 
-cmds_ :: [String] -> [([String], CmdM ())]
+commandNames :: [String]
+commandNames = concatMap names (cmds_ undefined)
+
+cmds_ :: [String] -> [Command]
 cmds_ args =
-          [(["quit", "exit", "bye", ".", "\EOT"], do
-                liftIO (hPutStrLn stderr "Exiting")
-                throwIO ExitSuccess),
-           (["v"], throwIO . Callback "louder" $ \next -> do
-                    liftIO (hPutStrLn stderr "Increasing Verbosity")
-                    noisily' next),
-           (["q"], throwIO . Callback "quieter" $ \next -> do
-                    liftIO (hPutStrLn stderr "Decreasing Verbosity")
-                    quietly' next),
+          [Command { names = ["quit", "exit", "bye", ".", "\EOT"],
+                     action = do liftIO (hPutStrLn stderr "Exiting")
+                                 throwIO ExitSuccess,
+                     usage = "quit\n" ++ "Exit the interpreter." },
+           Command { names = ["v"],
+                     action = throwIO . Callback "louder" $ \next -> do
+                                liftIO (hPutStrLn stderr "Increasing Verbosity")
+                                noisily' next,
+                     usage = "v\n" ++ "Increase the verbosity of the interpreter messages" },
+           Command { names = ["q"],
+                     action = throwIO . Callback "quieter" $ \next -> do
+                                liftIO (hPutStrLn stderr "Decreasing Verbosity")
+                                quietly' next,
+                     usage = "q\n" ++ "Decrease the verbosity of the interpreter messages" },
            -- The error message is more helpful
-           -- (["help"],  liftIO (hPutStrLn stderr "help text")),
-           (["verse"], liftCT (verse args)),
-           (["clean"], liftCT (clean args)),
-           (["dir"],   liftCT (dir args)),
-           (["split"], split args),
-           (["merge"], merge args),
-           (["cabalPrint"], cabalPrint),
-           (["cabalRead"], cabalRead args),
-           (["cabalWrite"], cabalWrite args)]
+           Command { names = ["help"],
+                     action = liftIO (hPutStrLn stderr helpMessage),
+                     usage = "help\n" ++ "Print usage information" },
+           Command { names = ["verse"],
+                     action = liftCT (verse args),
+                     usage = "verse <pathormodule1> <pathormodule2> ...\n" ++
+                             "Add the module or all the modules below a directory to the module universe.  " ++
+                             "This is the set of modules whose references will be updated when a symbol " ++ 
+                             "is moved from one module to another." },
+           Command { names = ["clean"],
+                     action =  liftCT (clean args),
+                     usage = "clean <modulepath1> <modulepath2> ...\n" ++
+                             "Clean up the import lists of the named modules" },
+           Command { names = ["dir"],
+                     action =    liftCT (dir args),
+                     usage = "dir <directory> <directory> ...\n" ++
+                             "Add paths to the list of search directories - similar to the ghc -i option." },
+           Command { names = ["split"],
+                     action =  split args,
+                     usage = "split <modulepath>\n" ++
+                             "Split each of the symbols in a module into individual sub-modules.  Updates all " ++
+                             "references to these symbols throughout the moduverse." },
+           Command { names = ["merge"],
+                     action =  merge args,
+                     usage = "merge <inputmodulepath1> <inputmodulepath2> ... <outputmodulepath>\n" ++
+                             "Merge the given input modules into a single output module.  Updates all " ++
+                             "references to these symbols throughout the moduverse." },
+           Command { names = ["cabalPrint"],
+                     action =  cabalPrint,
+                     usage = "" },
+           Command {names = ["cabalRead"],
+                     action =  cabalRead args,
+                     usage = "" },
+           Command {names = ["cabalWrite"],
+                     action =  cabalWrite args,
+                     usage = "" }]
+
+helpMessage :: String
+helpMessage = intercalate "\n\n" (map usage (cmds_ undefined))
 
 cabalPrint :: CmdM ()
 cabalPrint = do
@@ -315,7 +356,8 @@ dir xs =
        liftIO (putStrLn $ "sourceDirs updated:\n  [ " ++ intercalate "\n  , " xs' ++ " ]")
 
 clean :: MonadClean m => [FilePath] -> m ()
-clean [] = liftIO $ putStrLn "Usage: clean <modulepath1> <modulepath2> ..."
+clean [] = liftIO $ putStrLn $ "Usage: clean <modulepath1> <modulepath2> ...\n" ++
+                                    "Clean up the import lists of the named modules\n"
 clean args = cleanImports args >> return ()
 
 split :: [FilePath] -> CmdM ()
