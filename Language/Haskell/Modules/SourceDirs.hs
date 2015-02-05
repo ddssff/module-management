@@ -104,7 +104,7 @@ instance Path APath where
            return $ if exists then Just (APath x) else Nothing
     pathKeyMaybe x =
         do mpath <- findFileMaybe x
-           maybe (return Nothing) (\ (APath x) -> liftIO (canonicalizePath x) >>= return . Just . PathKey) mpath
+           maybe (return Nothing) (\ (APath y) -> liftIO (canonicalizePath y) >>= return . Just . PathKey) mpath
 
 findFile :: (SourceDirs m, Path p, Show p) => p -> m APath
 findFile path =

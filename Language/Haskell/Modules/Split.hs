@@ -3,6 +3,7 @@
 module Language.Haskell.Modules.Split
     ( splitModule
     , splitModuleDecls
+    , splitModuleBy
     , defaultSymbolToModule
     ) where
 

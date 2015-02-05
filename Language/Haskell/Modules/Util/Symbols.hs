@@ -22,7 +22,9 @@ import qualified Language.Haskell.Exts.Syntax as S (Namespace(..))
 
 -- | Do a fold over the names that are declared in a declaration (not
 -- every name that appears, just the ones that the declaration is
--- causing to exist - what's the word for that?  Reify!)
+-- causing to exist - what's the word for that?  Reify!)  The function
+-- argument takes a Maybe because some declarations don't cause a
+-- symbol to become bound - instances, for example.
 class FoldDeclared a where
     foldDeclared :: forall r. (Maybe S.Name -> r -> r) -> r -> a -> r
 

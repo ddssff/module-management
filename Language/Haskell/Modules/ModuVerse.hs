@@ -45,6 +45,7 @@ import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
 #if MIN_VERSION_haskell_src_exts(1,14,0)
+nameToExtension :: KnownExtension -> Extension
 nameToExtension x = EnableExtension x
 #else
 deriving instance Ord Extension

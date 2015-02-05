@@ -141,6 +141,10 @@ instance HasSpanInfo Decl where
     spanInfo (A.InstSig l _ _) = l
 #endif
     spanInfo (A.AnnPragma l _) = l
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+    spanInfo (A.ClosedTypeFamDecl l _ _ _) = l
+    spanInfo (A.MinimalPragma l _) = l
+#endif
 
 instance HasSpanInfo SrcSpanInfo where
     spanInfo = id

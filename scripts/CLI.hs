@@ -17,12 +17,15 @@ import qualified Data.Set as S (member, toList, map)
 import Data.Set.Extra as Set (Set, toList)
 import Distribution.Package (InstalledPackageId(..))
 import GHC.Generics (Generic)
-import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, runCleanT, splitModuleDecls)
-import Language.Haskell.Modules.ModuVerse (getNames)
+import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
+import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, runCleanT, splitModuleDecls, splitModuleBy)
+import Language.Haskell.Modules.ModuVerse (getNames, getInfo, moduleName)
 import Language.Haskell.Modules.SourceDirs (getDirs)
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
+import Language.Haskell.TH.Syntax as TH (nameBase)
 import System.Console.Haskeline (completeFilename, CompletionFunc, defaultSettings, getInputLine, InputT, noCompletion, runInputT, setComplete, simpleCompletion)
 import System.IO (hPutStrLn, stderr)
+import Text.Regex (mkRegex, matchRegex)
 
 import System.Console.CmdArgs
 import Control.Lens
@@ -251,12 +254,12 @@ cmds_ args =
            -- The error message is more helpful
            Command { names = ["help"],
                      action = liftIO (hPutStrLn stderr helpMessage),
-                     usage = "help\n" ++ "Print usage information" },
+                     usage = "help\n" ++ "Print usage information.  Remember that this script doesn't understand shell escaping and quoting." },
            Command { names = ["verse"],
                      action = liftCT (verse args),
                      usage = "verse <pathormodule1> <pathormodule2> ...\n" ++
                              "Add the module or all the modules below a directory to the module universe.  " ++
-                             "This is the set of modules whose references will be updated when a symbol " ++ 
+                             "This is the set of modules whose references will be updated when a symbol " ++
                              "is moved from one module to another." },
            Command { names = ["clean"],
                      action =  liftCT (clean args),
@@ -269,12 +272,19 @@ cmds_ args =
            Command { names = ["split"],
                      action =  split args,
                      usage = "split <modulepath>\n" ++
-                             "Split each of the symbols in a module into individual sub-modules.  Updates all " ++
+                             "Split each of the symbols in a module into individual sub-modules.  Updates all\n" ++
                              "references to these symbols throughout the moduverse." },
+           Command { names = ["splitBy"],
+                     action =  splitBy args,
+                     usage = "splitBy <regex> <newmodule> <oldmodule>\n" ++
+                             "Partition the symbols of a module into new modules based on the function\n" ++
+                             "mapping the symbol name to the new module name.  For example,\n" ++
+                             "split '(\\ s -> case s of \"foo\" -> \"Module.One\"; _ -> \"Module.Two\")' Module.Orig\n" ++
+                             "Updates all references to these symbols throughout the moduverse." },
            Command { names = ["merge"],
                      action =  merge args,
                      usage = "merge <inputmodulepath1> <inputmodulepath2> ... <outputmodulepath>\n" ++
-                             "Merge the given input modules into a single output module.  Updates all " ++
+                             "Merge the given input modules into a single output module.  Updates all\n" ++
                              "references to these symbols throughout the moduverse." },
            Command { names = ["cabalPrint"],
                      action =  cabalPrint,
@@ -360,12 +370,30 @@ clean [] = liftIO $ putStrLn $ "Usage: clean <modulepath1> <modulepath2> ...\n" 
                                     "Clean up the import lists of the named modules\n"
 clean args = cleanImports args >> return ()
 
-split :: [FilePath] -> CmdM ()
+split :: [String] -> CmdM ()
 split [arg] = do
     r <- liftCT (splitModuleDecls arg)
     lift (modify (Cabal.update r))
     return ()
 split _ = liftIO $ putStrLn "Usage: split <modulepath>"
+
+splitBy :: [String] -> CmdM ()
+splitBy [regex, newModule, oldModule] = do
+  r <- liftCT (getInfo (ModuleName oldModule) >>= maybe (error $ "Module not found: " ++ show oldModule) (\ oldModuleInfo -> splitModuleBy pred oldModuleInfo))
+  lift (modify (Cabal.update r))
+  return ()
+    where
+      pred :: Maybe Name -> ModuleName
+      pred name =
+          -- declarations not associated with symbols stay in
+          -- oldModules (e.g. instances.)  Decarations of matching
+          -- symbols go to newModule
+          let match = name >>= (\ x -> Just $ case x of Ident s -> s; Symbol s -> s) >>= matchRegex (mkRegex regex)
+              modname = ModuleName (maybe oldModule (const newModule) match) in
+          {- trace ("Symbol " ++ show name ++ " -> " ++ show modname ++ ", matchRegex (mkRegex " ++ show regex ++ ") -> " ++ show match)-}
+                modname
+
+splitBy _ = liftIO $ putStrLn "Usage: splitBy <regexp> <newmodule> <oldmodule>"
 
 merge :: [String] -> CmdM ()
 merge args =

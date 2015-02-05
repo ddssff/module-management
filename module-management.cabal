@@ -544,11 +544,14 @@ Executable hmm
     cmdargs,
     directory,
     haskeline,
+    haskell-src-exts,
     lens,
     module-management,
     monad-control,
     mtl,
+    regex-compat,
     set-extra,
+    template-haskell,
     transformers-base
 
   -- In ghc-7.6.3, -O0 prevents one of two failures: either a GHC out
