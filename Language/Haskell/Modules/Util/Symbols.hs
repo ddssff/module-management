@@ -85,9 +85,9 @@ instance FoldDeclared (A.DeclHead a) where
 #endif
     foldDeclared f r (A.DHParen _ x) = foldDeclared f r x
 instance FoldDeclared (A.ClassDecl a) where
-    foldDeclared f r (A.ClsDecl _ x) = foldDeclared f r x	-- ordinary declaration
-    foldDeclared f r (A.ClsDataFam _ _ x _) = foldDeclared f r x	-- declaration of an associated data type
-    foldDeclared f r (A.ClsTyFam _ x _) = foldDeclared f r x	-- declaration of an associated type synonym
+    foldDeclared f r (A.ClsDecl _ x) = foldDeclared f r x       -- ordinary declaration
+    foldDeclared f r (A.ClsDataFam _ _ x _) = foldDeclared f r x        -- declaration of an associated data type
+    foldDeclared f r (A.ClsTyFam _ x _) = foldDeclared f r x    -- declaration of an associated type synonym
     foldDeclared _ r (A.ClsTyDef _ _ _) = r -- default choice for an associated type synonym
 #if MIN_VERSION_haskell_src_exts(1,16,0)
     foldDeclared f r (A.ClsDefSig _ x _) = foldDeclared f r x -- default signature
@@ -117,53 +117,53 @@ instance FoldDeclared (A.QName a) where
     foldDeclared f r (A.UnQual _ x) = foldDeclared f r x
     foldDeclared _ r (A.Special _ _) = r
 instance FoldDeclared (A.Pat a) where
-    foldDeclared f r (A.PVar _ x) = foldDeclared f r x	-- variable
+    foldDeclared f r (A.PVar _ x) = foldDeclared f r x  -- variable
 #if MIN_VERSION_haskell_src_exts(1,16,0)
-    foldDeclared _ r (A.PLit _ _ _) = r	-- literal constant
+    foldDeclared _ r (A.PLit _ _ _) = r -- literal constant
 #else
-    foldDeclared _ r (A.PLit _ _) = r	-- literal constant
-    foldDeclared f r (A.PNeg _ x) = foldDeclared f r x	-- negated pattern
+    foldDeclared _ r (A.PLit _ _) = r   -- literal constant
+    foldDeclared f r (A.PNeg _ x) = foldDeclared f r x  -- negated pattern
 #endif
-    foldDeclared f r (A.PNPlusK _ x _) = foldDeclared f r x	-- n+k pattern
-    foldDeclared f r (A.PInfixApp _ p1 _qn p2) = let r' = foldDeclared f r p1 in foldDeclared f r' p2	-- pattern with an infix data constructor
-    foldDeclared f r (A.PApp _ _ ps) = foldl (foldDeclared f) r ps	-- data constructor and argument patterns
+    foldDeclared f r (A.PNPlusK _ x _) = foldDeclared f r x     -- n+k pattern
+    foldDeclared f r (A.PInfixApp _ p1 _qn p2) = let r' = foldDeclared f r p1 in foldDeclared f r' p2   -- pattern with an infix data constructor
+    foldDeclared f r (A.PApp _ _ ps) = foldl (foldDeclared f) r ps      -- data constructor and argument patterns
 #if MIN_VERSION_haskell_src_exts(1,14,0)
-    foldDeclared f r (A.PTuple _ _ ps) = foldl (foldDeclared f) r ps	-- tuple pattern
+    foldDeclared f r (A.PTuple _ _ ps) = foldl (foldDeclared f) r ps    -- tuple pattern
 #else
-    foldDeclared f r (A.PTuple _ ps) = foldl (foldDeclared f) r ps	-- tuple pattern
+    foldDeclared f r (A.PTuple _ ps) = foldl (foldDeclared f) r ps      -- tuple pattern
 #endif
-    foldDeclared f r (A.PList _ ps) = foldl (foldDeclared f) r ps	-- list pattern
-    foldDeclared f r (A.PParen _ x) = foldDeclared f r x	-- parenthesized pattern
-    foldDeclared f r (A.PRec _ _qn fs) = foldl (foldDeclared f) r fs	-- labelled pattern, record style
-    foldDeclared f r (A.PAsPat _ x y) = let r' = foldDeclared f r x in foldDeclared f r' y	-- @-pattern
-    foldDeclared _ r (A.PWildCard _) = r	-- wildcard pattern: _
-    foldDeclared f r (A.PIrrPat _ x) = foldDeclared f r x	-- irrefutable pattern: ~pat
-    foldDeclared f r (A.PatTypeSig _ x _) = foldDeclared f r x	-- pattern with type signature
-    foldDeclared f r (A.PViewPat _ _ x) = foldDeclared f r x	-- view patterns of the form (exp -> pat)
-    foldDeclared f r (A.PRPat _ rps) = foldl (foldDeclared f) r rps	-- regular list pattern
-    foldDeclared _f _r (A.PXTag _ _xn _pxs _mp _ps) = error "Unimplemented FoldDeclared instance: PXTag"	-- XML element pattern
-    foldDeclared _f _r (A.PXETag _ _xn _pxs _mp) = error "Unimplemented FoldDeclared instance: PXETag"	-- XML singleton element pattern
-    foldDeclared _f _r (A.PXPcdata _ _s) = error "Unimplemented FoldDeclared instance: XPcdata"	-- XML PCDATA pattern
-    foldDeclared _f _r (A.PXPatTag _ _p) = error "Unimplemented FoldDeclared instance: PXPatTag"	-- XML embedded pattern
-    foldDeclared _f _r (A.PXRPats _ _rps) = error "Unimplemented FoldDeclared instance: PXRPats"	-- XML regular list pattern
+    foldDeclared f r (A.PList _ ps) = foldl (foldDeclared f) r ps       -- list pattern
+    foldDeclared f r (A.PParen _ x) = foldDeclared f r x        -- parenthesized pattern
+    foldDeclared f r (A.PRec _ _qn fs) = foldl (foldDeclared f) r fs    -- labelled pattern, record style
+    foldDeclared f r (A.PAsPat _ x y) = let r' = foldDeclared f r x in foldDeclared f r' y      -- @-pattern
+    foldDeclared _ r (A.PWildCard _) = r        -- wildcard pattern: _
+    foldDeclared f r (A.PIrrPat _ x) = foldDeclared f r x       -- irrefutable pattern: ~pat
+    foldDeclared f r (A.PatTypeSig _ x _) = foldDeclared f r x  -- pattern with type signature
+    foldDeclared f r (A.PViewPat _ _ x) = foldDeclared f r x    -- view patterns of the form (exp -> pat)
+    foldDeclared f r (A.PRPat _ rps) = foldl (foldDeclared f) r rps     -- regular list pattern
+    foldDeclared _f _r (A.PXTag _ _xn _pxs _mp _ps) = error "Unimplemented FoldDeclared instance: PXTag"        -- XML element pattern
+    foldDeclared _f _r (A.PXETag _ _xn _pxs _mp) = error "Unimplemented FoldDeclared instance: PXETag"  -- XML singleton element pattern
+    foldDeclared _f _r (A.PXPcdata _ _s) = error "Unimplemented FoldDeclared instance: XPcdata" -- XML PCDATA pattern
+    foldDeclared _f _r (A.PXPatTag _ _p) = error "Unimplemented FoldDeclared instance: PXPatTag"        -- XML embedded pattern
+    foldDeclared _f _r (A.PXRPats _ _rps) = error "Unimplemented FoldDeclared instance: PXRPats"        -- XML regular list pattern
 #if !MIN_VERSION_haskell_src_exts(1,15,0)
-    foldDeclared _f _r (A.PExplTypeArg _ _n _t) = error "Unimplemented FoldDeclared instance: PExplTypeArg"	-- Explicit generics style type argument e.g. f {| Int |} x = ...
+    foldDeclared _f _r (A.PExplTypeArg _ _n _t) = error "Unimplemented FoldDeclared instance: PExplTypeArg"     -- Explicit generics style type argument e.g. f {| Int |} x = ...
 #endif
-    foldDeclared _ r (A.PQuasiQuote _ _ _) = r	-- quasi quote pattern: [$name| string |]
-    foldDeclared f r (A.PBangPat _ x) = foldDeclared f r x	-- strict (bang) pattern: f !x = ...
+    foldDeclared _ r (A.PQuasiQuote _ _ _) = r  -- quasi quote pattern: [$name| string |]
+    foldDeclared f r (A.PBangPat _ x) = foldDeclared f r x      -- strict (bang) pattern: f !x = ...
 instance FoldDeclared (A.PatField a) where
-    foldDeclared f r (A.PFieldPat _ _n x) = foldDeclared f r x 	-- ordinary label-pattern pair
-    foldDeclared f r (A.PFieldPun _ x) = foldDeclared f r x 	-- record field pun
+    foldDeclared f r (A.PFieldPat _ _n x) = foldDeclared f r x  -- ordinary label-pattern pair
+    foldDeclared f r (A.PFieldPun _ x) = foldDeclared f r x     -- record field pun
     foldDeclared _ r (A.PFieldWildcard _) = r
 instance FoldDeclared (A.RPat a) where
-    foldDeclared f r (A.RPOp _ x _) = foldDeclared f r x	-- operator pattern, e.g. pat*
-    foldDeclared f r (A.RPEither _ x y) = let r' = foldDeclared f r x in foldDeclared f r' y 	-- choice pattern, e.g. (1 | 2)
-    foldDeclared f r (A.RPSeq _ xs) = foldl (foldDeclared f) r xs	-- sequence pattern, e.g. (| 1, 2, 3 |)
-    foldDeclared f r (A.RPGuard _ x _) = foldDeclared f r x	-- guarded pattern, e.g. (| p | p < 3 |)
-    foldDeclared f r (A.RPCAs _ n x) = let r' = foldDeclared f r n in foldDeclared f r' x 	-- non-linear variable binding, e.g. (foo@:(1 | 2))*
-    foldDeclared f r (A.RPAs _ n x) = let r' = foldDeclared f r n in foldDeclared f r' x  	-- linear variable binding, e.g. foo@(1 | 2)
-    foldDeclared f r (A.RPParen _ x) = foldDeclared f r x	-- parenthesised pattern, e.g. (2*)
-    foldDeclared f r (A.RPPat _ x) = foldDeclared f r x	-- an ordinary pattern
+    foldDeclared f r (A.RPOp _ x _) = foldDeclared f r x        -- operator pattern, e.g. pat*
+    foldDeclared f r (A.RPEither _ x y) = let r' = foldDeclared f r x in foldDeclared f r' y    -- choice pattern, e.g. (1 | 2)
+    foldDeclared f r (A.RPSeq _ xs) = foldl (foldDeclared f) r xs       -- sequence pattern, e.g. (| 1, 2, 3 |)
+    foldDeclared f r (A.RPGuard _ x _) = foldDeclared f r x     -- guarded pattern, e.g. (| p | p < 3 |)
+    foldDeclared f r (A.RPCAs _ n x) = let r' = foldDeclared f r n in foldDeclared f r' x       -- non-linear variable binding, e.g. (foo@:(1 | 2))*
+    foldDeclared f r (A.RPAs _ n x) = let r' = foldDeclared f r n in foldDeclared f r' x        -- linear variable binding, e.g. foo@(1 | 2)
+    foldDeclared f r (A.RPParen _ x) = foldDeclared f r x       -- parenthesised pattern, e.g. (2*)
+    foldDeclared f r (A.RPPat _ x) = foldDeclared f r x -- an ordinary pattern
 
 instance FoldDeclared (A.Name l) where
     foldDeclared f r x = f (Just (sName x)) r
@@ -253,9 +253,9 @@ instance FoldDeclared (A.QualConDecl l) where
 
 -- Constructors and field names
 instance FoldDeclared (A.ConDecl l) where
-    foldDeclared f r (A.ConDecl _ x _ts) = foldDeclared f r x	-- ordinary data constructor
-    foldDeclared f r (A.InfixConDecl _ _t1 x _t2) = foldDeclared f r x	-- infix data constructor
-    foldDeclared f r (A.RecDecl _ x fs) = let r' = foldDeclared f r x in foldl (foldDeclared f) r' fs 	-- record constructor
+    foldDeclared f r (A.ConDecl _ x _ts) = foldDeclared f r x   -- ordinary data constructor
+    foldDeclared f r (A.InfixConDecl _ _t1 x _t2) = foldDeclared f r x  -- infix data constructor
+    foldDeclared f r (A.RecDecl _ x fs) = let r' = foldDeclared f r x in foldl (foldDeclared f) r' fs   -- record constructor
 
 instance FoldDeclared (A.FieldDecl l) where
     foldDeclared f r (A.FieldDecl _ xs _) = foldl (foldDeclared f) r xs
