@@ -1,5 +1,5 @@
 -- | 'foldModule' is a utility function used to implement the clean, split, and merge operations.
-{-# LANGUAGE BangPatterns, CPP, FlexibleInstances, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, CPP, FlexibleContexts, FlexibleInstances, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Fold
     ( foldModule

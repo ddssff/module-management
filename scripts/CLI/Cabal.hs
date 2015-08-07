@@ -1,4 +1,4 @@
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE FlexibleContexts, ViewPatterns #-}
 -- | Adjust contents of a cabal file to follow
 -- rearrangements of the underlying modules
 module CLI.Cabal (
