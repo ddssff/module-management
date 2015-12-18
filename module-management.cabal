@@ -521,7 +521,7 @@ Library
     data-default,
     directory,
     filepath,
-    haskell-src-exts <= 1.17,
+    haskell-src-exts <= 1.18,
     HUnit,
     lifted-base,
     monad-control,

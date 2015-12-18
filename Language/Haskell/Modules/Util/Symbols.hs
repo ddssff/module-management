@@ -170,22 +170,30 @@ instance FoldDeclared (A.Name l) where
 
 -- Something imported can be exported
 instance FoldDeclared (A.ImportSpec l) where
-#if MIN_VERSION_haskell_src_exts(1,16,0)
+#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
     foldDeclared f r (A.IVar _ _ name) = foldDeclared f r name
 #else
     foldDeclared f r (A.IVar _ name) = foldDeclared f r name
 #endif
+#if MIN_VERSION_haskell_src_exts(1,17,0)
+    foldDeclared f r (A.IAbs _ _ name) = foldDeclared f r name
+#else
     foldDeclared f r (A.IAbs _ name) = foldDeclared f r name
+#endif
     foldDeclared f r (A.IThingAll _ name) = foldDeclared f r name
     foldDeclared f r (A.IThingWith _ name _) = foldDeclared f r name
 
 instance FoldDeclared (A.ExportSpec l) where
-#if MIN_VERSION_haskell_src_exts(1,16,0)
+#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
     foldDeclared f r (A.EVar _ _ name) = foldDeclared f r name
 #else
     foldDeclared f r (A.EVar _ name) = foldDeclared f r name
 #endif
+#if MIN_VERSION_haskell_src_exts(1,17,0)
+    foldDeclared f r (A.EAbs _ _ name) = foldDeclared f r name
+#else
     foldDeclared f r (A.EAbs _ name) = foldDeclared f r name
+#endif
     foldDeclared f r (A.EThingAll _ name) = foldDeclared f r name
     foldDeclared f r (A.EThingWith _ name _) = foldDeclared f r name
     foldDeclared _ r (A.EModuleContents _ _) = r -- This probably won't work correctly
@@ -204,7 +212,7 @@ justs = mapMaybe id . toList
 
 exports :: (FoldDeclared a, FoldMembers a) => a -> [S.ExportSpec]
 exports x = case (justs (symbols x), justs (members x)) of
-#if MIN_VERSION_haskell_src_exts(1,16,0)
+#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
               ([n], []) -> [S.EVar S.NoNamespace (S.UnQual n)]
 #else
               ([n], []) -> [S.EVar (S.UnQual n)]
@@ -212,7 +220,7 @@ exports x = case (justs (symbols x), justs (members x)) of
               ([n], ms) -> [S.EThingWith (S.UnQual n) (sort (map S.VarName ms))]
               ([], []) -> []
               ([], _) -> error "exports: members with no top level name"
-#if MIN_VERSION_haskell_src_exts(1,16,0)
+#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
               (ns, []) -> map (S.EVar S.NoNamespace . S.UnQual) ns
 #else
               (ns, []) -> map (S.EVar . S.UnQual) ns
@@ -221,7 +229,7 @@ exports x = case (justs (symbols x), justs (members x)) of
 
 imports :: (FoldDeclared a, FoldMembers a) => a -> [S.ImportSpec]
 imports x = case (justs (symbols x), justs (members x)) of
-#if MIN_VERSION_haskell_src_exts(1,16,0)
+#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
               ([n], []) -> [S.IVar S.NoNamespace n]
 #else
               ([n], []) -> [S.IVar n]
@@ -229,7 +237,7 @@ imports x = case (justs (symbols x), justs (members x)) of
               ([n], ms) -> [S.IThingWith n (sort (map S.VarName ms))]
               ([], []) -> []
               ([], _ms) -> error "exports: members with no top level name"
-#if MIN_VERSION_haskell_src_exts(1,16,0)
+#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
               (ns, []) -> map (S.IVar S.NoNamespace) ns
 #else
               (ns, []) -> map S.IVar ns

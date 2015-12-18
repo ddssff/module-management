@@ -83,12 +83,16 @@ instance HasSpanInfo ExportSpecList where
     spanInfo (A.ExportSpecList x _) = x
 
 instance HasSpanInfo ExportSpec where
-#if MIN_VERSION_haskell_src_exts(1,16,0)
+#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
     spanInfo (A.EVar x _ _) = x
 #else
     spanInfo (A.EVar x _) = x
 #endif
+#if MIN_VERSION_haskell_src_exts(1,17,0)
+    spanInfo (A.EAbs x _ _) = x
+#else
     spanInfo (A.EAbs x _) = x
+#endif
     spanInfo (A.EThingAll x _) = x
     spanInfo (A.EThingWith x _ _) = x
     spanInfo (A.EModuleContents x _) = x

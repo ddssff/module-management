@@ -249,21 +249,29 @@ fixNewImports remove m oldImports imports =
           else s
           where
             n = case s of
-#if MIN_VERSION_haskell_src_exts(1,16,0)
+#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
                   (A.IVar _ _ x) -> x
 #else
                   (A.IVar _ x) -> x
 #endif
+#if MIN_VERSION_haskell_src_exts(1,17,0)
+                  (A.IAbs _ _ x) -> x
+#else
                   (A.IAbs _ x) -> x
+#endif
                   (A.IThingAll _ x) -> x
                   (A.IThingWith _ x _) -> x
             s' = case s of
-#if MIN_VERSION_haskell_src_exts(1,16,0)
+#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
                   (A.IVar l _ x) -> A.IThingAll l x
 #else
                   (A.IVar l x) -> A.IThingAll l x
 #endif
+#if MIN_VERSION_haskell_src_exts(1,17,0)
+                  (A.IAbs l _ x) -> A.IThingAll l x
+#else
                   (A.IAbs l x) -> A.IThingAll l x
+#endif
                   (A.IThingWith l x _) -> A.IThingAll l x
                   (A.IThingAll _ _) -> s
 
