@@ -2,7 +2,7 @@ module Split where
 
 import Control.Monad as List (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
-import Language.Haskell.Modules (modifyTestMode, noisily, putDirs, putModule, runCleanT, splitModule, splitModuleDecls, withCurrentDirectory, findHsModules, extraImport)
+import Language.Haskell.Modules (modifyTestMode, noisily, putDirs, putModule, runImportsT, splitModule, splitModuleDecls, withCurrentDirectory, findHsModules, extraImport)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import Prelude hiding (writeFile)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
@@ -18,7 +18,7 @@ split1 :: Test
 split1 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
-         _ <- runCleanT $ noisily $ noisily $
+         _ <- runImportsT $ noisily $ noisily $
            do putDirs ["tmp"]
               mapM_ putModule (map S.ModuleName repoModules)
               splitModuleDecls "tmp/Debian/Repo/Package.hs"
@@ -29,7 +29,7 @@ split2a :: Test
 split2a =
     TestCase $
     do _ <- rsync "testdata/split2" "tmp"
-       _ <- runCleanT $ noisily $ noisily $
+       _ <- runImportsT $ noisily $ noisily $
          do modifyTestMode (const True)
             putDirs ["tmp"]
             putModule (S.ModuleName "Split")
@@ -41,7 +41,7 @@ split2b :: Test
 split2b =
     TestCase $
     do _ <- rsync "testdata/split2" "tmp"
-       _ <- runCleanT $ noisily $ noisily $
+       _ <- runImportsT $ noisily $ noisily $
          do putDirs ["tmp"]
             putModule (S.ModuleName "Split")
             splitModuleDecls "tmp/Split.hs"
@@ -57,7 +57,7 @@ split4 =
     TestLabel "Split4" $ TestCase $
     do _ <- rsync "testdata/split4" "tmp"
        _ <- withCurrentDirectory "tmp" $
-         runCleanT $ noisily $ noisily $
+         runImportsT $ noisily $ noisily $
            modifyTestMode (const True) >>
            putModule (S.ModuleName "Split4") >>
            splitModuleDecls "Split4.hs"
@@ -69,7 +69,7 @@ split4b =
     TestLabel "Split4b" $ TestCase $
     do _ <- rsync "testdata/split4" "tmp"
        _ <- withCurrentDirectory "tmp" $
-         runCleanT $ noisily $ noisily $
+         runImportsT $ noisily $ noisily $
            modifyTestMode (const True) >>
            putModule (S.ModuleName "Split4") >>
            splitModule f "Split4.hs"
@@ -86,7 +86,7 @@ split4c =
     TestLabel "Split4b" $ TestCase $
     do _ <- rsync "testdata/split4" "tmp"
        _ <- withCurrentDirectory "tmp" $
-         runCleanT $ noisily $ noisily $
+         runImportsT $ noisily $ noisily $
            modifyTestMode (const True) >>
            putModule (S.ModuleName "Split4") >>
            splitModule f "Split4.hs"
@@ -103,7 +103,7 @@ split5 =
     TestLabel "Split5" $ TestCase $
     do _ <- rsync "testdata/split5" "tmp"
        _ <- withCurrentDirectory "tmp" $
-         runCleanT $ noisily $ noisily $
+         runImportsT $ noisily $ noisily $
            List.mapM_ (putModule . S.ModuleName) ["A", "B", "C", "D", "E"] >>
            modifyTestMode (const True) >>
            splitModuleDecls "B.hs"
@@ -116,7 +116,7 @@ split6 =
     do _ <- rsync "testdata/debian" "tmp"
        _ <- withCurrentDirectory "tmp" $
          findHsModules ["Debian", "Text", "Tmp"] >>= \ modules ->
-         runCleanT $ noisily $ noisily $
+         runImportsT $ noisily $ noisily $
            mapM putModule modules >>
            splitModule f "Debian/Repo/Monads/Apt.hs"
        result <- diff "testdata/split6-expected" "tmp"
@@ -130,7 +130,7 @@ split7 :: Test
 split7 =
     TestLabel "split7" $ TestCase $
     do _ <- rsync "testdata/fold3b" "tmp"
-       _ <- withCurrentDirectory "tmp" $ runCleanT $
+       _ <- withCurrentDirectory "tmp" $ runImportsT $
             do putModule (S.ModuleName "Main")
                extraImport (S.ModuleName "Main.GetPasteById") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.GetRecentPastes") (S.ModuleName "Main.Instances")
@@ -170,7 +170,7 @@ split7b :: Test
 split7b =
     TestLabel "split7b" $ TestCase $
     do _ <- rsync "testdata/fold3b" "tmp"
-       _ <- withCurrentDirectory "tmp" $ runCleanT $
+       _ <- withCurrentDirectory "tmp" $ runImportsT $
             do putModule (S.ModuleName "Main")
                extraImport (S.ModuleName "Main.GetPasteById") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.GetRecentPastes") (S.ModuleName "Main.Instances")

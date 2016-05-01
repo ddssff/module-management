@@ -5,13 +5,13 @@ import Control.Monad as List (mapM_)
 import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (intercalate, isPrefixOf)
 import Data.Set.Extra as Set (Set, toList)
-import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, quietly, runCleanT, splitModuleDecls)
+import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, quietly, runImportsT, splitModuleDecls)
 import Language.Haskell.Modules.ModuVerse (getNames)
 import Language.Haskell.Modules.SourceDirs (getDirs)
 import System.IO (hGetLine, hPutStr, hPutStrLn, stderr, stdin)
 
 main :: IO ()
-main = runCleanT (noisily cli)
+main = runImportsT (noisily cli)
 
 cli :: MonadClean m => m ()
 cli = liftIO (hPutStr stderr " > " >> hGetLine stdin) >>= cmd . words

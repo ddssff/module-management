@@ -3,7 +3,7 @@ module Imports where
 
 
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
-import Language.Haskell.Modules (cleanImports, modifyExtensions, modifyTestMode, modulePathBase, putDirs, runCleanT, withCurrentDirectory)
+import Language.Haskell.Modules (cleanImports, modifyExtensions, modifyTestMode, modulePathBase, putDirs, runImportsT, withCurrentDirectory)
 import Language.Haskell.Modules.Params (modifyParams, Params(hsFlags))
 import Language.Haskell.Modules.SourceDirs (RelPath(unRelPath))
 import Language.Haskell.Modules.Util.Test (diff, rsync)
@@ -31,7 +31,7 @@ test1 =
       (do rsync "testdata/debian" "tmp"
           let name = S.ModuleName "Debian.Repo.PackageIndex"
           let base = modulePathBase "hs" name
-          _ <- withCurrentDirectory "tmp" $ (runCleanT (cleanImports [unRelPath base]))
+          _ <- withCurrentDirectory "tmp" $ (runImportsT (cleanImports [unRelPath base]))
           (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> unRelPath base, "tmp" </> unRelPath base] ""
           assertEqual "cleanImports"
                          (ExitFailure 1,
@@ -65,7 +65,7 @@ test2 =
       (do rsync "testdata/debian" "tmp"
           let name = S.ModuleName "Debian.Repo.PackageIndex"
               base = modulePathBase "hs" name
-          _ <- withCurrentDirectory "tmp" (runCleanT (cleanImports [unRelPath base]))
+          _ <- withCurrentDirectory "tmp" (runImportsT (cleanImports [unRelPath base]))
           (code, out, err) <- readProcessWithExitCode "diff" ["-ru", "testdata/debian" </> unRelPath base, "tmp" </> unRelPath base] ""
           assertEqual "cleanImports" (ExitSuccess, "", "") (code, out, err))
 
@@ -74,7 +74,7 @@ test3 :: Test
 test3 =
     TestLabel "imports3" $ TestCase
       (rsync "testdata/imports3" "tmp" >>
-       runCleanT (putDirs ["tmp"] >> cleanImports ["tmp/NotMain.hs"]) >>
+       runImportsT (putDirs ["tmp"] >> cleanImports ["tmp/NotMain.hs"]) >>
        assertEqual "module name" () ())
 
 -- | Preserve imports with a "hiding" clause
@@ -82,7 +82,7 @@ test4 :: Test
 test4 =
     TestLabel "imports4" $ TestCase
       (rsync "testdata/imports4" "tmp" >>
-       runCleanT (putDirs ["tmp"] >> cleanImports ["tmp/Hiding.hs"]) >>
+       runImportsT (putDirs ["tmp"] >> cleanImports ["tmp/Hiding.hs"]) >>
        -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
        assertEqual "module name" () ())
 
@@ -91,7 +91,7 @@ test5 :: Test
 test5 =
     TestLabel "imports5" $ TestCase
       (do _ <- rsync "testdata/imports5" "tmp"
-          _ <- runCleanT
+          _ <- runImportsT
                  (putDirs ["tmp"] >>
                   modifyExtensions (++ map nameToExtension [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
                   cleanImports ["tmp/Deriving.hs"])
@@ -116,7 +116,7 @@ test6 :: Test
 test6 =
     TestLabel "imports6" $ TestCase
       (do _ <- rsync "testdata/imports6" "tmp"
-          _ <- withCurrentDirectory "tmp" (runCleanT (modifyTestMode (const True) >> cleanImports ["EndComment.hs"]))
+          _ <- withCurrentDirectory "tmp" (runImportsT (modifyTestMode (const True) >> cleanImports ["EndComment.hs"]))
           (_, out, _) <- readProcessWithExitCode "diff" ["-ru", "imports6-expected", "tmp"] ""
           assertEqual "comment at end" "" out)
 
@@ -125,7 +125,7 @@ test7 :: Test
 test7 =
     TestLabel "imports7" $ TestCase
       (do _ <- rsync "testdata/imports7" "tmp"
-          _ <- withCurrentDirectory "tmp" (runCleanT (putDirs [".", ".."] >>
+          _ <- withCurrentDirectory "tmp" (runImportsT (putDirs [".", ".."] >>
                                                       modifyParams (\ m -> m {hsFlags = "-DMIN_VERSION_haskell_src_exts(a,b,c)=1" : hsFlags m}) >>
                                                       modifyTestMode (const True) >>
                                                       cleanImports ["CLI.hs"]))

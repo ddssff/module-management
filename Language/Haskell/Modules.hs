@@ -11,7 +11,7 @@
 --
 -- These are the important entry points:
 --
--- * 'runCleanT' - Sets up the environment for splitting and merging.
+-- * 'runImportsT' - Sets up the environment for splitting and merging.
 --   These operations require updates to be made to all the modules
 --   that import the modules being split or merged, so this
 --   environment tracks the creation and removal of modules.  This
@@ -41,13 +41,13 @@
 -- * Use 'findHsFiles' and 'cleanImports' to clean up the import lists
 -- of all the modules under @./Language@:
 --
---    @findHsFiles [\"Language\", \"Tests.hs\", \"Tests\"] >>= runCleanT . cleanImports@
+--    @findHsFiles [\"Language\", \"Tests.hs\", \"Tests\"] >>= runImportsT . cleanImports@
 --
 -- * Split the module @Language.Haskell.Modules.Common@, and then
 --   merge two of the declarations back in:
 --
 --   @:m +Language.Haskell.Exts.Syntax
---    findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
+--    findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runImportsT $
 --      mapM putModule modules >>
 --      splitModuleDecls \"Language\/Haskell\/Modules\/Common.hs\" >>
 --      mergeModules [ModuleName \"Language.Haskell.Modules.Common.WithCurrentDirectory\",
@@ -58,7 +58,7 @@
 --   @Tmp@ is used because using existing modules for a split is not allowed.
 --   The exception to this is that you can leave declarations in the original module.
 --
---   @findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runCleanT $
+--   @findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runImportsT $
 --      mapM putModule modules >>
 --      splitModule (\\ n -> if elem n [Just (Ident \"ModuleResult\"), Just (Ident \"doResult\")]
 --                          then ModuleName \"Tmp\"
@@ -69,7 +69,7 @@
 --
 -- * Split a module where one of the result modules needs to import the instances:
 --
---  @runCleanT $
+--  @runImportsT $
 --      putModule (ModuleName \"Main\") >>
 --      extraImport (ModuleName \"Main.GetPasteById\") (ModuleName \"Main.Instances\") >>
 --      splitModuleDecls \"Main.hs\"@
@@ -85,7 +85,7 @@ module Language.Haskell.Modules
     -- * Runtime environment
     , MonadClean
     , CleanT
-    , runCleanT
+    , runImportsT
     , putModule
     , findModule
     , modifyDryRun
@@ -114,7 +114,7 @@ import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.ModuVerse (findModule, modifyExtensions, putModule)
-import Language.Haskell.Modules.Params (CleanT, extraImport, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode, MonadClean, runCleanT)
+import Language.Haskell.Modules.Params (CleanT, extraImport, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode, MonadClean, runImportsT)
 import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, SourceDirs(putDirs))
 import Language.Haskell.Modules.Split (defaultSymbolToModule, splitModule, splitModuleDecls, splitModuleBy)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)

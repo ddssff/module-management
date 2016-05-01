@@ -11,7 +11,7 @@ import Language.Haskell.Modules.SourceDirs (getDirs)
 import System.IO (hGetLine, hPutStr, hPutStrLn, stderr, stdin)
 
 main :: IO ()
-main = runCleanT (noisily cli)
+main = runImportsT (noisily cli)
 
 cli :: MonadClean m => m ()
 cli = liftIO (hPutStr stderr " > " >> hGetLine stdin) >>= cmd . words

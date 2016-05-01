@@ -1,3 +1,9 @@
+haskell-module-management (0.21) unstable; urgency=low
+
+  * Rename runCleanT -> runImportsT
+
+ -- David Fox <dsf@seereason.com>  Sun, 01 May 2016 12:19:48 -0700
+
 haskell-module-management (0.20.3) unstable; urgency=low
 
   * Changes for haskell-src-exts-1.16

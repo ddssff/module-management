@@ -576,6 +576,6 @@ Test-Suite module-management-tests
     containers,
     filepath,
     HUnit,
-    haskell-src-exts <= 1.17,
+    haskell-src-exts <= 1.18,
     module-management,
     process

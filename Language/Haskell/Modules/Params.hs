@@ -7,7 +7,7 @@ module Language.Haskell.Modules.Params
     , CleanT
     , MonadClean(getParams, putParams)
     , modifyParams
-    , runCleanT
+    , runImportsT
     , markForDelete
     , modifyRemoveEmptyImports
     , modifyHsFlags
@@ -94,8 +94,8 @@ instance MonadClean m => MonadDryRun m where
 -- | Create the environment required to do import cleaning and module
 -- splitting/merging.  This environment, @StateT Params m a@, is an
 -- instance of 'MonadClean'.
-runCleanT :: (MonadIO m, MonadBaseControl IO m) => CleanT m a -> m a
-runCleanT action =
+runImportsT :: (MonadIO m, MonadBaseControl IO m) => CleanT m a -> m a
+runImportsT action =
     withTempDirectory "." "hmm" $ \ scratch ->
     do (result, params) <- runStateT action (Params {scratchDir = scratch,
                                                      dryRun = False,

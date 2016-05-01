@@ -18,7 +18,7 @@ import Data.Set.Extra as Set (Set, toList)
 import Distribution.Package (InstalledPackageId(..))
 import GHC.Generics (Generic)
 import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
-import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, runCleanT, splitModuleDecls, splitModuleBy)
+import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, runImportsT, splitModuleDecls, splitModuleBy)
 import Language.Haskell.Modules.ModuVerse (getNames, getInfo, moduleName)
 import Language.Haskell.Modules.SourceDirs (getDirs)
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
@@ -116,7 +116,7 @@ main = do
 
 
         execCmdM :: CmdM a -> IO (Maybe GenericPackageDescription)
-        execCmdM x = runCleanT
+        execCmdM x = runImportsT
             $ flip execStateT pkgDesc'
             $ flip runReaderT conf
             $ runInputT (setComplete ((lift . lift) `fmap` compl conf) defaultSettings) x

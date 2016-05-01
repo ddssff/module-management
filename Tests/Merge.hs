@@ -2,7 +2,7 @@ module Merge where
 
 import Control.Monad as List (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
-import Language.Haskell.Modules (mergeModules, modifyTestMode, noisily, putDirs, putModule, runCleanT, withCurrentDirectory, findHsModules)
+import Language.Haskell.Modules (mergeModules, modifyTestMode, noisily, putDirs, putModule, runImportsT, withCurrentDirectory, findHsModules)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
@@ -14,7 +14,7 @@ test1 :: Test
 test1 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
-         _result <- runCleanT $ noisily $ noisily $ noisily $
+         _result <- runImportsT $ noisily $ noisily $ noisily $
            do putDirs ["tmp"]
               modifyTestMode (const True)
               mapM_ (putModule . S.ModuleName) repoModules
@@ -28,7 +28,7 @@ test2 :: Test
 test2 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
-         _result <- runCleanT $
+         _result <- runImportsT $
            do putDirs ["tmp"]
               modifyTestMode (const True)
               mapM_ (putModule . S.ModuleName) repoModules
@@ -43,7 +43,7 @@ test3 =
     TestCase $
       do _ <- rsync "testdata/debian" "tmp"
          _result <- withCurrentDirectory "tmp" $
-                   runCleanT $
+                   runImportsT $
            do modifyTestMode (const True)
               mapM_ (putModule . S.ModuleName) repoModules
               mergeModules
@@ -58,7 +58,7 @@ test4 :: Test
 test4 =
     TestCase $
       do _ <- rsync "testdata/merge4" "tmp"
-         _ <- withCurrentDirectory "tmp" $ runCleanT $
+         _ <- withCurrentDirectory "tmp" $ runImportsT $
               do mapM_ (putModule . S.ModuleName) ["In1", "In2", "M1"]
                  mergeModules [S.ModuleName "In1", S.ModuleName "In2"] (S.ModuleName "Out")
          (code, out, err) <- diff "testdata/merge4-expected" "tmp"
@@ -68,7 +68,7 @@ test5 :: Test
 test5 =
     TestCase $
       do _ <- rsync "testdata/merge5" "tmp"
-         _ <- withCurrentDirectory "tmp" $ runCleanT $ noisily $ noisily $ noisily $
+         _ <- withCurrentDirectory "tmp" $ runImportsT $ noisily $ noisily $ noisily $
               do modifyTestMode (const True)
                  List.mapM_ (putModule . S.ModuleName)
                             ["Apt.AptIO", "Apt.AptIOT", "Apt.AptState",
@@ -85,7 +85,7 @@ test6 =
       do _ <- rsync "testdata/merge6" "tmp"
          _ <- withCurrentDirectory "tmp" $
               findHsModules ["Test.hs", "A.hs", "B/C.hs", "B/D.hs"] >>= \ modules ->
-              runCleanT $ noisily $ noisily $ noisily $
+              runImportsT $ noisily $ noisily $ noisily $
               do mapM_ putModule modules
                  mergeModules [S.ModuleName "B.C", S.ModuleName "A"] (S.ModuleName "A")
          (code, out, err) <- diff "testdata/merge6-expected" "tmp"

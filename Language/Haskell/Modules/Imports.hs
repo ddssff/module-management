@@ -50,7 +50,7 @@ import Language.Haskell.Exts.Extension (Extension(..))
 cleanBuildImports :: LocalBuildInfo -> IO ()
 cleanBuildImports lbi =
     mapM (toFilePath srcDirs) (maybe [] exposedModules (library (localPkgDescr lbi))) >>= \ libPaths ->
-    runCleanT (Distribution.Simple.LocalBuildInfo.scratchDir lbi) $ mapM_ clean (libPaths ++ exePaths)
+    runImportsT (Distribution.Simple.LocalBuildInfo.scratchDir lbi) $ mapM_ clean (libPaths ++ exePaths)
     where
       clean path = cleanImports path >>= liftIO . putStrLn . either show (\ text -> path ++ ": " ++ maybe "no changes" (\ _ -> " updated") text)
       exePaths = map modulePath (executables (localPkgDescr lbi))
