@@ -1,5 +1,5 @@
 Name:               module-management
-Version:            0.20.4
+Version:            0.21
 Synopsis:           Clean up module imports, split and merge modules
 Description:        Clean up module imports, split and merge modules.
 Homepage:           https://github.com/seereason/module-management
