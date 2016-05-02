@@ -375,9 +375,7 @@ instance Default S.ImportDecl where
                         S.importModule = S.ModuleName "Main",
                         S.importQualified = False,
                         S.importSrc = False,
-#if MIN_VERSION_haskell_src_exts(1,16,0)
                         S.importSafe = False, -- ?
-#endif
                         S.importPkg = Nothing,
                         S.importAs = Nothing,
                         S.importSpecs = Just (False, [])}

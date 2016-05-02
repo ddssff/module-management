@@ -46,10 +46,6 @@ import Control.Exception (fromException)
 
 import System.Exit
 
-#if !MIN_VERSION_Cabal(1,21,1)
-deriving instance Generic InstalledPackageId
-#endif
-
 data HMM = CLI
   { verbosity :: Int,
     verbosityCabal :: Int,

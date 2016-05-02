@@ -2,6 +2,7 @@
 module Imports where
 
 
+import Language.Haskell.Exts.Extension (KnownExtension(FlexibleInstances, StandaloneDeriving, TypeSynonymInstances),Extension(EnableExtension))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules (cleanImports, modifyExtensions, modulePathBase, putDirs, runImportsT, withCurrentDirectory)
 import Language.Haskell.Modules.Params (modifyParams, Params(hsFlags), CleanMode(DoClean))
@@ -12,15 +13,7 @@ import System.FilePath ((</>))
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (assertEqual, Test(..))
 
-#if MIN_VERSION_haskell_src_exts(1,14,0)
-import Language.Haskell.Exts.Extension (KnownExtension(FlexibleInstances, StandaloneDeriving, TypeSynonymInstances),Extension(EnableExtension))
 nameToExtension x = EnableExtension x
-
-#else
-import Language.Haskell.Exts.Extension (Extension(FlexibleInstances, StandaloneDeriving, TypeSynonymInstances))
-nameToExtension x = x
-
-#endif
 
 tests :: Test
 tests = TestLabel "Clean" (TestList [test1, {-test2,-} test3, test4, test5, test6 {-, test7-}])

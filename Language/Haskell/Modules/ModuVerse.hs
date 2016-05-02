@@ -32,11 +32,7 @@ import Data.Maybe (fromMaybe)
 import Data.Set as Set (fromList, Set)
 import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
 import Language.Haskell.Exts.Comments (Comment(..))
-#if MIN_VERSION_haskell_src_exts(1,14,0)
 import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
-#else
-import Language.Haskell.Exts.Extension (Extension(..))
-#endif
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename, fixities), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..))
@@ -44,14 +40,8 @@ import Language.Haskell.Modules.SourceDirs (modulePathBase, PathKey(..), Path(..
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
-#if MIN_VERSION_haskell_src_exts(1,14,0)
 nameToExtension :: KnownExtension -> Extension
 nameToExtension x = EnableExtension x
-#else
-deriving instance Ord Extension
-deriving instance Ord KnownExtension
-nameToExtension x = id x
-#endif
 
 deriving instance Ord Comment
 
@@ -100,9 +90,7 @@ hseExtensions = map nameToExtension
     , BangPatterns, TemplateHaskell, ForeignFunctionInterface, {- Arrows, -} Generics, NamedFieldPuns, PatternGuards
     , MagicHash, TypeFamilies, StandaloneDeriving, TypeOperators, RecordWildCards, GADTs, UnboxedTuples
     , PackageImports, QuasiQuotes, {-TransformListComp,-} ViewPatterns, XmlSyntax, RegularPatterns, TupleSections
-#if MIN_VERSION_haskell_src_exts(1,16,0)
     , ExplicitNamespaces
-#endif
     ]
 
 getNames :: ModuVerse m => m (Set S.ModuleName)

@@ -6,11 +6,7 @@ import Data.List (isPrefixOf)
 import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
-#if MIN_VERSION_haskell_src_exts(1,14,0)
 import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
-#else
-import Language.Haskell.Exts.Extension (Extension(..))
-#endif
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules (CleanT, mergeModules, modifyExtensions, MonadClean, noisily, putModule, runImportsT, splitModuleDecls, withCurrentDirectory)
@@ -88,11 +84,7 @@ logictest s f =
 
 test2a :: MonadClean m => [ModuleName] -> m ()
 test2a u =
-#if MIN_VERSION_haskell_src_exts(1,14,0)
          do modifyExtensions (++ [EnableExtension MultiParamTypeClasses])
-#else
-         do modifyExtensions (++ [MultiParamTypeClasses])
-#endif
             -- We *must* clean the split results, or there will be
             -- circular imports created when we merge.
             mapM_ putModule u
@@ -101,11 +93,7 @@ test2a u =
 
 test2b :: MonadClean m => [ModuleName] -> m ()
 test2b u =
-#if MIN_VERSION_haskell_src_exts(1,14,0)
          do modifyExtensions (++ [EnableExtension MultiParamTypeClasses])
-#else
-         do modifyExtensions (++ [MultiParamTypeClasses])
-#endif
             mapM_ putModule u
             _ <- splitModuleDecls DoClean "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules
@@ -118,11 +106,7 @@ test2b u =
 
 test2c :: MonadClean m => [ModuleName] -> m ()
 test2c u =
-#if MIN_VERSION_haskell_src_exts(1,14,0)
          do modifyExtensions (++ [EnableExtension MultiParamTypeClasses])
-#else
-         do modifyExtensions (++ [MultiParamTypeClasses])
-#endif
             mapM_ putModule u
             _ <- splitModuleDecls DoClean "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules

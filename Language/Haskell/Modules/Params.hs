@@ -143,9 +143,7 @@ extraImport m i =
                           , importModule = i
                           , importQualified = False
                           , importSrc = False
-#if MIN_VERSION_haskell_src_exts(1,16,0)
                           , importSafe = False
-#endif
                           , importPkg = Nothing
                           , importAs = Nothing
                           , importSpecs = Just (False, []) }

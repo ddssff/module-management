@@ -141,11 +141,7 @@ moduleDecls inNames outName thisName info@(ModuleInfo (A.Module _ _ _ imports _)
       -- Looking at an import, augment the map with the "as" name of a
       -- qualified import.  module and that module's info.
       qualifiedImportName :: A.ImportDecl l -> Maybe S.ModuleName
-#if MIN_VERSION_haskell_src_exts(1,16,0)
       qualifiedImportName (A.ImportDecl _ m _ _ _ _ (Just a) _specs) =
-#else
-      qualifiedImportName (A.ImportDecl _ m _ _ _ (Just a) _specs) =
-#endif
           case elem (sModuleName m) inNames of
             True -> Just (sModuleName a)
             _ -> Nothing

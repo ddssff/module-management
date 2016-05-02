@@ -15,10 +15,8 @@ import Data.Set as Set (empty, insert, Set, toList)
 import Language.Haskell.Exts.Annotated.Simplify (sName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), ExportSpec(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name, Pat(..), PatField(..), QName(..), QualConDecl(..), RPat(..))
 import qualified Language.Haskell.Exts.Syntax as S (CName(..), ExportSpec(..), ImportSpec(..), Name(..), QName(..))
-#if MIN_VERSION_haskell_src_exts(1,16,0)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (InstRule(..))
 import qualified Language.Haskell.Exts.Syntax as S (Namespace(..))
-#endif
 
 -- | Do a fold over the names that are declared in a declaration (not
 -- every name that appears, just the ones that the declaration is
@@ -31,9 +29,7 @@ class FoldDeclared a where
 instance FoldDeclared (A.Decl a) where
     foldDeclared f r (A.TypeDecl _ x _t) = foldDeclared f r x  -- type x = ...
     foldDeclared f r (A.TypeFamDecl _ x _k) = foldDeclared f r x -- data family x = ...
-#if MIN_VERSION_haskell_src_exts(1,16,0)
     foldDeclared f r (A.ClosedTypeFamDecl _ x _k _ts) = foldDeclared f r x -- data family x = ...
-#endif
     foldDeclared f r (A.DataDecl _ _ _ x _ _) = foldDeclared f r x -- data/newtype _ x = ...
     foldDeclared f r (A.GDataDecl _ _ _ x _ _ _) = foldDeclared f r x
     foldDeclared f r (A.DataFamDecl _ _ x _) = foldDeclared f r x
@@ -48,11 +44,8 @@ instance FoldDeclared (A.Decl a) where
     foldDeclared f r (A.SpliceDecl _ _) = f Nothing r  -- template haskell splice declaration
     foldDeclared f r (A.TypeSig _ xs _) = foldl (foldDeclared f) r xs
     foldDeclared f r (A.FunBind _ xs) = foldl (foldDeclared f) r xs
-#if MIN_VERSION_haskell_src_exts(1,16,0)
     foldDeclared f r (A.PatBind _ x _ _) = foldDeclared f r x
-#else
-    foldDeclared f r (A.PatBind _ x _ _ _) = foldDeclared f r x
-#endif
+    foldDeclared f r (A.PatBind _ x _ _) = foldDeclared f r x
     foldDeclared _f _r (A.ForImp _ _ _ _ _ _) = error "Unimplemented FoldDeclared instance: ForImp"
     foldDeclared _ _r (A.ForExp _ _ _ _ _) = error "Unimplemented FoldDeclared instance: ForExp"
     foldDeclared f r (A.RulePragmaDecl _ _) = f Nothing r
@@ -60,54 +53,32 @@ instance FoldDeclared (A.Decl a) where
     foldDeclared f r (A.WarnPragmaDecl _ _) = f Nothing r
     foldDeclared f r (A.InlineSig _ _ _ x) = foldDeclared f r x
     foldDeclared f r (A.InlineConlikeSig _ _ x) = foldDeclared f r x
-#if MIN_VERSION_haskell_src_exts(1,14,0)
     foldDeclared f r (A.SpecSig _ _ x _) = foldDeclared f r x
-#else
-    foldDeclared f r (A.SpecSig _ x _) = foldDeclared f r x
-#endif
     foldDeclared f r (A.SpecInlineSig _ _ _ x _) = foldDeclared f r x
-#if MIN_VERSION_haskell_src_exts(1,16,0)
     foldDeclared f r (A.InstSig _ x) = foldDeclared f r x
     foldDeclared f r (A.MinimalPragma _ _) = f Nothing r
-#else
-    foldDeclared f r (A.InstSig _ _ x) = foldDeclared f r x
-#endif
     foldDeclared f r (A.AnnPragma _ _) = f Nothing r
 
 instance FoldDeclared (A.DeclHead a) where
-#if MIN_VERSION_haskell_src_exts(1,16,0)
     foldDeclared f r (A.DHead _ x) = foldDeclared f r x
     foldDeclared f r (A.DHApp _ x _) = foldDeclared f r x
     foldDeclared f r (A.DHInfix _ _ x) = foldDeclared f r x
-#else
-    foldDeclared f r (A.DHead _ x _) = foldDeclared f r x
-    foldDeclared f r (A.DHInfix _ _ x _) = foldDeclared f r x
-#endif
     foldDeclared f r (A.DHParen _ x) = foldDeclared f r x
 instance FoldDeclared (A.ClassDecl a) where
     foldDeclared f r (A.ClsDecl _ x) = foldDeclared f r x       -- ordinary declaration
     foldDeclared f r (A.ClsDataFam _ _ x _) = foldDeclared f r x        -- declaration of an associated data type
     foldDeclared f r (A.ClsTyFam _ x _) = foldDeclared f r x    -- declaration of an associated type synonym
     foldDeclared _ r (A.ClsTyDef _ _ _) = r -- default choice for an associated type synonym
-#if MIN_VERSION_haskell_src_exts(1,16,0)
     foldDeclared f r (A.ClsDefSig _ x _) = foldDeclared f r x -- default signature
-#endif
 instance FoldDeclared (A.InstHead a) where
-#if MIN_VERSION_haskell_src_exts(1,16,0)
     foldDeclared f r (A.IHCon _ x) = foldDeclared f r x
     foldDeclared f r (A.IHApp _ x _) = foldDeclared f r x
     -- foldDeclared f r (A.IHead _ x _) = foldDeclared f r x
     foldDeclared f r (A.IHInfix _ _ x) = foldDeclared f r x
-#else
-    foldDeclared f r (A.IHead _ x _) = foldDeclared f r x
-    foldDeclared f r (A.IHInfix _ _ x _) = foldDeclared f r x
-#endif
     foldDeclared f r (A.IHParen _ x) = foldDeclared f r x
-#if MIN_VERSION_haskell_src_exts(1,16,0)
 instance FoldDeclared (A.InstRule a) where
     foldDeclared f r (A.IRule _ _ _ x) = foldDeclared f r x
     foldDeclared f r (A.IParen _ x) = foldDeclared f r x
-#endif
 instance FoldDeclared (A.Match a) where
     foldDeclared f r (A.Match _ x _ _ _) = foldDeclared f r x
     foldDeclared f r (A.InfixMatch _ _ x _ _ _) = foldDeclared f r x
@@ -118,20 +89,11 @@ instance FoldDeclared (A.QName a) where
     foldDeclared _ r (A.Special _ _) = r
 instance FoldDeclared (A.Pat a) where
     foldDeclared f r (A.PVar _ x) = foldDeclared f r x  -- variable
-#if MIN_VERSION_haskell_src_exts(1,16,0)
     foldDeclared _ r (A.PLit _ _ _) = r -- literal constant
-#else
-    foldDeclared _ r (A.PLit _ _) = r   -- literal constant
-    foldDeclared f r (A.PNeg _ x) = foldDeclared f r x  -- negated pattern
-#endif
     foldDeclared f r (A.PNPlusK _ x _) = foldDeclared f r x     -- n+k pattern
     foldDeclared f r (A.PInfixApp _ p1 _qn p2) = let r' = foldDeclared f r p1 in foldDeclared f r' p2   -- pattern with an infix data constructor
     foldDeclared f r (A.PApp _ _ ps) = foldl (foldDeclared f) r ps      -- data constructor and argument patterns
-#if MIN_VERSION_haskell_src_exts(1,14,0)
     foldDeclared f r (A.PTuple _ _ ps) = foldl (foldDeclared f) r ps    -- tuple pattern
-#else
-    foldDeclared f r (A.PTuple _ ps) = foldl (foldDeclared f) r ps      -- tuple pattern
-#endif
     foldDeclared f r (A.PList _ ps) = foldl (foldDeclared f) r ps       -- list pattern
     foldDeclared f r (A.PParen _ x) = foldDeclared f r x        -- parenthesized pattern
     foldDeclared f r (A.PRec _ _qn fs) = foldl (foldDeclared f) r fs    -- labelled pattern, record style
@@ -146,9 +108,6 @@ instance FoldDeclared (A.Pat a) where
     foldDeclared _f _r (A.PXPcdata _ _s) = error "Unimplemented FoldDeclared instance: XPcdata" -- XML PCDATA pattern
     foldDeclared _f _r (A.PXPatTag _ _p) = error "Unimplemented FoldDeclared instance: PXPatTag"        -- XML embedded pattern
     foldDeclared _f _r (A.PXRPats _ _rps) = error "Unimplemented FoldDeclared instance: PXRPats"        -- XML regular list pattern
-#if !MIN_VERSION_haskell_src_exts(1,15,0)
-    foldDeclared _f _r (A.PExplTypeArg _ _n _t) = error "Unimplemented FoldDeclared instance: PExplTypeArg"     -- Explicit generics style type argument e.g. f {| Int |} x = ...
-#endif
     foldDeclared _ r (A.PQuasiQuote _ _ _) = r  -- quasi quote pattern: [$name| string |]
     foldDeclared f r (A.PBangPat _ x) = foldDeclared f r x      -- strict (bang) pattern: f !x = ...
 instance FoldDeclared (A.PatField a) where
@@ -170,30 +129,14 @@ instance FoldDeclared (A.Name l) where
 
 -- Something imported can be exported
 instance FoldDeclared (A.ImportSpec l) where
-#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
-    foldDeclared f r (A.IVar _ _ name) = foldDeclared f r name
-#else
     foldDeclared f r (A.IVar _ name) = foldDeclared f r name
-#endif
-#if MIN_VERSION_haskell_src_exts(1,17,0)
     foldDeclared f r (A.IAbs _ _ name) = foldDeclared f r name
-#else
-    foldDeclared f r (A.IAbs _ name) = foldDeclared f r name
-#endif
     foldDeclared f r (A.IThingAll _ name) = foldDeclared f r name
     foldDeclared f r (A.IThingWith _ name _) = foldDeclared f r name
 
 instance FoldDeclared (A.ExportSpec l) where
-#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
-    foldDeclared f r (A.EVar _ _ name) = foldDeclared f r name
-#else
     foldDeclared f r (A.EVar _ name) = foldDeclared f r name
-#endif
-#if MIN_VERSION_haskell_src_exts(1,17,0)
     foldDeclared f r (A.EAbs _ _ name) = foldDeclared f r name
-#else
-    foldDeclared f r (A.EAbs _ name) = foldDeclared f r name
-#endif
     foldDeclared f r (A.EThingAll _ name) = foldDeclared f r name
     foldDeclared f r (A.EThingWith _ name _) = foldDeclared f r name
     foldDeclared _ r (A.EModuleContents _ _) = r -- This probably won't work correctly
@@ -212,36 +155,20 @@ justs = mapMaybe id . toList
 
 exports :: (FoldDeclared a, FoldMembers a) => a -> [S.ExportSpec]
 exports x = case (justs (symbols x), justs (members x)) of
-#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
-              ([n], []) -> [S.EVar S.NoNamespace (S.UnQual n)]
-#else
               ([n], []) -> [S.EVar (S.UnQual n)]
-#endif
               ([n], ms) -> [S.EThingWith (S.UnQual n) (sort (map S.VarName ms))]
               ([], []) -> []
               ([], _) -> error "exports: members with no top level name"
-#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
-              (ns, []) -> map (S.EVar S.NoNamespace . S.UnQual) ns
-#else
               (ns, []) -> map (S.EVar . S.UnQual) ns
-#endif
               y -> error $ "exports: multiple top level names and member names: " ++ show y
 
 imports :: (FoldDeclared a, FoldMembers a) => a -> [S.ImportSpec]
 imports x = case (justs (symbols x), justs (members x)) of
-#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
-              ([n], []) -> [S.IVar S.NoNamespace n]
-#else
               ([n], []) -> [S.IVar n]
-#endif
               ([n], ms) -> [S.IThingWith n (sort (map S.VarName ms))]
               ([], []) -> []
               ([], _ms) -> error "exports: members with no top level name"
-#if MIN_VERSION_haskell_src_exts(1,16,0) && !MIN_VERSION_haskell_src_exts(1,17,0)
-              (ns, []) -> map (S.IVar S.NoNamespace) ns
-#else
               (ns, []) -> map S.IVar ns
-#endif
               y -> error $ "imports: multiple top level names and member names: " ++ show y
 
 -- | Fold over the declared members - e.g. the method names of a class
@@ -269,8 +196,4 @@ instance FoldDeclared (A.FieldDecl l) where
     foldDeclared f r (A.FieldDecl _ xs _) = foldl (foldDeclared f) r xs
 
 instance FoldDeclared (A.GadtDecl l) where
-#if MIN_VERSION_haskell_src_exts(1,16,0)
     foldDeclared f r (A.GadtDecl _ x xs _) = let r' = foldDeclared f r x in maybe r' (foldl (foldDeclared f) r') xs
-#else
-    foldDeclared f r (A.GadtDecl _ x _) = foldDeclared f r x
-#endif

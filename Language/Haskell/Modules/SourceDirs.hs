@@ -8,10 +8,6 @@ module Language.Haskell.Modules.SourceDirs
     , PathKey(..)
     , APath(..)
     , pathKey
-#if 0
-    , pathKey
-    , pathKeyMaybe
-#endif
     , Path(..)
     , modulePath
     , modulePathBase
