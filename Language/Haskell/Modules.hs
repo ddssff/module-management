@@ -80,7 +80,7 @@ module Language.Haskell.Modules
     , splitModule
     , splitModuleDecls
     , splitModuleBy
-    , defaultSymbolToModule
+    , defaultToModule
     , mergeModules
     -- * Runtime environment
     , MonadClean
@@ -115,6 +115,6 @@ import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.ModuVerse (findModule, modifyExtensions, putModule)
 import Language.Haskell.Modules.Params (CleanT, extraImport, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, MonadClean, runImportsT)
 import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, SourceDirs(putDirs))
-import Language.Haskell.Modules.Split (defaultSymbolToModule, splitModule, splitModuleDecls, splitModuleBy)
+import Language.Haskell.Modules.Split (defaultToModule, splitModule, splitModuleDecls, splitModuleBy)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
 import Language.Haskell.Modules.Util.Test (findHsFiles, findHsModules) -- (findHsFiles, findHsModules)

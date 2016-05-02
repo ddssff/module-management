@@ -4,7 +4,7 @@ module Language.Haskell.Modules.Split
     ( splitModule
     , splitModuleDecls
     , splitModuleBy
-    , defaultSymbolToModule
+    , defaultToModule
     ) where
 
 import Debug.Trace
@@ -37,7 +37,7 @@ import Prelude hiding (writeFile)
 import System.FilePath ((<.>))
 
 -- | Split the declarations of the module in the input file into new
--- modules as specified by the 'symToModule' function, which maps
+-- modules as specified by the 'toModule' function, which maps
 -- symbol name's to module names.  It is permissable for the output
 -- function to map one or more symbols to the original module.  The
 -- modules will be written into files whose names are constructed from
@@ -53,9 +53,9 @@ splitModule :: MonadClean m =>
             -> FilePath
             -- ^ The file containing the input module.
             -> m [ModuleResult]
-splitModule mode symToModule path =
+splitModule mode toModule path =
     do info <- pathKey (APath path) >>= parseModule
-       splitModuleBy mode symToModule info
+       splitModuleBy mode toModule info
 
 -- | Split each of a module's declarations into a new module.  Update
 -- the imports of all the modules in the moduVerse to reflect the split.
@@ -89,7 +89,7 @@ splitModuleDecls :: MonadClean m =>
                  -> m [ModuleResult]
 splitModuleDecls mode path =
     do info <- pathKey (APath path) >>= parseModule
-       splitModuleBy mode (defaultSymbolToModule info) info
+       splitModuleBy mode (defaultToModule info) info
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
 splitModuleBy :: MonadClean m =>
@@ -105,14 +105,14 @@ splitModuleBy _ _ (ModuleInfo (A.XmlHybrid {}) _ _ _) = error "XmlPage"
 splitModuleBy _ _ m@(ModuleInfo (A.Module _ _ _ _ []) _ _ key) = return [Unchanged (moduleName m) key] -- No declarations - nothing to split
 splitModuleBy _ _ m@(ModuleInfo (A.Module _ _ _ _ [_]) _ _ key) = return [Unchanged (moduleName m) key] -- One declaration - nothing to split (but maybe we should anyway?)
 splitModuleBy _ _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = throw $ userError $ "splitModule: no explicit header"
-splitModuleBy mode symToModule inInfo =
+splitModuleBy mode toModule inInfo =
     do qLnPutStr ("Splitting module " ++ prettyPrint (moduleName inInfo))
        quietly $
          do eiMap <- getParams >>= return . extraImports
             -- The name of the module to be split
             let inName = moduleName inInfo
             allNames <- getNames >>= return . Set.union outNames
-            changes <- List.mapM (doModule symToModule eiMap inInfo inName outNames) (toList allNames)
+            changes <- List.mapM (doModule toModule eiMap inInfo inName outNames) (toList allNames)
             -- Now we have to clean the import lists of the new
             -- modules, which means writing the files and doing an IO
             -- operation (i.e. running ghc.)  Could we do this in a
@@ -122,14 +122,14 @@ splitModuleBy mode symToModule inInfo =
             -- Clean the new modules after all edits are finished
             cleanResults mode changes'
     where
-      outNames = Set.map symToModule (union (declared inInfo) (exported inInfo))
+      outNames = Set.map toModule (union (declared inInfo) (exported inInfo))
 
 doModule :: MonadClean m =>
             (Maybe S.Name -> S.ModuleName)
          -> Map S.ModuleName (Set S.ImportDecl)
          -> ModuleInfo -> S.ModuleName
          -> Set S.ModuleName -> S.ModuleName -> m ModuleResult
-doModule symToModule eiMap inInfo inName outNames thisName =
+doModule toModule eiMap inInfo inName outNames thisName =
     case () of
       _ | member thisName outNames ->
             findModule thisName >>= \ thisInfo ->
@@ -217,7 +217,7 @@ doModule symToModule eiMap inInfo inName outNames thisName =
       moduleExports (ModuleInfo (A.Module _ (Just (A.ModuleHead _ _ _ x)) _ _ _) _ _ _) = x
       moduleExports (ModuleInfo _ _ _ _) = error "Unsupported module type"
 
-      -- Update the imports to reflect the changed module names in symToModule.
+      -- Update the imports to reflect the changed module names in toModule.
       -- Update re-exports of the split module.
       updateImports :: ModuleInfo -> String
       updateImports oldInfo =
@@ -244,7 +244,7 @@ doModule symToModule eiMap inInfo inName outNames thisName =
       moduleDeclMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
       moduleDeclMap = foldDecls (\ d pref s suff r ->
                                      Set.fold (\ sym mp -> insertWith (\ a b -> b ++ a)
-                                                                      (symToModule (trace ("sym " ++ show sym ++ " -> " ++ show (symToModule sym))
+                                                                      (toModule (trace ("sym " ++ show sym ++ " -> " ++ show (toModule sym))
                                                                                     sym))
                                                                       [(d, pref <> s <> suff)] mp)
                                               r
@@ -261,15 +261,15 @@ doModule symToModule eiMap inInfo inName outNames thisName =
       updateImportSpecs i Nothing = List.map (\ x -> (sImportDecl i) {S.importModule = x}) (Set.toList moduleNames) -- (Map.elems moduleMap)
       -- If flag is True this is a "hiding" import
       updateImportSpecs i (Just (A.ImportSpecList _ flag specs)) =
-          concatMap (\ spec -> let xs = List.map symToModule (toList (symbolsDeclaredBy spec)) in
+          concatMap (\ spec -> let xs = List.map toModule (toList (symbolsDeclaredBy spec)) in
                                List.map (\ x -> (sImportDecl i) {S.importModule = x, S.importSpecs = Just (flag, [sImportSpec spec])}) xs) specs
 
       moduleNames :: Set S.ModuleName
       moduleNames =
           s
           where
-            s = foldExports ignore2 (\ e _ _ _ r -> Set.fold (Set.insert . symToModule) r (symbolsDeclaredBy e)) ignore2 inInfo s'
-            s' = foldDecls (\ d _ _ _ r -> Set.fold (Set.insert . symToModule) r (symbolsDeclaredBy d)) ignore2 inInfo Set.empty
+            s = foldExports ignore2 (\ e _ _ _ r -> Set.fold (Set.insert . toModule) r (symbolsDeclaredBy e)) ignore2 inInfo s'
+            s' = foldDecls (\ d _ _ _ r -> Set.fold (Set.insert . toModule) r (symbolsDeclaredBy d)) ignore2 inInfo Set.empty
 
 -- | Combine the suffix of each export with the prefix of the following
 -- export to make a list of all the separators.  Discards the first
@@ -355,10 +355,10 @@ isReExported _ = False
 
 -- | This can be used to build the function parameter of 'splitModule',
 -- it determines which module should a symbol be moved to.
-defaultSymbolToModule :: ModuleInfo    -- ^ Parent module name
+defaultToModule :: ModuleInfo    -- ^ Parent module name
                       -> Maybe S.Name
                       -> S.ModuleName
-defaultSymbolToModule info name =
+defaultToModule info name =
     S.ModuleName (parentModuleName <.>
                              case declClass info name of
                                Instance -> "Instances"
