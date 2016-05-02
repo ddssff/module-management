@@ -3,7 +3,8 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.Modules.Params
     ( Params(Params, dryRun, extraImports, hsFlags, junk, moduVerse,
-       removeEmptyImports, scratchDir, testMode, verbosity)
+       removeEmptyImports, scratchDir, verbosity)
+    , CleanMode(DoClean, NoClean)
     , CleanT
     , MonadClean(getParams, putParams)
     , modifyParams
@@ -12,7 +13,6 @@ module Language.Haskell.Modules.Params
     , modifyRemoveEmptyImports
     , modifyHsFlags
     , modifyDryRun
-    , modifyTestMode
     , extraImport
     ) where
 
@@ -30,6 +30,8 @@ import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..))
 import Language.Haskell.Modules.Util.Temp (withTempDirectory)
 import Prelude hiding (writeFile, writeFile)
 import System.Directory (removeFile)
+
+data CleanMode = DoClean | NoClean deriving (Eq, Ord, Show)
 
 -- | This contains the information required to run the state monad for
 -- import cleaning and module spliting/mergeing.
@@ -60,7 +62,7 @@ data Params
       -- ^ Deciding whether a module needs to be imported can be
       -- difficult when instances are involved, this is a cheat to force
       -- keys of the map to import the corresponding elements.
-      , testMode :: Bool
+      -- , testMode :: CleanMode
       -- ^ For testing, do not run cleanImports on the results of the
       -- splitModule and catModules operations.
       } deriving (Eq, Ord, Show)
@@ -104,8 +106,7 @@ runImportsT action =
                                                      moduVerse = moduVerseInit,
                                                      junk = Set.empty,
                                                      removeEmptyImports = True,
-                                                     extraImports = Map.empty,
-                                                     testMode = False})
+                                                     extraImports = Map.empty})
        mapM_ (\ x -> liftIO (try (removeFile x)) >>= \ (_ :: Either SomeException ()) -> return ()) (toList (junk params))
        return result
 
@@ -132,13 +133,6 @@ modifyHsFlags f = modifyParams (\ p -> p {hsFlags = f (hsFlags p)})
 -- by a version control system so you don't have to worry about this.)
 modifyDryRun :: MonadClean m => (Bool -> Bool) -> m ()
 modifyDryRun f = modifyParams (\ p -> p {dryRun = f (dryRun p)})
-
--- | If TestMode is turned on no import cleaning will occur after a
--- split or cat.  Default is False.  Note that the modules produced
--- with this option will often fail to compile to to circular imports.
--- (Does this seem counterintuitive to anyone else?)
-modifyTestMode :: MonadClean m => (Bool -> Bool) -> m ()
-modifyTestMode f = modifyParams (\ p -> p {testMode = f (testMode p)})
 
 -- | When we write module @m@, insert an extra line that imports the
 -- instances (only) from module @i@.

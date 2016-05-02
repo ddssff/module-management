@@ -92,7 +92,6 @@ module Language.Haskell.Modules
     , modifyHsFlags
     , modifyRemoveEmptyImports
     , modifyExtensions
-    , modifyTestMode
     , modifyDirs
     , putDirs
     , extraImport
@@ -114,7 +113,7 @@ import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.ModuVerse (findModule, modifyExtensions, putModule)
-import Language.Haskell.Modules.Params (CleanT, extraImport, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, modifyTestMode, MonadClean, runImportsT)
+import Language.Haskell.Modules.Params (CleanT, extraImport, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, MonadClean, runImportsT)
 import Language.Haskell.Modules.SourceDirs (modifyDirs, modulePathBase, SourceDirs(putDirs))
 import Language.Haskell.Modules.Split (defaultSymbolToModule, splitModule, splitModuleDecls, splitModuleBy)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)

@@ -3,8 +3,8 @@ module Imports where
 
 
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
-import Language.Haskell.Modules (cleanImports, modifyExtensions, modifyTestMode, modulePathBase, putDirs, runImportsT, withCurrentDirectory)
-import Language.Haskell.Modules.Params (modifyParams, Params(hsFlags))
+import Language.Haskell.Modules (cleanImports, modifyExtensions, modulePathBase, putDirs, runImportsT, withCurrentDirectory)
+import Language.Haskell.Modules.Params (modifyParams, Params(hsFlags), CleanMode(DoClean))
 import Language.Haskell.Modules.SourceDirs (RelPath(unRelPath))
 import Language.Haskell.Modules.Util.Test (diff, rsync)
 import System.Exit (ExitCode(..))
@@ -116,7 +116,7 @@ test6 :: Test
 test6 =
     TestLabel "imports6" $ TestCase
       (do _ <- rsync "testdata/imports6" "tmp"
-          _ <- withCurrentDirectory "tmp" (runImportsT (modifyTestMode (const True) >> cleanImports ["EndComment.hs"]))
+          _ <- withCurrentDirectory "tmp" (runImportsT (cleanImports ["EndComment.hs"]))
           (_, out, _) <- readProcessWithExitCode "diff" ["-ru", "imports6-expected", "tmp"] ""
           assertEqual "comment at end" "" out)
 
@@ -127,7 +127,6 @@ test7 =
       (do _ <- rsync "testdata/imports7" "tmp"
           _ <- withCurrentDirectory "tmp" (runImportsT (putDirs [".", ".."] >>
                                                       modifyParams (\ m -> m {hsFlags = "-DMIN_VERSION_haskell_src_exts(a,b,c)=1" : hsFlags m}) >>
-                                                      modifyTestMode (const True) >>
                                                       cleanImports ["CLI.hs"]))
           out <- diff "testdata/imports7-expected" "tmp"
           assertEqual "CLI" (ExitSuccess, "", "") out)

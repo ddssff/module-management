@@ -22,7 +22,7 @@ import Language.Haskell.Modules.Common (doResult, fixExport, ModuleResult(..), r
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), moduleName, parseModule, parseModuleMaybe)
-import Language.Haskell.Modules.Params (MonadClean)
+import Language.Haskell.Modules.Params (MonadClean(getParams), CleanMode)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, pathKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 
@@ -31,8 +31,8 @@ import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 -- reflect the change.  It *is* permissable to use one of the input
 -- modules as the output module.  Note that circular imports can be
 -- created by this operation.
-mergeModules :: MonadClean m => [S.ModuleName] -> S.ModuleName -> m [ModuleResult]
-mergeModules inNames outName =
+mergeModules :: MonadClean m => CleanMode -> [S.ModuleName] -> S.ModuleName -> m [ModuleResult]
+mergeModules mode inNames outName =
     do qLnPutStr ("mergeModules: [" ++ intercalate ", " (map prettyPrint inNames) ++ "] -> " ++ prettyPrint outName)
        quietly $
          do univ <- getNames
@@ -40,7 +40,7 @@ mergeModules inNames outName =
             results <- List.mapM (doModule inNames outName) allNames
             results' <- List.mapM doResult results
             List.mapM_ (\ x -> qLnPutStr ("mergeModules: " ++ reportResult x)) results'
-            cleanResults results'
+            cleanResults mode results'
 
 -- Process one of the modules in the moduVerse and return the result.
 -- The output module may not (yet) be an element of the moduVerse, in

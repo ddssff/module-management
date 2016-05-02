@@ -14,6 +14,7 @@ import Language.Haskell.Exts.Extension (Extension(..))
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
 import Language.Haskell.Modules (CleanT, mergeModules, modifyExtensions, MonadClean, noisily, putModule, runImportsT, splitModuleDecls, withCurrentDirectory)
+import Language.Haskell.Modules.Params (CleanMode(DoClean))
 import Language.Haskell.Modules.Util.Test (diff', logicModules, rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.Process (system)
@@ -95,7 +96,7 @@ test2a u =
             -- We *must* clean the split results, or there will be
             -- circular imports created when we merge.
             mapM_ putModule u
-            _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
+            _ <- splitModuleDecls DoClean "Data/Logic/Classes/Literal.hs"
             return ()
 
 test2b :: MonadClean m => [ModuleName] -> m ()
@@ -106,8 +107,9 @@ test2b u =
          do modifyExtensions (++ [MultiParamTypeClasses])
 #endif
             mapM_ putModule u
-            _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
+            _ <- splitModuleDecls DoClean "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules
+                   DoClean
                    [ModuleName "Data.Logic.Classes.FirstOrder",
                     ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
                     ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
@@ -122,13 +124,15 @@ test2c u =
          do modifyExtensions (++ [MultiParamTypeClasses])
 #endif
             mapM_ putModule u
-            _ <- splitModuleDecls "Data/Logic/Classes/Literal.hs"
+            _ <- splitModuleDecls DoClean "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules
+                   DoClean
                    [ModuleName "Data.Logic.Classes.FirstOrder",
                     ModuleName "Data.Logic.Classes.Literal.FromFirstOrder",
                     ModuleName "Data.Logic.Classes.Literal.FromLiteral"]
                    (ModuleName "Data.Logic.Classes.FirstOrder")
             _ <- mergeModules
+                   DoClean
                    [ModuleName "Data.Logic.Classes.Literal.Literal",
                     ModuleName "Data.Logic.Classes.Literal.ZipLiterals",
                     ModuleName "Data.Logic.Classes.Literal.ToPropositional",

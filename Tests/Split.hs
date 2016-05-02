@@ -2,7 +2,8 @@ module Split where
 
 import Control.Monad as List (mapM_)
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
-import Language.Haskell.Modules (modifyTestMode, noisily, putDirs, putModule, runImportsT, splitModule, splitModuleDecls, withCurrentDirectory, findHsModules, extraImport)
+import Language.Haskell.Modules.Params (CleanMode(DoClean))
+import Language.Haskell.Modules (noisily, putDirs, putModule, runImportsT, splitModule, splitModuleDecls, withCurrentDirectory, findHsModules, extraImport)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import Prelude hiding (writeFile)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
@@ -21,7 +22,7 @@ split1 =
          _ <- runImportsT $ noisily $ noisily $
            do putDirs ["tmp"]
               mapM_ putModule (map S.ModuleName repoModules)
-              splitModuleDecls "tmp/Debian/Repo/Package.hs"
+              splitModuleDecls DoClean "tmp/Debian/Repo/Package.hs"
          (code, out, err) <- diff "testdata/split1-expected" "tmp"
          assertEqual "split1" (ExitSuccess, "", "") (code, out, err)
 
@@ -30,10 +31,9 @@ split2a =
     TestCase $
     do _ <- rsync "testdata/split2" "tmp"
        _ <- runImportsT $ noisily $ noisily $
-         do modifyTestMode (const True)
-            putDirs ["tmp"]
+         do putDirs ["tmp"]
             putModule (S.ModuleName "Split")
-            splitModuleDecls "tmp/Split.hs"
+            splitModuleDecls DoClean "tmp/Split.hs"
        (code, out, err) <- diff "testdata/split2-expected" "tmp"
        assertEqual "split2a" (ExitSuccess, "", "") (code, out, err)
 
@@ -44,7 +44,7 @@ split2b =
        _ <- runImportsT $ noisily $ noisily $
          do putDirs ["tmp"]
             putModule (S.ModuleName "Split")
-            splitModuleDecls "tmp/Split.hs"
+            splitModuleDecls DoClean "tmp/Split.hs"
        (code, out, err) <- diff "testdata/split2-clean-expected" "tmp"
        -- The output of splitModule is "correct", but it will not be
        -- accepted by GHC until the fix for
@@ -58,9 +58,8 @@ split4 =
     do _ <- rsync "testdata/split4" "tmp"
        _ <- withCurrentDirectory "tmp" $
          runImportsT $ noisily $ noisily $
-           modifyTestMode (const True) >>
            putModule (S.ModuleName "Split4") >>
-           splitModuleDecls "Split4.hs"
+           splitModuleDecls DoClean "Split4.hs"
        result <- diff "testdata/split4-expected" "tmp"
        assertEqual "split4" (ExitSuccess, "", "") result
 
@@ -70,9 +69,8 @@ split4b =
     do _ <- rsync "testdata/split4" "tmp"
        _ <- withCurrentDirectory "tmp" $
          runImportsT $ noisily $ noisily $
-           modifyTestMode (const True) >>
            putModule (S.ModuleName "Split4") >>
-           splitModule f "Split4.hs"
+           splitModule DoClean f "Split4.hs"
        result <- diff "testdata/split4b-expected" "tmp"
        assertEqual "split4b" (ExitSuccess, "", "") result
     where
@@ -87,9 +85,8 @@ split4c =
     do _ <- rsync "testdata/split4" "tmp"
        _ <- withCurrentDirectory "tmp" $
          runImportsT $ noisily $ noisily $
-           modifyTestMode (const True) >>
            putModule (S.ModuleName "Split4") >>
-           splitModule f "Split4.hs"
+           splitModule DoClean f "Split4.hs"
        result <- diff "testdata/split4c-expected" "tmp"
        assertEqual "split4c" (ExitSuccess, "", "") result
     where
@@ -105,8 +102,7 @@ split5 =
        _ <- withCurrentDirectory "tmp" $
          runImportsT $ noisily $ noisily $
            List.mapM_ (putModule . S.ModuleName) ["A", "B", "C", "D", "E"] >>
-           modifyTestMode (const True) >>
-           splitModuleDecls "B.hs"
+           splitModuleDecls DoClean "B.hs"
        result <- diff "testdata/split5-expected" "tmp"
        assertEqual "split5" (ExitSuccess, "", "") result
 
@@ -118,7 +114,7 @@ split6 =
          findHsModules ["Debian", "Text", "Tmp"] >>= \ modules ->
          runImportsT $ noisily $ noisily $
            mapM putModule modules >>
-           splitModule f "Debian/Repo/Monads/Apt.hs"
+           splitModule DoClean f "Debian/Repo/Monads/Apt.hs"
        result <- diff "testdata/split6-expected" "tmp"
        assertEqual "split6" (ExitSuccess, "", "") result
     where
@@ -136,7 +132,7 @@ split7 =
                extraImport (S.ModuleName "Main.GetRecentPastes") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.InitialCtrlVState") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.InsertPaste") (S.ModuleName "Main.Instances")
-               splitModule f "Main.hs"
+               splitModule DoClean f "Main.hs"
        result <- diff "testdata/split7-expected" "tmp"
        assertEqual "split7" (ExitSuccess, "", "") result
     where
@@ -176,6 +172,6 @@ split7b =
                extraImport (S.ModuleName "Main.GetRecentPastes") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.InitialCtrlVState") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.InsertPaste") (S.ModuleName "Main.Instances")
-               splitModuleDecls "Main.hs"
+               splitModuleDecls DoClean "Main.hs"
        result <- diff "testdata/split7-expected" "tmp"
        assertEqual "split7b" (ExitSuccess, "", "") result

@@ -7,6 +7,7 @@ module Language.Haskell.Modules.Split
     , defaultSymbolToModule
     ) where
 
+import Debug.Trace
 import Control.Exception (throw)
 import Control.Monad as List (mapM, mapM_)
 import Data.Char (isAlpha, isAlphaNum, toUpper)
@@ -28,7 +29,7 @@ import Language.Haskell.Modules.Common (doResult, ModuleResult(..), reportResult
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.ModuVerse (findModule, getNames, ModuleInfo(..), moduleName, parseModule)
-import Language.Haskell.Modules.Params (MonadClean(getParams), Params(extraImports))
+import Language.Haskell.Modules.Params (MonadClean(getParams), Params(extraImports), CleanMode)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols, members)
@@ -44,16 +45,17 @@ import System.FilePath ((<.>))
 -- first element of the list of directories in the 'SourceDirs' list.
 -- This list is just @["."]@ by default.
 splitModule :: MonadClean m =>
-               (Maybe S.Name -> S.ModuleName)
+               CleanMode
+            -> (Maybe S.Name -> S.ModuleName)
             -- ^ Map each symbol name to the module it will be moved
             -- to.  The name @Nothing@ is used for instance
             -- declarations.
             -> FilePath
             -- ^ The file containing the input module.
             -> m [ModuleResult]
-splitModule symToModule path =
+splitModule mode symToModule path =
     do info <- pathKey (APath path) >>= parseModule
-       splitModuleBy symToModule info
+       splitModuleBy mode symToModule info
 
 -- | Split each of a module's declarations into a new module.  Update
 -- the imports of all the modules in the moduVerse to reflect the split.
@@ -81,27 +83,29 @@ splitModule symToModule path =
 -- go into a module named @Start.ReExported@.  Any instance declarations
 -- would go into @Start.Instances@.
 splitModuleDecls :: MonadClean m =>
-                    FilePath
+                    CleanMode
+                 -> FilePath
                  -- ^ The file containing the input module.
                  -> m [ModuleResult]
-splitModuleDecls path =
+splitModuleDecls mode path =
     do info <- pathKey (APath path) >>= parseModule
-       splitModuleBy (defaultSymbolToModule info) info
+       splitModuleBy mode (defaultSymbolToModule info) info
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
 splitModuleBy :: MonadClean m =>
-                 (Maybe S.Name -> S.ModuleName)
+                 CleanMode
+              -> (Maybe S.Name -> S.ModuleName)
               -- ^ Function mapping symbol names of the input module
               -- to destination module name.
               -> ModuleInfo
               -- ^ The parsed input module.
               -> m [ModuleResult]
-splitModuleBy _ (ModuleInfo (A.XmlPage {}) _ _ _) = error "XmlPage"
-splitModuleBy _ (ModuleInfo (A.XmlHybrid {}) _ _ _) = error "XmlPage"
-splitModuleBy _ m@(ModuleInfo (A.Module _ _ _ _ []) _ _ key) = return [Unchanged (moduleName m) key] -- No declarations - nothing to split
-splitModuleBy _ m@(ModuleInfo (A.Module _ _ _ _ [_]) _ _ key) = return [Unchanged (moduleName m) key] -- One declaration - nothing to split (but maybe we should anyway?)
-splitModuleBy _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = throw $ userError $ "splitModule: no explicit header"
-splitModuleBy symToModule inInfo =
+splitModuleBy _ _ (ModuleInfo (A.XmlPage {}) _ _ _) = error "XmlPage"
+splitModuleBy _ _ (ModuleInfo (A.XmlHybrid {}) _ _ _) = error "XmlPage"
+splitModuleBy _ _ m@(ModuleInfo (A.Module _ _ _ _ []) _ _ key) = return [Unchanged (moduleName m) key] -- No declarations - nothing to split
+splitModuleBy _ _ m@(ModuleInfo (A.Module _ _ _ _ [_]) _ _ key) = return [Unchanged (moduleName m) key] -- One declaration - nothing to split (but maybe we should anyway?)
+splitModuleBy _ _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = throw $ userError $ "splitModule: no explicit header"
+splitModuleBy mode symToModule inInfo =
     do qLnPutStr ("Splitting module " ++ prettyPrint (moduleName inInfo))
        quietly $
          do eiMap <- getParams >>= return . extraImports
@@ -109,12 +113,14 @@ splitModuleBy symToModule inInfo =
             let inName = moduleName inInfo
             allNames <- getNames >>= return . Set.union outNames
             changes <- List.mapM (doModule symToModule eiMap inInfo inName outNames) (toList allNames)
-            -- No good reason to use sets here
-            -- changes <- doSplit symToModule info >>= return . collisionCheck univ
+            -- Now we have to clean the import lists of the new
+            -- modules, which means writing the files and doing an IO
+            -- operation (i.e. running ghc.)  Could we do this in a
+            -- private place and then reload and return the result?
             changes' <- List.mapM doResult changes           -- Write the new modules
             List.mapM_ (\ x -> qLnPutStr ("splitModule: " ++ reportResult x)) changes'
             -- Clean the new modules after all edits are finished
-            cleanResults changes'
+            cleanResults mode changes'
     where
       outNames = Set.map symToModule (union (declared inInfo) (exported inInfo))
 
@@ -181,7 +187,9 @@ doModule symToModule eiMap inInfo inName outNames thisName =
             ([], s) -> s
             ((pref, s, suff) : more, i) -> pref <> i <> s <> suff ++ concatMap (\ (pref', s', suff') -> pref' <> s' <> suff') more
           where
+            oldImportText :: [(String, String, String)]
             oldImportText = foldImports (\ _ pref s suff r -> r ++ [(pref, s, suff)]) inInfo []
+            newImports'' :: String
             newImports'' =
                 case Map.lookup thisName moduleDeclMap of
                   Nothing -> ""
@@ -234,7 +242,7 @@ doModule symToModule eiMap inInfo inName outNames thisName =
       -- will be in that module.  All of these declarations used to be
       -- in moduleName.
       moduleDeclMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
-      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (\ a b -> b ++ a) (symToModule sym) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 inInfo Map.empty
+      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (\ a b -> b ++ a) (symToModule (trace ("sym " ++ show sym ++ " -> " ++ show (symToModule sym)) sym)) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 inInfo Map.empty
 
       updateImportDecl :: String -> A.ImportDecl SrcSpanInfo -> String
       updateImportDecl s i =

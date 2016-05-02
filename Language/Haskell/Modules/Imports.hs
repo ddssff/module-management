@@ -27,7 +27,8 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, import
 import Language.Haskell.Modules.Common (ModuleResult(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
 import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, ModuleInfo(..), moduleName, parseModule)
-import Language.Haskell.Modules.Params (markForDelete, MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir, testMode))
+import Language.Haskell.Modules.Params (markForDelete, MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir),
+                                        CleanMode(..))
 import Language.Haskell.Modules.SourceDirs (modifyDirs, pathKey, APath(..), PathKey(..), PathKey(unPathKey), SourceDirs(getDirs, putDirs))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
@@ -92,10 +93,10 @@ cleanImports paths =
 -- | Do import cleaning in response to the values returned by the
 -- split and merge operations.  Module import lists are cleaned if the
 -- module is modified or created.
-cleanResults :: MonadClean m => [ModuleResult] -> m [ModuleResult]
-cleanResults results =
-    do mode <- getParams >>= return . testMode
-       if mode then return results else (dump >> clean)
+cleanResults :: MonadClean m => CleanMode -> [ModuleResult] -> m [ModuleResult]
+cleanResults NoClean results = return results
+cleanResults testMode results =
+    dump >> clean
     where
       dump =
           mapM (\ x -> case x of

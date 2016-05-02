@@ -20,6 +20,7 @@ import GHC.Generics (Generic)
 import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
 import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, runImportsT, splitModuleDecls, splitModuleBy)
 import Language.Haskell.Modules.ModuVerse (getNames, getInfo, moduleName)
+import Language.Haskell.Modules.Params (CleanMode(DoClean))
 import Language.Haskell.Modules.SourceDirs (getDirs)
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
 import Language.Haskell.TH.Syntax as TH (nameBase)
@@ -372,14 +373,16 @@ clean args = cleanImports args >> return ()
 
 split :: [String] -> CmdM ()
 split [arg] = do
-    r <- liftCT (splitModuleDecls arg)
+    r <- liftCT (splitModuleDecls DoClean arg)
     lift (modify (Cabal.update r))
     return ()
 split _ = liftIO $ putStrLn "Usage: split <modulepath>"
 
 splitBy :: [String] -> CmdM ()
 splitBy [regex, newModule, oldModule] = do
-  r <- liftCT (getInfo (ModuleName oldModule) >>= maybe (error $ "Module not found: " ++ show oldModule) (\ oldModuleInfo -> splitModuleBy pred oldModuleInfo))
+  r <- liftCT (getInfo (ModuleName oldModule) >>=
+               maybe (error $ "Module not found: " ++ show oldModule)
+                     (\oldModuleInfo -> splitModuleBy DoClean pred oldModuleInfo))
   lift (modify (Cabal.update r))
   return ()
     where
@@ -388,7 +391,7 @@ splitBy [regex, newModule, oldModule] = do
           -- declarations not associated with symbols stay in
           -- oldModules (e.g. instances.)  Decarations of matching
           -- symbols go to newModule
-          let match = name >>= (\ x -> Just $ case x of Ident s -> s; Symbol s -> s) >>= matchRegex (mkRegex regex)
+          let match = name >>= (\x -> Just $ case x of Ident s -> s; Symbol s -> s) >>= matchRegex (mkRegex regex)
               modname = ModuleName (maybe oldModule (const newModule) match) in
           {- trace ("Symbol " ++ show name ++ " -> " ++ show modname ++ ", matchRegex (mkRegex " ++ show regex ++ ") -> " ++ show match)-}
                 modname
@@ -399,6 +402,6 @@ merge :: [String] -> CmdM ()
 merge args =
     case splitAt (length args - 1) args of
       (inputs, [output]) -> do
-            r <- liftCT $ mergeModules (map ModuleName inputs) (ModuleName output)
+            r <- liftCT $ mergeModules DoClean (map ModuleName inputs) (ModuleName output)
             liftS (modify (Cabal.update r))
       _ -> liftIO $ putStrLn "Usage: merge <inputmodulename1> <inputmodulename2> ... <outputmodulename>"
