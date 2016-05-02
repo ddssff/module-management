@@ -57,3 +57,8 @@ To Do:
      under version control.
   2. Global cleanups: eliminate exports that are never imported
   3. Global cleanups: eliminate declarations that are not exported.
+  4. Move nested declarations to the top level, adding arguments as
+     necessary.  Also, move top level declarations into a nested position
+     if they are only used in one place, removing arguments if possible.
+  5. Show how to do a completely self contained split, writing source,
+     splitting, reading back in and parsing.
