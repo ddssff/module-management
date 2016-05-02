@@ -3,6 +3,7 @@
 module Language.Haskell.Modules.SourceDirs
     ( SourceDirs(..)
     , modifyDirs
+    , withModifiedDirs
     , withDirs
     , RelPath(..)
     , PathKey(..)
@@ -33,7 +34,10 @@ modifyDirs :: SourceDirs m => ([FilePath] -> [FilePath]) -> m ()
 modifyDirs f = getDirs >>= putDirs . f
 
 withDirs :: SourceDirs m => [FilePath] -> m a -> m a
-withDirs dirs action = bracket (getDirs >>= \ save -> putDirs dirs >> return save) putDirs (const action)
+withDirs dirs action = withModifiedDirs (const dirs) action
+
+withModifiedDirs :: SourceDirs m => ([FilePath] -> [FilePath]) -> m a -> m a
+withModifiedDirs f action = bracket (getDirs >>= \save -> putDirs (f save) >> return save) putDirs (const action)
 
 -- | A FilePath that can be assumed to be unique.
 newtype PathKey = PathKey {unPathKey :: FilePath} deriving (Eq, Ord, Show)
