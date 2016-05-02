@@ -15,7 +15,7 @@ import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpan(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Modules.Util.SrcLoc ()
-import Language.Haskell.Modules.Util.Symbols (symbols, members)
+import Language.Haskell.Modules.Util.Symbols (symbolsDeclaredBy, members)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 tests :: Test
@@ -33,7 +33,7 @@ test4 = TestCase (assertEqual "Pat" "unqual pvar" (prettyPrint (A.PApp def (A.Un
 
 test5 :: Test
 test5 =
-    TestCase (assertEqual "symbols DataDecl" expected (symbols decl, members decl))
+    TestCase (assertEqual "symbols DataDecl" expected (symbolsDeclaredBy decl, members decl))
     where
       expected = (-- Type name
                   fromList [Just (S.Ident "Paste")],

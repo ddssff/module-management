@@ -32,7 +32,7 @@ import Language.Haskell.Modules.SourceDirs (modifyDirs, pathKey, APath(..), Path
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
-import Language.Haskell.Modules.Util.Symbols (symbols)
+import Language.Haskell.Modules.Util.Symbols (symbolsDeclaredBy)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
@@ -336,7 +336,7 @@ unModuleName (A.ModuleName _ x) = x
 -- Compare function used to sort the symbols within an import.
 compareSpecs :: A.ImportSpec SrcSpanInfo -> A.ImportSpec SrcSpanInfo -> Ordering
 compareSpecs a b =
-    case compare (map (map toLower . nameString) $ catMaybes $ toList $ symbols a) (map (map toLower . nameString) $ catMaybes $ toList $ symbols b) of
+    case compare (map (map toLower . nameString) $ catMaybes $ toList $ symbolsDeclaredBy a) (map (map toLower . nameString) $ catMaybes $ toList $ symbolsDeclaredBy b) of
       EQ -> compare (sImportSpec a) (sImportSpec b)
       x -> x
 

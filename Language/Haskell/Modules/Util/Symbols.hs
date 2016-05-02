@@ -3,7 +3,7 @@
 module Language.Haskell.Modules.Util.Symbols
     ( FoldDeclared(foldDeclared)
     , FoldMembers(foldMembers)
-    , symbols
+    , symbolsDeclaredBy
     , members
     , exports
     , imports
@@ -144,8 +144,8 @@ instance FoldDeclared (A.ExportSpec l) where
 -- Return the set of symbols appearing in a construct.  Some
 -- constructs, such as instance declarations, declare no symbols, in
 -- which case Nothing is returned.  Some declare more than one.
-symbols :: FoldDeclared a => a -> Set (Maybe S.Name)
-symbols = foldDeclared insert empty
+symbolsDeclaredBy :: FoldDeclared a => a -> Set (Maybe S.Name)
+symbolsDeclaredBy = foldDeclared insert empty
 
 members :: FoldMembers a => a -> Set (Maybe S.Name)
 members = foldMembers insert empty
@@ -154,7 +154,7 @@ justs :: Set (Maybe a) -> [a]
 justs = mapMaybe id . toList
 
 exports :: (FoldDeclared a, FoldMembers a) => a -> [S.ExportSpec]
-exports x = case (justs (symbols x), justs (members x)) of
+exports x = case (justs (symbolsDeclaredBy x), justs (members x)) of
               ([n], []) -> [S.EVar (S.UnQual n)]
               ([n], ms) -> [S.EThingWith (S.UnQual n) (sort (map S.VarName ms))]
               ([], []) -> []
@@ -163,7 +163,7 @@ exports x = case (justs (symbols x), justs (members x)) of
               y -> error $ "exports: multiple top level names and member names: " ++ show y
 
 imports :: (FoldDeclared a, FoldMembers a) => a -> [S.ImportSpec]
-imports x = case (justs (symbols x), justs (members x)) of
+imports x = case (justs (symbolsDeclaredBy x), justs (members x)) of
               ([n], []) -> [S.IVar n]
               ([n], ms) -> [S.IThingWith n (sort (map S.VarName ms))]
               ([], []) -> []

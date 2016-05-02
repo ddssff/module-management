@@ -32,7 +32,7 @@ import Language.Haskell.Modules.ModuVerse (findModule, getNames, ModuleInfo(..),
 import Language.Haskell.Modules.Params (MonadClean(getParams), Params(extraImports), CleanMode)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
-import Language.Haskell.Modules.Util.Symbols (exports, imports, symbols, members)
+import Language.Haskell.Modules.Util.Symbols (exports, imports, symbolsDeclaredBy, members)
 import Prelude hiding (writeFile)
 import System.FilePath ((<.>))
 
@@ -162,7 +162,7 @@ doModule symToModule eiMap inInfo inName outNames thisName =
            Nothing ->
                doSeps (Foldable.fold (foldExports ignore2
                                        (\ e pref s suff r ->
-                                            if setAny isReExported (Set.map (declClass inInfo) (symbols e))
+                                            if setAny isReExported (Set.map (declClass inInfo) (symbolsDeclaredBy e))
                                             then r |> [(pref, s <> suff)]
                                             else r)
                                        (\ s r -> r |> [("", s)]) inInfo mempty))
@@ -204,7 +204,7 @@ doModule symToModule eiMap inInfo inName outNames thisName =
                 Map.filter imported moduleDeclMap
                 where
                   imported pairs =
-                      let declared' = justs (Set.unions (List.map (symbols . fst) pairs ++
+                      let declared' = justs (Set.unions (List.map (symbolsDeclaredBy . fst) pairs ++
                                                          List.map (members . fst) pairs)) in
                       not (Set.null (Set.intersection declared' referenced))
 
@@ -242,7 +242,13 @@ doModule symToModule eiMap inInfo inName outNames thisName =
       -- will be in that module.  All of these declarations used to be
       -- in moduleName.
       moduleDeclMap :: Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
-      moduleDeclMap = foldDecls (\ d pref s suff r -> Set.fold (\ sym mp -> insertWith (\ a b -> b ++ a) (symToModule (trace ("sym " ++ show sym ++ " -> " ++ show (symToModule sym)) sym)) [(d, pref <> s <> suff)] mp) r (symbols d)) ignore2 inInfo Map.empty
+      moduleDeclMap = foldDecls (\ d pref s suff r ->
+                                     Set.fold (\ sym mp -> insertWith (\ a b -> b ++ a)
+                                                                      (symToModule (trace ("sym " ++ show sym ++ " -> " ++ show (symToModule sym))
+                                                                                    sym))
+                                                                      [(d, pref <> s <> suff)] mp)
+                                              r
+                                              (symbolsDeclaredBy d)) ignore2 inInfo Map.empty
 
       updateImportDecl :: String -> A.ImportDecl SrcSpanInfo -> String
       updateImportDecl s i =
@@ -255,15 +261,15 @@ doModule symToModule eiMap inInfo inName outNames thisName =
       updateImportSpecs i Nothing = List.map (\ x -> (sImportDecl i) {S.importModule = x}) (Set.toList moduleNames) -- (Map.elems moduleMap)
       -- If flag is True this is a "hiding" import
       updateImportSpecs i (Just (A.ImportSpecList _ flag specs)) =
-          concatMap (\ spec -> let xs = List.map symToModule (toList (symbols spec)) in
+          concatMap (\ spec -> let xs = List.map symToModule (toList (symbolsDeclaredBy spec)) in
                                List.map (\ x -> (sImportDecl i) {S.importModule = x, S.importSpecs = Just (flag, [sImportSpec spec])}) xs) specs
 
       moduleNames :: Set S.ModuleName
       moduleNames =
           s
           where
-            s = foldExports ignore2 (\ e _ _ _ r -> Set.fold (Set.insert . symToModule) r (symbols e)) ignore2 inInfo s'
-            s' = foldDecls (\ d _ _ _ r -> Set.fold (Set.insert . symToModule) r (symbols d)) ignore2 inInfo Set.empty
+            s = foldExports ignore2 (\ e _ _ _ r -> Set.fold (Set.insert . symToModule) r (symbolsDeclaredBy e)) ignore2 inInfo s'
+            s' = foldDecls (\ d _ _ _ r -> Set.fold (Set.insert . symToModule) r (symbolsDeclaredBy d)) ignore2 inInfo Set.empty
 
 -- | Combine the suffix of each export with the prefix of the following
 -- export to make a list of all the separators.  Discards the first
@@ -286,7 +292,7 @@ exportSep defsep info =
 -- | Return a list of the names declared in this module, Nothing
 -- denotes one or more instances.
 declared :: ModuleInfo -> Set (Maybe S.Name)
-declared m = foldDecls (\ d _pref _s _suff r -> Set.union (symbols d) r) ignore2 m Set.empty
+declared m = foldDecls (\ d _pref _s _suff r -> Set.union (symbolsDeclaredBy d) r) ignore2 m Set.empty
 
 -- | Return a list of the names expored by this module, Nothing
 -- denotes instances.
@@ -294,7 +300,7 @@ exported :: ModuleInfo -> Set (Maybe S.Name)
 exported m =
     case hasExportList m of
       False -> declared m
-      True -> union (foldExports ignore2 (\ e _pref _s _suff r -> Set.union (symbols e) r) ignore2 m Set.empty)
+      True -> union (foldExports ignore2 (\ e _pref _s _suff r -> Set.union (symbolsDeclaredBy e) r) ignore2 m Set.empty)
                     -- Any instances declared are exported regardless of the export list
                     (if member Nothing (declared m) then singleton Nothing else Set.empty)
     where
@@ -331,11 +337,11 @@ declClass info@(ModuleInfo m _ _ _) mName =
                then Exported name
                else ReExported name -- Exported but not declared - must come from an import
           else Internal name        -- Not exported
-      declaredSymbols = foldDecls (\ d _pref _s _suff r -> Set.union (symbols d) r) ignore2 info Set.empty
+      declaredSymbols = foldDecls (\ d _pref _s _suff r -> Set.union (symbolsDeclaredBy d) r) ignore2 info Set.empty
       exportedSymbols =
         case hasExportList (sModule m) of
           False -> declaredSymbols
-          True -> union (foldExports ignore2 (\ e _pref _s _suff r -> Set.union (symbols e) r) ignore2 info Set.empty)
+          True -> union (foldExports ignore2 (\ e _pref _s _suff r -> Set.union (symbolsDeclaredBy e) r) ignore2 info Set.empty)
                         -- Any instances declared are exported regardless of the export list
                         (if member Nothing declaredSymbols then singleton Nothing else Set.empty)
         where
