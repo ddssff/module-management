@@ -523,9 +523,11 @@ Library
     filepath,
     haskell-src-exts <= 1.18,
     HUnit,
+    lens,
     lifted-base,
     monad-control,
     mtl,
+    mtl-unleashed,
     pretty,
     process,
     pureMD5,
@@ -578,5 +580,6 @@ Test-Suite module-management-tests
     filepath,
     HUnit,
     haskell-src-exts <= 1.18,
+    lens,
     module-management,
     process

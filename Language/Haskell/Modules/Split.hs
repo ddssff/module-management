@@ -7,6 +7,7 @@ module Language.Haskell.Modules.Split
     ) where
 
 import Control.Exception (throw)
+import Control.Lens (use)
 import Control.Monad as List (mapM, mapM_)
 import Data.Default (Default(def))
 import Data.Foldable as Foldable (fold)
@@ -26,7 +27,7 @@ import Language.Haskell.Modules.Common (doResult, ModuleResult(..), reportResult
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.ModuVerse (findModule, getNames, moduleName, parseModule)
-import Language.Haskell.Modules.Params (MonadClean(getParams), Params(extraImports), CleanMode)
+import Language.Haskell.Modules.Params (MonadClean, extraImports, CleanMode)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbolsDeclaredBy, members)
@@ -136,7 +137,7 @@ splitModuleBy _ _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = throw $ userEr
 splitModuleBy mode toModule inInfo =
     do qLnPutStr ("Splitting module " ++ prettyPrint (moduleName inInfo))
        quietly $
-         do eiMap <- getParams >>= return . extraImports
+         do eiMap <- use extraImports
             -- The name of the module to be split
             let inName = moduleName inInfo
             allNames <- getNames >>= return . Set.union outNames

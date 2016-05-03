@@ -1,11 +1,11 @@
 {-# LANGUAGE CPP, PackageImports #-}
 module Imports where
 
-
+import Control.Lens ((%=))
 import Language.Haskell.Exts.Extension (KnownExtension(FlexibleInstances, StandaloneDeriving, TypeSynonymInstances),Extension(EnableExtension))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
 import Language.Haskell.Modules (cleanImports, modifyExtensions, modulePathBase, putHsSourceDirs, runImportsT, withCurrentDirectory)
-import Language.Haskell.Modules.Params (modifyParams, Params(hsFlags), CleanMode(DoClean))
+import Language.Haskell.Modules.Params (modifyParams, Params, hsFlags, CleanMode(DoClean))
 import Language.Haskell.Modules.SourceDirs (RelPath(unRelPath))
 import Language.Haskell.Modules.Util.Test (diff, rsync)
 import System.Directory (createDirectoryIfMissing)
@@ -116,8 +116,8 @@ test7 :: Test
 test7 =
     TestLabel "imports7" $ TestCase
       (do _ <- rsync "tests/data/imports7" tmp
-          _ <- withCurrentDirectory tmp (runImportsT (putHsSourceDirs [".", "../.."] >>
-                                                      modifyParams (\ m -> m {hsFlags = "-DMIN_VERSION_haskell_src_exts(a,b,c)=1" : hsFlags m}) >>
-                                                      cleanImports ["CLI.hs"]))
+          _ <- withCurrentDirectory tmp (runImportsT (do putHsSourceDirs [".", "../.."]
+                                                         hsFlags %= (\x -> "-DMIN_VERSION_haskell_src_exts(a,b,c)=1" : x)
+                                                         cleanImports ["CLI.hs"]))
           out <- diff "tests/data/imports7-expected" tmp
           assertEqual "CLI" (ExitSuccess, "", "") out)

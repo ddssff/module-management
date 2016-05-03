@@ -2,11 +2,18 @@
 -- will be performed.  If a symbol moves from one module to another,
 -- the imports of that symbol will also be updated across all the
 -- modules tracked in the 'ModuVerseState'.
-{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
     ( moduleName
-    , ModuVerseState
+    , ModuVerseState, extensions, moduleInfo, moduleNames, sourceDirs
     , moduVerseInit
     , ModuVerse(..)
     , getNames
@@ -28,6 +35,7 @@ module Language.Haskell.Modules.ModuVerse
     ) where
 
 import Control.Exception.Lifted as IO (catch, throw)
+import Control.Lens (makeLenses)
 import Control.Monad.Trans (liftIO, MonadIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Map as Map (delete, empty, insert, keys, lookup, Map)
@@ -59,22 +67,24 @@ moduleName (ModuleInfo (A.Module _ mh _ _ _) _ _ _) =
 moduleName (ModuleInfo m _ _ _) = error $ "Unsupported Module: " ++ show m
 
 data ModuVerseState =
-    ModuVerseState { moduleNames_ :: Maybe (Map S.ModuleName ModuleInfo)
-                   , moduleInfo_ :: Map PathKey ModuleInfo
-                   , extensions_ :: [Extension]
-                   , sourceDirs_ :: [FilePath]
+    ModuVerseState { _moduleNames :: Maybe (Map S.ModuleName ModuleInfo)
+                   , _moduleInfo :: Map PathKey ModuleInfo
+                   , _extensions :: [Extension]
+                   , _sourceDirs :: [FilePath]
                    -- ^ Top level directories to search for source files and
                    -- imports.  These directories would be the value used in the
                    -- hs-source-dirs parameter of a cabal file, and passed to ghc
                    -- via the -i option.
                    } deriving (Eq, Ord, Show)
 
+$(makeLenses ''ModuVerseState)
+
 moduVerseInit :: ModuVerseState
 moduVerseInit =
-    ModuVerseState { moduleNames_ = Nothing
-                   , moduleInfo_ = Map.empty
-                   , extensions_ = Exts.extensions Exts.defaultParseMode ++ [nameToExtension StandaloneDeriving] -- allExtensions
-                   , sourceDirs_ = ["."] }
+    ModuVerseState { _moduleNames = Nothing
+                   , _moduleInfo = Map.empty
+                   , _extensions = Exts.extensions Exts.defaultParseMode ++ [nameToExtension StandaloneDeriving] -- allExtensions
+                   , _sourceDirs = ["."] }
 
 -- | From hsx2hs, but removing Arrows because it makes test case fold3c and others fail.
 hseExtensions :: [Extension]
@@ -88,13 +98,13 @@ hseExtensions = map nameToExtension
     ]
 
 getNames :: ModuVerse m => m (Set S.ModuleName)
-getNames = getModuVerse >>= return . Set.fromList . keys . fromMaybe (error "No modules in ModuVerse, use putModule") . moduleNames_
+getNames = getModuVerse >>= return . Set.fromList . keys . fromMaybe (error "No modules in ModuVerse, use putModule") . _moduleNames
 
 getInfo :: ModuVerse m => S.ModuleName -> m (Maybe ModuleInfo)
-getInfo name = getModuVerse >>= return . Map.lookup name . fromMaybe (error "No modules in ModuVerse, use putModule") . moduleNames_
+getInfo name = getModuVerse >>= return . Map.lookup name . fromMaybe (error "No modules in ModuVerse, use putModule") . _moduleNames
 
 putName :: ModuVerse m => S.ModuleName -> ModuleInfo -> m ()
-putName name info = modifyModuVerse (\ s -> s {moduleNames_ = Just (Map.insert name info (fromMaybe Map.empty (moduleNames_ s)))})
+putName name info = modifyModuVerse (\ s -> s {_moduleNames = Just (Map.insert name info (fromMaybe Map.empty (_moduleNames s)))})
 
 putModule :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m ()
 putModule name = pathKey (modulePathBase "hs" name) >>= parseModule >>= putName name
@@ -122,25 +132,25 @@ findSymbolDecl modu name =
          Just _ -> error ("Multiple declarations of " ++ show name ++ " in " ++ show modu)
 
 delName :: ModuVerse m => S.ModuleName -> m ()
-delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Map.delete name (fromMaybe Map.empty (moduleNames_ s)))
-                                         , moduleInfo_ = Map.empty })
+delName name = modifyModuVerse (\ s -> s { _moduleNames = Just (Map.delete name (fromMaybe Map.empty (_moduleNames s)))
+                                         , _moduleInfo = Map.empty })
 
 class (MonadIO m, MonadBaseControl IO m, Functor m) => ModuVerse m where
     getModuVerse :: m ModuVerseState
     modifyModuVerse :: (ModuVerseState -> ModuVerseState) -> m ()
 
 getExtensions :: ModuVerse m => m [Extension]
-getExtensions = getModuVerse >>= return . extensions_
+getExtensions = getModuVerse >>= return . _extensions
 
 -- | Modify the list of extensions passed to GHC when dumping the
 -- minimal imports.  Note that GHC will also use the extensions in the
 -- module's LANGUAGE pragma, so this can usually be left alone.
 modifyExtensions :: ModuVerse m => ([Extension] -> [Extension]) -> m ()
-modifyExtensions f = modifyModuVerse (\ s -> s {extensions_ = f (extensions_ s)})
+modifyExtensions f = modifyModuVerse (\ s -> s {_extensions = f (_extensions s)})
 
 instance ModuVerse m => SourceDirs m where
-    putHsSourceDirs xs = modifyModuVerse (\ s -> s {sourceDirs_ = xs})
-    getHsSourceDirs = getModuVerse >>= return . sourceDirs_
+    putHsSourceDirs xs = modifyModuVerse (\ s -> s {_sourceDirs = xs})
+    getHsSourceDirs = getModuVerse >>= return . _sourceDirs
 
 {-
 getSourceDirs :: ModuVerse m => m [FilePath]
@@ -163,7 +173,7 @@ parseModuleMaybe (Just key) =
     where
       look =
           do verse <- getModuVerse
-             return $ Map.lookup key (moduleInfo_ verse)
+             return $ Map.lookup key (_moduleInfo verse)
       load (Just x) = return (Just x)
       load Nothing = Just <$> loadModule key
 
@@ -173,12 +183,12 @@ loadModule key =
     do text <- liftIO $ readFile (unPathKey key)
        quietly $ qLnPutStr ("parsing " ++ unPathKey key)
        (parsed, comments) <- parseFileWithComments (unPathKey key) >>= return . Exts.fromParseResult
-       modifyModuVerse (\ x -> x {moduleInfo_ = Map.insert key (ModuleInfo parsed text comments key) (moduleInfo_ x)})
+       modifyModuVerse (\ x -> x {_moduleInfo = Map.insert key (ModuleInfo parsed text comments key) (_moduleInfo x)})
        return (ModuleInfo parsed text comments key)
 
 unloadModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ()
 unloadModule key =
-    modifyModuVerse (\ x -> x {moduleInfo_ = Map.delete key (moduleInfo_ x)})
+    modifyModuVerse (\ x -> x {_moduleInfo = Map.delete key (_moduleInfo x)})
 
 -- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))

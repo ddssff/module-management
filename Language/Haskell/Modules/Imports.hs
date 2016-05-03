@@ -6,6 +6,7 @@ module Language.Haskell.Modules.Imports
     ) where
 
 import Control.Exception.Lifted as IO (bracket, catch, throw)
+import Control.Lens (use)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
 import Data.Foldable (fold)
@@ -25,7 +26,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, import
 import Language.Haskell.Modules.Common (ModuleResult(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports, ModuleInfo(..))
 import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, moduleName, parseModule)
-import Language.Haskell.Modules.Params (markForDelete, MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir),
+import Language.Haskell.Modules.Params (markForDelete, MonadClean, hsFlags, removeEmptyImports, scratchDir,
                                         CleanMode(..))
 import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, pathKey, APath(..), PathKey(..), PathKey(unPathKey), SourceDirs(getHsSourceDirs, putHsSourceDirs))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
@@ -121,10 +122,10 @@ cleanResults DoClean results =
 -- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
 dumpImports :: MonadClean m => Set PathKey -> m ()
 dumpImports keys =
-    do scratch <- scratchDir <$> getParams
+    do scratch <- use scratchDir
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"
-       args <- hsFlags <$> getParams
+       args <- use hsFlags
        dirs <- getHsSourceDirs
        exts <- getExtensions
        let args' = args ++
@@ -148,7 +149,7 @@ dumpImports keys =
 checkImports :: MonadClean m => ModuleInfo -> m ModuleResult
 checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _) =
     do
-       scratch <- scratchDir <$> getParams
+       scratch <- use scratchDir
        let importsPath = scratch </> maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh ++ ".imports"
 
        -- The .imports file will appear in the real current directory,
@@ -177,7 +178,7 @@ withDot a =
 -- old, update the source file with the new imports.
 updateSource :: MonadClean m => ModuleInfo -> A.Module SrcSpanInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
 updateSource m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ key) (A.Module _ _ _ newImports _) extraImports =
-    do remove <- removeEmptyImports <$> getParams
+    do remove <- use removeEmptyImports
        maybe (qLnPutStr ("cleanImports: no changes to " ++ show key) >> return (Unchanged (moduleName m) key))
              (\ text' ->
                   qLnPutStr ("cleanImports: modifying " ++ show key) >>
