@@ -156,11 +156,15 @@ splitModuleBy mode toModule inInfo =
       outNames :: Set S.ModuleName
       outNames = Set.map (toModule Nothing . A) ({-union (exported inInfo)-} (declared inInfo))
 
+-- | Perform updates a module.
 doModule :: MonadClean m =>
             ToModuleArg
          -> Map S.ModuleName [S.ImportDecl]
-         -> ModuleInfo -> S.ModuleName
-         -> Set S.ModuleName -> S.ModuleName -> m ModuleResult
+         -> ModuleInfo
+         -> S.ModuleName
+         -> Set S.ModuleName
+         -> S.ModuleName
+         -> m ModuleResult
 doModule toModule eiMap inInfo inName outNames thisName =
     case () of
       _ | member thisName outNames ->

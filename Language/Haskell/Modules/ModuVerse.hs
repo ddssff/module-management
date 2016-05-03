@@ -1,3 +1,7 @@
+-- | The ModuVerse is the set of modules over which global operations
+-- will be performed.  If a symbol moves from one module to another,
+-- the imports of that symbol will also be updated across all the
+-- modules tracked in the 'ModuVerseState'.
 {-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
