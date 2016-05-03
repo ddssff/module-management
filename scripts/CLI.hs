@@ -17,11 +17,14 @@ import qualified Data.Set as S (member, toList, map)
 import Data.Set.Extra as Set (Set, toList)
 import Distribution.Package (InstalledPackageId(..))
 import GHC.Generics (Generic)
+import qualified Language.Haskell.Exts.Annotated as A (Decl)
+import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
 import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, runImportsT, splitModuleDecls, splitModuleBy)
 import Language.Haskell.Modules.ModuVerse (getNames, getInfo, moduleName)
 import Language.Haskell.Modules.Params (CleanMode(DoClean))
 import Language.Haskell.Modules.SourceDirs (getDirs)
+import Language.Haskell.Modules.Split (T(A))
 import Language.Haskell.Modules.Util.Symbols (FoldDeclared)
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
 import Language.Haskell.TH.Syntax as TH (nameBase)
@@ -383,7 +386,7 @@ splitBy [regex, newModule, oldModule] = do
   lift (modify (Cabal.update r))
   return ()
     where
-      pred :: forall t. FoldDeclared t => Maybe Name -> t -> ModuleName
+      -- pred :: Maybe Name -> T -> ModuleName
       pred name decl =
           -- declarations not associated with symbols stay in
           -- oldModules (e.g. instances.)  Decarations of matching

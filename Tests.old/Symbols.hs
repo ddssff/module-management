@@ -22,9 +22,9 @@ tests :: Test
 tests = TestList [test1, test2, test3, test4, test5]
 
 test1 :: Test
-test1 = TestCase (assertEqual "DefaultDecl" " \ndefault (foo)" (prettyPrint (A.DefaultDecl def [A.TyVar def (A.Ident def "foo")] :: A.Decl SrcSpanInfo)))
+test1 = TestCase (assertEqual "DefaultDecl" "default (foo)" (prettyPrint (A.DefaultDecl def [A.TyVar def (A.Ident def "foo")] :: A.Decl SrcSpanInfo)))
 test2 :: Test
-test2 = TestCase (assertEqual "PatBind" "pvar :: typ = unqualrhs" (prettyPrint (A.PatBind def (A.PVar def (A.Ident def "pvar"))
+test2 = TestCase (assertEqual "PatBind" "pvar = unqualrhs" (prettyPrint (A.PatBind def (A.PVar def (A.Ident def "pvar"))
                                                                                               (A.UnGuardedRhs def (A.Var def (A.UnQual def (A.Ident def "unqualrhs")))) Nothing :: A.Decl SrcSpanInfo)))
 test3 :: Test
 test3 = TestCase (assertEqual "Pat" "pvar" (prettyPrint (A.PVar def (A.Ident def "pvar") :: A.Pat SrcSpanInfo)))
