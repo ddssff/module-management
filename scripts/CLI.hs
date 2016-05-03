@@ -1,5 +1,5 @@
 {- # OPTIONS_GHC -Wall #-}
-{-# LANGUAGE CPP, DeriveDataTypeable, DeriveGeneric, PatternGuards, StandaloneDeriving, ViewPatterns #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, DeriveGeneric, PatternGuards, RankNTypes, StandaloneDeriving, ViewPatterns #-}
 module Main where
 
 import System.Console.Haskeline
@@ -22,6 +22,7 @@ import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModul
 import Language.Haskell.Modules.ModuVerse (getNames, getInfo, moduleName)
 import Language.Haskell.Modules.Params (CleanMode(DoClean))
 import Language.Haskell.Modules.SourceDirs (getDirs)
+import Language.Haskell.Modules.Util.Symbols (FoldDeclared)
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
 import Language.Haskell.TH.Syntax as TH (nameBase)
 import System.Console.Haskeline (completeFilename, CompletionFunc, defaultSettings, getInputLine, InputT, noCompletion, runInputT, setComplete, simpleCompletion)
@@ -382,8 +383,8 @@ splitBy [regex, newModule, oldModule] = do
   lift (modify (Cabal.update r))
   return ()
     where
-      pred :: Maybe Name -> ModuleName
-      pred name =
+      pred :: forall t. FoldDeclared t => Maybe Name -> t -> ModuleName
+      pred name decl =
           -- declarations not associated with symbols stay in
           -- oldModules (e.g. instances.)  Decarations of matching
           -- symbols go to newModule

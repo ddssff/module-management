@@ -21,7 +21,8 @@ import Control.Monad.Trans.Control as IO (MonadBaseControl)
 import Control.Monad.State (MonadState(get, put), StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
 import Data.Map as Map (empty, Map, insertWith)
-import Data.Set as Set (empty, insert, Set, singleton, toList, union)
+import Data.Monoid ((<>))
+import Data.Set as Set (empty, insert, Set, toList)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(SrcLoc))
 import Language.Haskell.Exts.Syntax as S (ImportDecl(..), ModuleName)
 import Language.Haskell.Modules.ModuVerse (ModuVerse(..), moduVerseInit, ModuVerseState)
@@ -58,7 +59,7 @@ data Params
       -- instances it contains, but usually it is not.  Note that this
       -- option does not affect imports that started empty and end
       -- empty.
-      , extraImports :: Map S.ModuleName (Set S.ImportDecl)
+      , extraImports :: Map S.ModuleName [S.ImportDecl]
       -- ^ Deciding whether a module needs to be imported can be
       -- difficult when instances are involved, this is a cheat to force
       -- keys of the map to import the corresponding elements.
@@ -138,7 +139,7 @@ modifyDryRun f = modifyParams (\ p -> p {dryRun = f (dryRun p)})
 -- instances (only) from module @i@.
 extraImport :: MonadClean m => S.ModuleName -> S.ModuleName -> m ()
 extraImport m i =
-    modifyParams (\ p -> p {extraImports = Map.insertWith (union) m (singleton im) (extraImports p)})
+    modifyParams (\ p -> p {extraImports = Map.insertWith (<>) m [im] (extraImports p)})
     where im = ImportDecl { importLoc = SrcLoc "<unknown>.hs" 1 1
                           , importModule = i
                           , importQualified = False

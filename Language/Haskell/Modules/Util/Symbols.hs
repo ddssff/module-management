@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, CPP, FlexibleInstances, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, CPP, FlexibleInstances, OverloadedLists, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.Util.Symbols
     ( FoldDeclared(foldDeclared)
@@ -9,14 +9,11 @@ module Language.Haskell.Modules.Util.Symbols
     , imports
     ) where
 
-import Data.List (sort)
-import Data.Maybe (mapMaybe)
-import Data.Set as Set (empty, insert, Set, toList)
+import Data.Set as Set (empty, insert, map, Set, toAscList)
 import Language.Haskell.Exts.Annotated.Simplify (sName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), ExportSpec(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name, Pat(..), PatField(..), QName(..), QualConDecl(..), RPat(..))
 import qualified Language.Haskell.Exts.Syntax as S (CName(..), ExportSpec(..), ImportSpec(..), Name(..), QName(..))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (InstRule(..))
-import qualified Language.Haskell.Exts.Syntax as S (Namespace(..))
 
 -- | Do a fold over the names that are declared in a declaration (not
 -- every name that appears, just the ones that the declaration is
@@ -24,7 +21,7 @@ import qualified Language.Haskell.Exts.Syntax as S (Namespace(..))
 -- argument takes a Maybe because some declarations don't cause a
 -- symbol to become bound - instances, for example.
 class FoldDeclared a where
-    foldDeclared :: forall r. (Maybe S.Name -> r -> r) -> r -> a -> r
+    foldDeclared :: forall r. (S.Name -> r -> r) -> r -> a -> r
 
 instance FoldDeclared (A.Decl a) where
     foldDeclared f r (A.TypeDecl _ x _t) = foldDeclared f r x  -- type x = ...
@@ -33,31 +30,33 @@ instance FoldDeclared (A.Decl a) where
     foldDeclared f r (A.DataDecl _ _ _ x _ _) = foldDeclared f r x -- data/newtype _ x = ...
     foldDeclared f r (A.GDataDecl _ _ _ x _ _ _) = foldDeclared f r x
     foldDeclared f r (A.DataFamDecl _ _ x _) = foldDeclared f r x
-    foldDeclared f r (A.TypeInsDecl _ _ _) = f Nothing r -- type instance _ = ...
-    foldDeclared f r (A.DataInsDecl _ _ _ _ _) = f Nothing r -- data instance _ = ...
-    foldDeclared f r (A.GDataInsDecl _ _ _ _ _ _) = f Nothing r -- data or newtype instance, GADT style
+    foldDeclared _ r (A.TypeInsDecl _ _ _) = r -- type instance _ = ...
+    foldDeclared _ r (A.DataInsDecl _ _ _ _ _) = r -- data instance _ = ...
+    foldDeclared _ r (A.GDataInsDecl _ _ _ _ _ _) = r -- data or newtype instance, GADT style
     foldDeclared f r (A.ClassDecl _ _ x _ _) = foldDeclared f r x  -- class context => x | fundeps where decls
-    foldDeclared f r (A.InstDecl _ _ _ _) = f Nothing r -- type class instance
+    foldDeclared _ r (A.InstDecl _ _ _ _) = r -- type class instance
     foldDeclared f r (A.DerivDecl _ _ x) = foldDeclared f r x
-    foldDeclared f r (A.InfixDecl _ _ _ _) = f Nothing r -- fixity
-    foldDeclared f r (A.DefaultDecl _ _) = f Nothing r -- default (type1, type2 ...)
-    foldDeclared f r (A.SpliceDecl _ _) = f Nothing r  -- template haskell splice declaration
+    foldDeclared _ r (A.InfixDecl _ _ _ _) = r -- fixity
+    foldDeclared _ r (A.DefaultDecl _ _) = r -- default (type1, type2 ...)
+    foldDeclared _ r (A.SpliceDecl _ _) = r  -- template haskell splice declaration
     foldDeclared f r (A.TypeSig _ xs _) = foldl (foldDeclared f) r xs
     foldDeclared f r (A.FunBind _ xs) = foldl (foldDeclared f) r xs
     foldDeclared f r (A.PatBind _ x _ _) = foldDeclared f r x
-    foldDeclared f r (A.PatBind _ x _ _) = foldDeclared f r x
     foldDeclared _f _r (A.ForImp _ _ _ _ _ _) = error "Unimplemented FoldDeclared instance: ForImp"
     foldDeclared _ _r (A.ForExp _ _ _ _ _) = error "Unimplemented FoldDeclared instance: ForExp"
-    foldDeclared f r (A.RulePragmaDecl _ _) = f Nothing r
-    foldDeclared f r (A.DeprPragmaDecl _ _) = f Nothing r
-    foldDeclared f r (A.WarnPragmaDecl _ _) = f Nothing r
+    foldDeclared _ r (A.RulePragmaDecl _ _) = r
+    foldDeclared _ r (A.DeprPragmaDecl _ _) = r
+    foldDeclared _ r (A.WarnPragmaDecl _ _) = r
     foldDeclared f r (A.InlineSig _ _ _ x) = foldDeclared f r x
     foldDeclared f r (A.InlineConlikeSig _ _ x) = foldDeclared f r x
     foldDeclared f r (A.SpecSig _ _ x _) = foldDeclared f r x
     foldDeclared f r (A.SpecInlineSig _ _ _ x _) = foldDeclared f r x
     foldDeclared f r (A.InstSig _ x) = foldDeclared f r x
-    foldDeclared f r (A.MinimalPragma _ _) = f Nothing r
-    foldDeclared f r (A.AnnPragma _ _) = f Nothing r
+    foldDeclared _ r (A.MinimalPragma _ _) = r
+    foldDeclared _ r (A.AnnPragma _ _) = r
+    foldDeclared _ _ (A.PatSynSig _ _ _ _ _ _) = error "fixme"
+    foldDeclared _ _ (A.PatSyn _ _ _ _) = error "fixme"
+    foldDeclared _ _ (A.RoleAnnotDecl _ _ _) = error "fixme"
 
 instance FoldDeclared (A.DeclHead a) where
     foldDeclared f r (A.DHead _ x) = foldDeclared f r x
@@ -125,7 +124,7 @@ instance FoldDeclared (A.RPat a) where
     foldDeclared f r (A.RPPat _ x) = foldDeclared f r x -- an ordinary pattern
 
 instance FoldDeclared (A.Name l) where
-    foldDeclared f r x = f (Just (sName x)) r
+    foldDeclared f r x = f (sName x) r
 
 -- Something imported can be exported
 instance FoldDeclared (A.ImportSpec l) where
@@ -134,6 +133,7 @@ instance FoldDeclared (A.ImportSpec l) where
     foldDeclared f r (A.IThingAll _ name) = foldDeclared f r name
     foldDeclared f r (A.IThingWith _ name _) = foldDeclared f r name
 
+-- This is really an implementation of foldMentioned
 instance FoldDeclared (A.ExportSpec l) where
     foldDeclared f r (A.EVar _ name) = foldDeclared f r name
     foldDeclared f r (A.EAbs _ _ name) = foldDeclared f r name
@@ -144,37 +144,34 @@ instance FoldDeclared (A.ExportSpec l) where
 -- Return the set of symbols appearing in a construct.  Some
 -- constructs, such as instance declarations, declare no symbols, in
 -- which case Nothing is returned.  Some declare more than one.
-symbolsDeclaredBy :: FoldDeclared a => a -> Set (Maybe S.Name)
+symbolsDeclaredBy :: FoldDeclared a => a -> Set S.Name
 symbolsDeclaredBy = foldDeclared insert empty
 
-members :: FoldMembers a => a -> Set (Maybe S.Name)
+members :: FoldMembers a => a -> Set S.Name
 members = foldMembers insert empty
 
-justs :: Set (Maybe a) -> [a]
-justs = mapMaybe id . toList
-
-exports :: (FoldDeclared a, FoldMembers a) => a -> [S.ExportSpec]
-exports x = case (justs (symbolsDeclaredBy x), justs (members x)) of
+exports :: (FoldDeclared a, FoldMembers a) => a -> Set S.ExportSpec
+exports x = case (symbolsDeclaredBy x, members x) of
               ([n], []) -> [S.EVar (S.UnQual n)]
-              ([n], ms) -> [S.EThingWith (S.UnQual n) (sort (map S.VarName ms))]
+              ([n], ms) -> [S.EThingWith (S.UnQual n) (Set.toAscList (Set.map S.VarName ms))]
               ([], []) -> []
               ([], _) -> error "exports: members with no top level name"
-              (ns, []) -> map (S.EVar . S.UnQual) ns
+              (ns, []) -> Set.map (S.EVar . S.UnQual) ns
               y -> error $ "exports: multiple top level names and member names: " ++ show y
 
-imports :: (FoldDeclared a, FoldMembers a) => a -> [S.ImportSpec]
-imports x = case (justs (symbolsDeclaredBy x), justs (members x)) of
+imports :: (FoldDeclared a, FoldMembers a) => a -> Set S.ImportSpec
+imports x = case (symbolsDeclaredBy x, members x) of
               ([n], []) -> [S.IVar n]
-              ([n], ms) -> [S.IThingWith n (sort (map S.VarName ms))]
+              ([n], ms) -> [S.IThingWith n (Set.toAscList (Set.map S.VarName ms))]
               ([], []) -> []
               ([], _ms) -> error "exports: members with no top level name"
-              (ns, []) -> map S.IVar ns
+              (ns, []) -> Set.map S.IVar ns
               y -> error $ "imports: multiple top level names and member names: " ++ show y
 
 -- | Fold over the declared members - e.g. the method names of a class
 -- declaration, the constructors of a data declaration.
 class FoldMembers a where
-    foldMembers :: forall r. (Maybe S.Name -> r -> r) -> r -> a -> r
+    foldMembers :: forall r. (S.Name -> r -> r) -> r -> a -> r
 
 instance FoldMembers (A.Decl a) where
     foldMembers f r (A.ClassDecl _ _ _ _ mxs) = maybe r (foldl (foldDeclared f) r) mxs  -- class context => x | fundeps where decls

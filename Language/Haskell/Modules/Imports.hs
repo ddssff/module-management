@@ -5,7 +5,6 @@ module Language.Haskell.Modules.Imports
     , cleanResults
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Exception.Lifted as IO (bracket, catch, throw)
 import Control.Monad.Trans (liftIO)
 import Data.Char (toLower)
@@ -13,9 +12,9 @@ import Data.Foldable (fold)
 import Data.Function (on)
 import Data.List (find, groupBy, intercalate, nub, sortBy)
 import Data.Maybe (catMaybes, fromMaybe)
-import Data.Monoid ((<>), mempty)
+import Data.Monoid ((<>))
 import Data.Sequence ((|>))
-import Data.Set as Set (empty, fromList, member, Set, singleton, toList, union, unions)
+import Data.Set as Set (empty, fromList, map, member, Set, singleton, toList, union, unions)
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, sModuleName, sName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleHead(..), ModuleName(..), QName(..), Type(..))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (InstRule(..))
@@ -131,7 +130,7 @@ dumpImports keys =
        let args' = args ++
                    ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs] ++
                    concatMap ppExtension exts ++
-                   map unPathKey (toList keys)
+                   Set.toList (Set.map unPathKey keys)
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
          ExitSuccess -> quietly (qLnPutStr (showCommandForUser cmd args' ++ " -> Ok")) >> return ()
@@ -194,7 +193,7 @@ replaceImports newImports m =
     let oldPretty = fold (foldImports (\ _ pref s suff r -> r |> (pref <> s <> suff)) m mempty)
         -- Surround newPretty with the same prefix and suffix as oldPretty
         newPretty = fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just pref) Just r) m Nothing) <>
-                    intercalate "\n" (map (prettyPrintWithMode (defaultMode {layout = PPInLine})) newImports) <>
+                    intercalate "\n" (Prelude.map (prettyPrintWithMode (defaultMode {layout = PPInLine})) newImports) <>
                     foldImports (\ _ _ _ suff _ -> suff) m mempty in
     if oldPretty == newPretty
     then Nothing
@@ -214,20 +213,20 @@ fixNewImports :: Bool         -- ^ If true, imports that turn into empty lists w
               -> [A.ImportDecl SrcSpanInfo]
               -> [A.ImportDecl SrcSpanInfo]
 fixNewImports remove m oldImports imports =
-    filter importPred $ map expandSDTypes $ map mergeDecls $ groupBy (\ a b -> importMergable a b == EQ) $ sortBy importMergable imports
+    filter importPred $ Prelude.map expandSDTypes $ Prelude.map mergeDecls $ groupBy (\ a b -> importMergable a b == EQ) $ sortBy importMergable imports
     where
       -- mergeDecls :: [ImportDecl] -> ImportDecl
       mergeDecls [] = error "mergeDecls"
-      mergeDecls xs@(x : _) = x {A.importSpecs = mergeSpecLists (catMaybes (map A.importSpecs xs))}
+      mergeDecls xs@(x : _) = x {A.importSpecs = mergeSpecLists (catMaybes (Prelude.map A.importSpecs xs))}
           where
             -- Merge a list of specs for the same module
             mergeSpecLists :: [A.ImportSpecList SrcSpanInfo] -> Maybe (A.ImportSpecList SrcSpanInfo)
             mergeSpecLists (A.ImportSpecList loc flag specs : ys) =
-                Just (A.ImportSpecList loc flag (mergeSpecs (sortBy compareSpecs (nub (concat (specs : map (\ (A.ImportSpecList _ _ specs') -> specs') ys))))))
+                Just (A.ImportSpecList loc flag (mergeSpecs (sortBy compareSpecs (nub (concat (specs : Prelude.map (\ (A.ImportSpecList _ _ specs') -> specs') ys))))))
             mergeSpecLists [] = error "mergeSpecLists"
       expandSDTypes :: A.ImportDecl SrcSpanInfo -> A.ImportDecl SrcSpanInfo
       expandSDTypes i@(A.ImportDecl {A.importSpecs = Just (A.ImportSpecList l f specs)}) =
-          i {A.importSpecs = Just (A.ImportSpecList l f (map (expandSpec i) specs))}
+          i {A.importSpecs = Just (A.ImportSpecList l f (Prelude.map (expandSpec i) specs))}
       expandSDTypes i = i
       expandSpec i s =
           if not (A.importQualified i) && member (Nothing, sName n) sdTypes ||
@@ -263,7 +262,7 @@ standaloneDerivingTypes :: ModuleInfo -> Set (Maybe S.ModuleName, S.Name)
 standaloneDerivingTypes (ModuleInfo (A.XmlPage _ _ _ _ _ _ _) _ _ _) = error "standaloneDerivingTypes A.XmlPage"
 standaloneDerivingTypes (ModuleInfo (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ _) = error "standaloneDerivingTypes A.XmlHybrid"
 standaloneDerivingTypes (ModuleInfo (A.Module _ _ _ _ decls) _ _ _) =
-    unions (map derivDeclTypes decls)
+    unions (Prelude.map derivDeclTypes decls)
 
 -- | Collect the declared types of a standalone deriving declaration.
 class DerivDeclTypes a where
@@ -286,7 +285,7 @@ instance DerivDeclTypes (A.InstHead l) where
 instance DerivDeclTypes (A.Type l) where
     derivDeclTypes (A.TyForall _ _ _ x) = derivDeclTypes x -- qualified type
     derivDeclTypes (A.TyFun _ x y) = union (derivDeclTypes x) (derivDeclTypes y) -- function type
-    derivDeclTypes (A.TyTuple _ _ xs) = unions (map derivDeclTypes xs) -- tuple type, possibly boxed
+    derivDeclTypes (A.TyTuple _ _ xs) = unions (Prelude.map derivDeclTypes xs) -- tuple type, possibly boxed
     derivDeclTypes (A.TyList _ x) =  derivDeclTypes x -- list syntax, e.g. [a], as opposed to [] a
     derivDeclTypes (A.TyApp _ x y) = union (derivDeclTypes x) (derivDeclTypes y) -- application of a type constructor
     derivDeclTypes (A.TyVar _ _) = empty -- type variable
@@ -302,6 +301,7 @@ instance DerivDeclTypes (A.Type l) where
     derivDeclTypes (A.TyEquals _ _ _) = empty -- a ~ b, not clear how this related to standalone deriving
     derivDeclTypes (A.TySplice _ _) = empty
     derivDeclTypes (A.TyBang _ _ x) = derivDeclTypes x
+    derivDeclTypes (A.TyWildCard _ _) = empty
 
 -- | Compare the two import declarations ignoring the things that are
 -- actually being imported.  Equality here indicates that the two
@@ -336,7 +336,7 @@ unModuleName (A.ModuleName _ x) = x
 -- Compare function used to sort the symbols within an import.
 compareSpecs :: A.ImportSpec SrcSpanInfo -> A.ImportSpec SrcSpanInfo -> Ordering
 compareSpecs a b =
-    case compare (map (map toLower . nameString) $ catMaybes $ toList $ symbolsDeclaredBy a) (map (map toLower . nameString) $ catMaybes $ toList $ symbolsDeclaredBy b) of
+    case compare (Set.map (Prelude.map toLower . nameString) $ symbolsDeclaredBy a) (Set.map (Prelude.map toLower . nameString) $ symbolsDeclaredBy b) of
       EQ -> compare (sImportSpec a) (sImportSpec b)
       x -> x
 

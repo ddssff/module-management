@@ -36,9 +36,9 @@ test5 =
     TestCase (assertEqual "symbols DataDecl" expected (symbolsDeclaredBy decl, members decl))
     where
       expected = (-- Type name
-                  fromList [Just (S.Ident "Paste")],
+                  fromList [(S.Ident "Paste")],
                   -- Constructor and field accessors
-                  fromList [Just (S.Ident "Paste"), Just (S.Ident "pasteMeta"), Just (S.Ident "paste")])
+                  fromList [(S.Ident "Paste"), (S.Ident "pasteMeta"), (S.Ident "paste")])
       decl :: A.Decl SrcSpanInfo
       decl = fromParseResult $ parse $ unlines [ "data Paste = Paste"
                                                , "    { pasteMeta :: PasteMeta"
