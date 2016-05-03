@@ -19,9 +19,9 @@ import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, importModule), ModuleName(..))
 import Language.Haskell.Modules.Common (doResult, fixExport, ModuleResult(..), reportResult)
-import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2)
+import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (getNames, ModuleInfo(..), moduleName, parseModule, parseModuleMaybe)
+import Language.Haskell.Modules.ModuVerse (getNames, moduleName, parseModule, parseModuleMaybe)
 import Language.Haskell.Modules.Params (MonadClean, CleanMode)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, pathKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
@@ -101,7 +101,7 @@ doModule inNames@(_ : _) outName thisName =
                    else moduleDecls inNames outName thisName baseInfo
                text' = header <> exports <> imports <> decls in
            return $ case thisInfo of
-                      Just (ModuleInfo {text_ = text, key_ = key}) ->
+                      Just (ModuleInfo {modtext_ = text, key_ = key}) ->
                           if text' /= text then ToBeModified thisName key text' else Unchanged thisName key
                       Nothing ->
                           ToBeCreated thisName text'

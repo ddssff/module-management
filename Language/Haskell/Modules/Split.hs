@@ -23,9 +23,9 @@ import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMo
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(..), Module(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (doResult, ModuleResult(..), reportResult)
-import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2)
+import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (findModule, getNames, ModuleInfo(..), moduleName, parseModule)
+import Language.Haskell.Modules.ModuVerse (findModule, getNames, moduleName, parseModule)
 import Language.Haskell.Modules.Params (MonadClean(getParams), Params(extraImports), CleanMode)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
@@ -334,8 +334,7 @@ exportSep defsep info =
                                                 (suff' : xs) -> suff : (pref ++ suff') : xs)
                         ignore2 ignore ignore ignore2 info []
 
--- | Return a list of the names declared in this module, Nothing
--- denotes one or more instances.
+-- | Return a list of this module's declarations
 declared :: ModuleInfo -> Set (A.Decl SrcSpanInfo)
 declared m = foldDecls (\d _pref _s _suff r -> Set.insert d r) ignore2 m Set.empty
 

@@ -23,8 +23,8 @@ import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPI
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (ModuleResult(..))
-import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports)
-import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, ModuleInfo(..), moduleName, parseModule)
+import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports, ModuleInfo(..))
+import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, moduleName, parseModule)
 import Language.Haskell.Modules.Params (markForDelete, MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir),
                                         CleanMode(..))
 import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, pathKey, APath(..), PathKey(..), PathKey(unPathKey), SourceDirs(getHsSourceDirs, putHsSourceDirs))

@@ -5,8 +5,7 @@
 {-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
-    ( ModuleInfo(..)
-    , moduleName
+    ( moduleName
     , ModuVerseState
     , moduVerseInit
     , ModuVerse(..)
@@ -16,6 +15,7 @@ module Language.Haskell.Modules.ModuVerse
     , putModule
     , putModuleAnew
     , findModule
+    , findSymbolDecl
     , delName
     , getExtensions
     , modifyExtensions
@@ -32,29 +32,20 @@ import Control.Monad.Trans (liftIO, MonadIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.Map as Map (delete, empty, insert, keys, lookup, Map)
 import Data.Maybe (fromMaybe)
-import Data.Set as Set (fromList, Set)
-import qualified Language.Haskell.Exts.Annotated as A (Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
+import Data.Set as Set (fromList, insert, minView, Set)
+import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename, fixities), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import Language.Haskell.Exts.Syntax as S (ModuleName(..))
+import Language.Haskell.Exts.Syntax as S (ModuleName(..), Name)
+import Language.Haskell.Modules.Fold (foldDecls, ModuleInfo(..))
 import Language.Haskell.Modules.SourceDirs (modulePathBase, PathKey(..), Path(..), pathKey, SourceDirs(..))
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity, qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
 nameToExtension :: KnownExtension -> Extension
 nameToExtension x = EnableExtension x
-
-deriving instance Ord Comment
-
-data ModuleInfo
-    = ModuleInfo
-      { module_ :: A.Module SrcSpanInfo
-      , text_ :: String
-      , comments_ :: [Comment]
-      , key_ :: PathKey }
-    deriving (Eq, Ord, Show)
 
 {-
 moduleName :: A.Module a -> S.ModuleName
@@ -118,6 +109,17 @@ putModuleAnew name =
 
 findModule :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m (Maybe ModuleInfo)
 findModule name = pathKeyMaybe (modulePathBase "hs" name) >>= parseModuleMaybe
+
+-- | Given a symbol name and the module from which it can be imported,
+-- return the Decl that creates it.
+findSymbolDecl :: ModuVerse m => S.ModuleName -> S.Name -> m (Maybe (A.Decl SrcSpanInfo))
+findSymbolDecl modu name =
+    do Just info <- getInfo modu
+       let s = foldDecls (\d _ _ _ r -> Set.insert d r) (\_ r -> r) info mempty
+       case Set.minView s of
+         Nothing -> return Nothing
+         Just (d, s') | null s' -> return (Just d)
+         Just _ -> error ("Multiple declarations of " ++ show name ++ " in " ++ show modu)
 
 delName :: ModuVerse m => S.ModuleName -> m ()
 delName name = modifyModuVerse (\ s -> s { moduleNames_ = Just (Map.delete name (fromMaybe Map.empty (moduleNames_ s)))

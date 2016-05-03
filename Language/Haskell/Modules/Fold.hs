@@ -1,8 +1,9 @@
 -- | 'foldModule' is a utility function used to implement the clean, split, and merge operations.
-{-# LANGUAGE BangPatterns, CPP, FlexibleContexts, FlexibleInstances, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, CPP, FlexibleContexts, FlexibleInstances, ScopedTypeVariables, StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wall #-}
 module Language.Haskell.Modules.Fold
-    ( foldModule
+    ( ModuleInfo(..)
+    , foldModule
     , foldHeader
     , foldExports
     , foldImports
@@ -22,7 +23,8 @@ import Data.Sequence (Seq, (|>))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
-import Language.Haskell.Modules.ModuVerse (ModuleInfo(ModuleInfo))
+-- import Language.Haskell.Modules.ModuVerse (ModuleInfo(ModuleInfo))
+import Language.Haskell.Modules.SourceDirs (PathKey)
 import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, srcLoc, srcPairText)
 
 --type Module = A.Module SrcSpanInfo
@@ -142,6 +144,16 @@ adjustSpans text comments sps@(x : _) =
                                                 text_ = t',
                                                 comms_ = cs})
                          _ -> return () -- No comments, or we didn't reach it
+
+deriving instance Ord Comment
+
+data ModuleInfo
+    = ModuleInfo
+      { module_ :: A.Module SrcSpanInfo
+      , modtext_ :: String
+      , comments_ :: [Comment]
+      , key_ :: PathKey }
+    deriving (Eq, Ord, Show)
 
 -- | Given the result of parseModuleWithComments and the original
 -- module text, this does a fold over the parsed module contents,
