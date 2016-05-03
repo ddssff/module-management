@@ -22,7 +22,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
 import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules,
                                  modifyHsSourceDirs, ModuleName(..), MonadClean, noisily, putHsSourceDirs, putModule,
-                                 runImportsT, splitModuleDecls, splitModuleBy)
+                                 runImportsT, splitModuleBy)
 import Language.Haskell.Modules.ModuVerse (getNames, getInfo, moduleName)
 import Language.Haskell.Modules.Params (CleanMode(DoClean))
 import Language.Haskell.Modules.SourceDirs (getHsSourceDirs)
@@ -272,11 +272,13 @@ cmds_ args =
                      action =    liftCT (dir args),
                      usage = "dir <directory> <directory> ...\n" ++
                              "Add paths to the list of search directories - similar to the ghc -i option." },
+{-
            Command { names = ["split"],
                      action =  split args,
                      usage = "split <modulepath>\n" ++
                              "Split each of the symbols in a module into individual sub-modules.  Updates all\n" ++
                              "references to these symbols throughout the moduverse." },
+-}
            Command { names = ["splitBy"],
                      action =  splitBy args,
                      usage = "splitBy <regex> <newmodule> <oldmodule>\n" ++
@@ -373,12 +375,14 @@ clean [] = liftIO $ putStrLn $ "Usage: clean <modulepath1> <modulepath2> ...\n" 
                                     "Clean up the import lists of the named modules\n"
 clean args = cleanImports args >> return ()
 
+#if 0
 split :: [String] -> CmdM ()
 split [arg] = do
     r <- liftCT (splitModuleDecls DoClean arg)
     lift (modify (Cabal.update r))
     return ()
 split _ = liftIO $ putStrLn "Usage: split <modulepath>"
+#endif
 
 splitBy :: [String] -> CmdM ()
 splitBy [regex, newModule, oldModule] = do

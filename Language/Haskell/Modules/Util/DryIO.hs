@@ -14,7 +14,6 @@ module Language.Haskell.Modules.Util.DryIO
     , writeFile
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Exception as E (catch, throw)
 import Control.Monad.Trans (liftIO, MonadIO)
 import Prelude hiding (writeFile)

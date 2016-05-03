@@ -3,23 +3,19 @@
 module Language.Haskell.Modules.Split
     ( T(..)
     , splitModule
-    , splitModuleDecls
     , splitModuleBy
-    , defaultToModule
     ) where
 
--- import Debug.Trace
 import Control.Exception (throw)
 import Control.Monad as List (mapM, mapM_)
-import Data.Char (isAlpha, isAlphaNum, toUpper)
 import Data.Default (Default(def))
-import Data.Foldable as Foldable (fold, foldl')
-import Data.List as List (group, intercalate, filter, map, nub, sort)
+import Data.Foldable as Foldable (fold)
+import Data.List as List (group, intercalate, map, nub, sort)
 import Data.Map as Map (delete, elems, empty, filter, insertWith, lookup, Map, mapWithKey)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Sequence ((<|), (|>))
-import Data.Set as Set (empty, filter, fold, fromList, insert, intersection, map, member, minView, null, Set, singleton, toAscList, toList, union, unions)
+import Data.Set as Set (empty, filter, fold, fromList, insert, intersection, map, member, null, Set, singleton, toList, union)
 import Data.Set.Extra as Set (gFind)
 import qualified Language.Haskell.Exts.Annotated as A (Decl(InstDecl), ExportSpec(..), ExportSpecList, ImportDecl(..), ImportSpec(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
 import Language.Haskell.Exts.Annotated.Simplify (sExportSpec, sImportDecl, sImportSpec, sModule, sModuleName, sName)
@@ -35,7 +31,6 @@ import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.Symbols (exports, imports, symbolsDeclaredBy, members)
 import Prelude hiding (writeFile)
-import System.FilePath ((<.>))
 
 -- | The purpose of this module is to move declartions between
 -- modules, and the basic input is a funcion that decides what the
@@ -67,6 +62,7 @@ splitModule mode toModule path =
     do info <- pathKey (APath path) >>= parseModule
        splitModuleBy mode toModule info
 
+{-
 -- | Split each of a module's declarations into a new module.  Update
 -- the imports of all the modules in the moduVerse to reflect the split.
 -- For example, if you have a module like
@@ -121,6 +117,7 @@ defaultToModule info (Just name) (A decl) =
       -- by capitalizing and keeping the remaining alphaNum characters.
       g (c : s) | isAlpha c = toUpper c : List.filter isAlphaNum s
       g _ = "OtherSymbols"
+-}
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
 splitModuleBy :: MonadClean m =>
@@ -342,6 +339,7 @@ exportSep defsep info =
 declared :: ModuleInfo -> Set (A.Decl SrcSpanInfo)
 declared m = foldDecls (\d _pref _s _suff r -> Set.insert d r) ignore2 m Set.empty
 
+#if 0
 -- | Return a list of the decls and associate names exported by this module
 exported :: ModuleInfo -> [Either (A.Decl SrcSpanInfo) S.Name]
 exported m =
@@ -357,6 +355,7 @@ exported m =
       hasExportList (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = False
       hasExportList (ModuleInfo (A.Module _ (Just (A.ModuleHead _ _ _ Nothing)) _ _ _) _ _ _) = False
       hasExportList _ = True
+#endif
 
 instanceImports :: S.ModuleName -> Map S.ModuleName [S.ImportDecl] -> [S.ImportDecl]
 instanceImports name eiMap = maybe [] id (Map.lookup name eiMap)
@@ -368,6 +367,7 @@ data SymbolClass
     | Instance (A.Decl SrcSpanInfo)
     deriving (Eq, Ord, Show)
 
+#if 0
 declClass :: ModuleInfo -> Either (A.ExportSpec SrcSpanInfo) (A.Decl SrcSpanInfo) -> S.Name -> Maybe SymbolClass -- Map S.Name SymbolClass?
 declClass info eed name =
     case Set.minView (Set.filter testName (declClasses info eed)) of
@@ -379,6 +379,7 @@ declClass info eed name =
       testName (ReExported _ name') = name' == name
       testName (Internal _ name') = name' == name
       testName _ = False
+#endif
 
 -- | Classify the symbols of a Decl or ExportSpec.
 declClasses :: ModuleInfo -> Either (A.ExportSpec SrcSpanInfo) (A.Decl SrcSpanInfo) -> Set SymbolClass -- Map S.Name SymbolClass?

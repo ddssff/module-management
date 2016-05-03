@@ -33,7 +33,7 @@ test4 = TestCase (assertEqual "Pat" "unqual pvar" (prettyPrint (A.PApp def (A.Un
 
 test5 :: Test
 test5 =
-    TestCase (assertEqual "symbols DataDecl" expected (symbolsDeclaredBy decl, members decl))
+    TestCase (assertEqual "symbols DataDecl" expected (fromList (symbolsDeclaredBy decl), fromList (members decl)))
     where
       expected = (-- Type name
                   fromList [(S.Ident "Paste")],
