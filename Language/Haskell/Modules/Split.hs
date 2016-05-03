@@ -26,11 +26,10 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(.
 import Language.Haskell.Modules.Common (doResult, ModuleResult(..), reportResult)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (findModule, getNames, moduleName, parseModule)
-import Language.Haskell.Modules.Params (MonadClean, extraImports, CleanMode)
+import Language.Haskell.Modules.ModuVerse (extraImports, CleanMode, findModule, getNames, moduleName, ModuVerse, parseModule)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
+import Language.Haskell.Modules.Symbols (exports, imports, symbolsDeclaredBy, members)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
-import Language.Haskell.Modules.Util.Symbols (exports, imports, symbolsDeclaredBy, members)
 import Prelude hiding (writeFile)
 
 -- | The purpose of this module is to move declartions between
@@ -50,7 +49,7 @@ type ToModuleArg = Maybe S.Name -> T -> S.ModuleName
 -- the module name in the usual way, but with a prefix taken from the
 -- first element of the list of directories in the 'SourceDirs' list.
 -- This list is just @["."]@ by default.
-splitModule :: MonadClean m =>
+splitModule :: ModuVerse m =>
                CleanMode
             -> ToModuleArg
             -- ^ Map each symbol name to the module it will be moved
@@ -89,7 +88,7 @@ splitModule mode toModule path =
 -- If we had imported and then re-exported a symbol in Start it would
 -- go into a module named @Start.ReExported@.  Any instance declarations
 -- would go into @Start.Instances@.
-splitModuleDecls :: MonadClean m =>
+splitModuleDecls :: ModuVerse m =>
                     CleanMode
                  -> FilePath
                  -- ^ The file containing the input module.
@@ -121,7 +120,7 @@ defaultToModule info (Just name) (A decl) =
 -}
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
-splitModuleBy :: MonadClean m =>
+splitModuleBy :: ModuVerse m =>
                  CleanMode
               -> ToModuleArg
               -- ^ Function mapping symbol names of the input module
@@ -155,7 +154,7 @@ splitModuleBy mode toModule inInfo =
       outNames = Set.map (toModule Nothing . A) ({-union (exported inInfo)-} (declared inInfo))
 
 -- | Perform updates a module.
-doModule :: MonadClean m =>
+doModule :: ModuVerse m =>
             ToModuleArg
          -> Map S.ModuleName [S.ImportDecl]
          -> ModuleInfo

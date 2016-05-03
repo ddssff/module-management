@@ -25,14 +25,13 @@ import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (ModuleResult(..))
 import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports, ModuleInfo(..))
-import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, moduleName, parseModule)
-import Language.Haskell.Modules.Params (markForDelete, MonadClean, hsFlags, removeEmptyImports, scratchDir,
-                                        CleanMode(..))
+import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, moduleName, ModuVerse, parseModule,
+                                           markForDelete, hsFlags, removeEmptyImports, scratchDir, CleanMode(..))
 import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, pathKey, APath(..), PathKey(..), PathKey(unPathKey), SourceDirs(getHsSourceDirs, putHsSourceDirs))
+import Language.Haskell.Modules.SrcLoc (srcLoc)
+import Language.Haskell.Modules.Symbols (symbolsDeclaredBy)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
-import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
-import Language.Haskell.Modules.Util.Symbols (symbolsDeclaredBy)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
@@ -46,7 +45,7 @@ import System.Process (readProcessWithExitCode, showCommandForUser)
 cleanBuildImports :: LocalBuildInfo -> IO ()
 cleanBuildImports lbi =
     mapM (toFilePath srcDirs) (maybe [] exposedModules (library (localPkgDescr lbi))) >>= \ libPaths ->
-    runImportsT (Distribution.Simple.LocalBuildInfo.scratchDir lbi) $ mapM_ clean (libPaths ++ exePaths)
+    runModuVerseT (Distribution.Simple.LocalBuildInfo.scratchDir lbi) $ mapM_ clean (libPaths ++ exePaths)
     where
       clean path = cleanImports path >>= liftIO . putStrLn . either show (\ text -> path ++ ": " ++ maybe "no changes" (\ _ -> " updated") text)
       exePaths = map modulePath (executables (localPkgDescr lbi))
@@ -79,7 +78,7 @@ cleanBuildImports lbi =
 --    * Imported symbols are alphabetized by symbol name
 --
 --    * Imported constructors and field accessors are alphabetized
-cleanImports :: MonadClean m => [FilePath] -> m [ModuleResult]
+cleanImports :: ModuVerse m => [FilePath] -> m [ModuleResult]
 cleanImports paths =
     do keys <- mapM (pathKey . APath) paths >>= return . fromList
        dumpImports keys
@@ -88,7 +87,7 @@ cleanImports paths =
 -- | Do import cleaning in response to the values returned by the
 -- split and merge operations.  Module import lists are cleaned if the
 -- module is modified or created.
-cleanResults :: MonadClean m => CleanMode -> [ModuleResult] -> m [ModuleResult]
+cleanResults :: ModuVerse m => CleanMode -> [ModuleResult] -> m [ModuleResult]
 cleanResults NoClean results = return results
 cleanResults DoClean results =
     dump >> clean
@@ -120,7 +119,7 @@ cleanResults DoClean results =
              checkImports info
 
 -- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
-dumpImports :: MonadClean m => Set PathKey -> m ()
+dumpImports :: ModuVerse m => Set PathKey -> m ()
 dumpImports keys =
     do scratch <- use scratchDir
        liftIO $ createDirectoryIfMissing True scratch
@@ -146,7 +145,7 @@ dumpImports keys =
 -- source file.  We also need to modify the imports of any names
 -- that are types that appear in standalone instance derivations so
 -- their members are imported too.
-checkImports :: MonadClean m => ModuleInfo -> m ModuleResult
+checkImports :: ModuVerse m => ModuleInfo -> m ModuleResult
 checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _) =
     do
        scratch <- use scratchDir
@@ -168,7 +167,7 @@ checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _) =
       isHiddenImport _ = False
 checkImports _ = error "Unsupported module type"
 
-withDot :: MonadClean m => m a -> m a
+withDot :: ModuVerse m => m a -> m a
 withDot a =
     bracket (getHsSourceDirs)
             (modifyHsSourceDirs . const)
@@ -176,7 +175,7 @@ withDot a =
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
-updateSource :: MonadClean m => ModuleInfo -> A.Module SrcSpanInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
+updateSource :: ModuVerse m => ModuleInfo -> A.Module SrcSpanInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
 updateSource m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ key) (A.Module _ _ _ newImports _) extraImports =
     do remove <- use removeEmptyImports
        maybe (qLnPutStr ("cleanImports: no changes to " ++ show key) >> return (Unchanged (moduleName m) key))

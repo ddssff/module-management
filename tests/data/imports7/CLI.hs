@@ -6,18 +6,17 @@ import Control.Monad.Trans (MonadIO(liftIO))
 import Data.List (intercalate, isPrefixOf)
 import Data.Set.Extra as Set (Set, toList)
 import Language.Haskell.Modules
-import Language.Haskell.Modules.ModuVerse (getNames)
-import Language.Haskell.Modules.Params (CleanMode(DoClean))
+import Language.Haskell.Modules.ModuVerse (getNames, CleanMode(DoClean))
 import Language.Haskell.Modules.SourceDirs (getHsSourceDirs)
 import System.IO (hGetLine, hPutStr, hPutStrLn, stderr, stdin)
 
 main :: IO ()
 main = runImportsT (noisily cli)
 
-cli :: MonadClean m => m ()
+cli :: ModuVerse m => m ()
 cli = liftIO (hPutStr stderr " > " >> hGetLine stdin) >>= cmd . words
 
-cmd :: MonadClean m => [String] -> m ()
+cmd :: ModuVerse m => [String] -> m ()
 cmd [] = cli
 cmd (s : args) =
     case filter (any (== s) . fst) cmds of
@@ -45,7 +44,7 @@ cmd (s : args) =
 unModuleName :: ModuleName -> String
 unModuleName (ModuleName x) = x
 
-verse :: MonadClean m => [String] -> m ()
+verse :: ModuVerse m => [String] -> m ()
 verse [] =
     do modules <- getNames
        liftIO $ hPutStrLn stderr ("Usage: verse <pathormodule1> <pathormodule2> ...\n" ++
@@ -66,22 +65,22 @@ verse args =
 showVerse :: Set ModuleName -> String
 showVerse modules = "[ " ++ intercalate "\n  , " (map unModuleName (toList modules)) ++ " ]"
 
-dir :: MonadClean m => [FilePath] -> m ()
+dir :: ModuVerse m => [FilePath] -> m ()
 dir [] = putHsSourceDirs []
 dir xs =
     do modifyHsSourceDirs (++ xs)
        xs' <- getHsSourceDirs
        liftIO (hPutStrLn stderr $ "sourceDirs updated:\n  [ " ++ intercalate "\n  , " xs' ++ " ]")
 
-clean :: MonadClean m => [FilePath] -> m ()
+clean :: ModuVerse m => [FilePath] -> m ()
 clean [] = liftIO $ hPutStrLn stderr "Usage: clean <modulepath1> <modulepath2> ..."
 clean args = cleanImports args >> return ()
 
-split :: MonadClean m => [FilePath] -> m ()
+split :: ModuVerse m => [FilePath] -> m ()
 split [arg] = splitModuleDecls DoClean arg >> return ()
 split _ = liftIO $ hPutStrLn stderr "Usage: split <modulepath>"
 
-merge :: MonadClean m => [String] -> m ()
+merge :: ModuVerse m => [String] -> m ()
 merge args =
     case splitAt (length args - 1) args of
       (inputs, [output]) -> mergeModules DoClean (map ModuleName inputs) (ModuleName output) >> return ()

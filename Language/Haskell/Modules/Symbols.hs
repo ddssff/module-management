@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns, CPP, FlexibleInstances, OverloadedLists, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-module Language.Haskell.Modules.Util.Symbols
+module Language.Haskell.Modules.Symbols
     ( FoldDeclared(foldDeclared)
     , FoldMembers(foldMembers)
     , symbolsDeclaredBy

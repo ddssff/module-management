@@ -133,7 +133,7 @@ findHsFiles tops =
 
 -- | Convenience function for building the moduVerse, searches for
 -- modules in a directory hierarchy.  FIXME: This should be in
--- MonadClean and use the value of sourceDirs to remove prefixes from
+-- ModuVerse and use the value of sourceDirs to remove prefixes from
 -- the module paths.  And then it should look at the module text to
 -- see what the module name really is.
 findHsModules :: [FilePath] -> IO [ModuleName]

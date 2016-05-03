@@ -14,8 +14,8 @@ import Language.Haskell.Exts.Parser (parse, fromParseResult)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcSpan(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S
-import Language.Haskell.Modules.Util.SrcLoc ()
-import Language.Haskell.Modules.Util.Symbols (symbolsDeclaredBy, members)
+import Language.Haskell.Modules.SrcLoc ()
+import Language.Haskell.Modules.Symbols (symbolsDeclaredBy, members)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
 tests :: Test

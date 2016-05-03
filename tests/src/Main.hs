@@ -9,8 +9,8 @@ import Language.Haskell.Exts.Comments (Comment)
 import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
-import Language.Haskell.Modules (CleanT, mergeModules, modifyExtensions, MonadClean, noisily, putModule, runImportsT, withCurrentDirectory)
-import Language.Haskell.Modules.Params (CleanMode(DoClean))
+import Language.Haskell.Modules (mergeModules, extensions, ModuVerse, noisily, putModule, runModuVerseT, withCurrentDirectory,
+                                 CleanMode(DoClean))
 import Language.Haskell.Modules.Util.Test (diff', logicModules, rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
 import System.Process (system)
@@ -78,28 +78,28 @@ slow = TestList [ -- No need to do test2b or test2a if test2c passes.
                 , Split.slow
                 ]
 
--- logictest :: String -> ([String] -> CleanT m ()) -> Test
-logictest :: String -> ([ModuleName] -> CleanT IO ()) -> Test
+-- logictest :: String -> ([String] -> StateT Params m ()) -> Test
+logictest :: String -> ([ModuleName] -> StateT Params IO ()) -> Test
 logictest s f =
     TestLabel s $ TestCase $
     do _ <- rsync "testdata/logic" "tmp"
-       _ <- withCurrentDirectory "tmp" $ runImportsT $ noisily $ f (map ModuleName logicModules)
+       _ <- withCurrentDirectory "tmp" $ runModuVerseT $ noisily $ f (map ModuleName logicModules)
        (code, out, err) <- diff' ("testdata/" ++ s ++ "-expected") "tmp"
        let out' = unlines (filter (not . isPrefixOf "Binary files") . map (takeWhile (/= '\t')) $ (lines out))
        assertEqual s (ExitSuccess, "", "") (code, out', err)
 
-test2a :: MonadClean m => [ModuleName] -> m ()
+test2a :: ModuVerse m => [ModuleName] -> m ()
 test2a u =
-         do modifyExtensions (++ [EnableExtension MultiParamTypeClasses])
+         do extensions %= (++ [EnableExtension MultiParamTypeClasses])
             -- We *must* clean the split results, or there will be
             -- circular imports created when we merge.
             mapM_ putModule u
             _ <- splitModuleDecls DoClean "Data/Logic/Classes/Literal.hs"
             return ()
 
-test2b :: MonadClean m => [ModuleName] -> m ()
+test2b :: ModuVerse m => [ModuleName] -> m ()
 test2b u =
-         do modifyExtensions (++ [EnableExtension MultiParamTypeClasses])
+         do extensions %= (++ [EnableExtension MultiParamTypeClasses])
             mapM_ putModule u
             _ <- splitModuleDecls DoClean "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules
@@ -110,9 +110,9 @@ test2b u =
                    (ModuleName "Data.Logic.Classes.FirstOrder")
             return ()
 
-test2c :: MonadClean m => [ModuleName] -> m ()
+test2c :: ModuVerse m => [ModuleName] -> m ()
 test2c u =
-         do modifyExtensions (++ [EnableExtension MultiParamTypeClasses])
+         do extensions %= (++ [EnableExtension MultiParamTypeClasses])
             mapM_ putModule u
             _ <- splitModuleDecls DoClean "Data/Logic/Classes/Literal.hs"
             _ <- mergeModules

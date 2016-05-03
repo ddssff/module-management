@@ -25,7 +25,7 @@ import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 -- import Language.Haskell.Modules.ModuVerse (ModuleInfo(ModuleInfo))
 import Language.Haskell.Modules.SourceDirs (PathKey)
-import Language.Haskell.Modules.Util.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, srcLoc, srcPairText)
+import Language.Haskell.Modules.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, srcLoc, srcPairText)
 
 --type Module = A.Module SrcSpanInfo
 --type ModuleHead = A.ModuleHead SrcSpanInfo

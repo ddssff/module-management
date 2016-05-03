@@ -4,9 +4,8 @@ module Imports where
 import Control.Lens ((%=))
 import Language.Haskell.Exts.Extension (KnownExtension(FlexibleInstances, StandaloneDeriving, TypeSynonymInstances),Extension(EnableExtension))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(ModuleName))
-import Language.Haskell.Modules (cleanImports, modifyExtensions, modulePathBase, putHsSourceDirs, runImportsT, withCurrentDirectory)
-import Language.Haskell.Modules.Params (modifyParams, Params, hsFlags, CleanMode(DoClean))
-import Language.Haskell.Modules.SourceDirs (RelPath(unRelPath))
+import Language.Haskell.Modules (cleanImports, extensions, modulePathBase, putHsSourceDirs, runModuVerseT, withCurrentDirectory,
+                                 hsFlags, CleanMode(DoClean), RelPath(unRelPath))
 import Language.Haskell.Modules.Util.Test (diff, rsync)
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(..))
@@ -29,7 +28,7 @@ test1 =
           createDirectoryIfMissing True tmp
           rsync "tests/data" tmp
           let base = modulePathBase "hs" (S.ModuleName "Test1")
-          _ <- withCurrentDirectory tmp $ (runImportsT (cleanImports [unRelPath base]))
+          _ <- withCurrentDirectory tmp $ (runModuVerseT (cleanImports [unRelPath base]))
           (code, out, err) <- readProcessWithExitCode "diff" ["-ru", expected </> unRelPath base, tmp </> unRelPath base] ""
           assertEqual "cleanImports"
                          (ExitFailure 1,
@@ -65,7 +64,7 @@ test3 :: Test
 test3 =
     TestLabel "imports3" $ TestCase
       (rsync "tests/data/imports3" tmp >>
-       runImportsT (putHsSourceDirs [tmp] >> cleanImports [tmp </> "NotMain.hs"]) >>
+       runModuVerseT (putHsSourceDirs [tmp] >> cleanImports [tmp </> "NotMain.hs"]) >>
        assertEqual "module name" () ())
 
 -- | Preserve imports with a "hiding" clause
@@ -73,7 +72,7 @@ test4 :: Test
 test4 =
     TestLabel "imports4" $ TestCase
       (rsync "tests/data/imports4" tmp >>
-       runImportsT (putHsSourceDirs [tmp] >> cleanImports [tmp </> "Hiding.hs"]) >>
+       runModuVerseT (putHsSourceDirs [tmp] >> cleanImports [tmp </> "Hiding.hs"]) >>
        -- Need to check the text of Hiding.hs, but at least this verifies that there was no crash
        assertEqual "module name" () ())
 
@@ -82,9 +81,9 @@ test5 :: Test
 test5 =
     TestLabel "imports5" $ TestCase
       (do _ <- rsync "tests/data/imports5" tmp
-          _ <- runImportsT
+          _ <- runModuVerseT
                  (putHsSourceDirs [tmp] >>
-                  modifyExtensions (++ map nameToExtension [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
+                  extensions %= (++ map nameToExtension [StandaloneDeriving, TypeSynonymInstances, FlexibleInstances]) >>
                   cleanImports [tmp </> "Deriving.hs"])
           (code, out, err) <- diff "tests/data/imports5" tmp
           assertEqual "standalone deriving"
@@ -107,7 +106,7 @@ test6 :: Test
 test6 =
     TestLabel "imports6" $ TestCase
       (do _ <- rsync "tests/data/imports6" tmp
-          _ <- withCurrentDirectory tmp (runImportsT (cleanImports ["EndComment.hs"]))
+          _ <- withCurrentDirectory tmp (runModuVerseT (cleanImports ["EndComment.hs"]))
           (_, out, _) <- readProcessWithExitCode "diff" ["-ru", "tests/data/imports6-expected", tmp] ""
           assertEqual "comment at end" "Only in tests/tmp: EndComment.hs~\n" out)
 
@@ -116,8 +115,8 @@ test7 :: Test
 test7 =
     TestLabel "imports7" $ TestCase
       (do _ <- rsync "tests/data/imports7" tmp
-          _ <- withCurrentDirectory tmp (runImportsT (do putHsSourceDirs [".", "../.."]
-                                                         hsFlags %= (\x -> "-DMIN_VERSION_haskell_src_exts(a,b,c)=1" : x)
-                                                         cleanImports ["CLI.hs"]))
+          _ <- withCurrentDirectory tmp (runModuVerseT (do putHsSourceDirs [".", "../.."]
+                                                           hsFlags %= (\x -> "-DMIN_VERSION_haskell_src_exts(a,b,c)=1" : x)
+                                                           cleanImports ["CLI.hs"]))
           out <- diff "tests/data/imports7-expected" tmp
           assertEqual "CLI" (ExitSuccess, "", "") out)

@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns, CPP, FlexibleInstances, ScopedTypeVariables, UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-module Language.Haskell.Modules.Util.SrcLoc
+module Language.Haskell.Modules.SrcLoc
     ( HasSpanInfo(..)
     , srcSpan
     , srcLoc

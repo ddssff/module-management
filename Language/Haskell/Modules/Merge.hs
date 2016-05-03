@@ -21,8 +21,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, impor
 import Language.Haskell.Modules.Common (doResult, fixExport, ModuleResult(..), reportResult)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (getNames, moduleName, parseModule, parseModuleMaybe)
-import Language.Haskell.Modules.Params (MonadClean, CleanMode)
+import Language.Haskell.Modules.ModuVerse (CleanMode, getNames, moduleName, ModuVerse, parseModule, parseModuleMaybe)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, pathKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 
@@ -31,7 +30,7 @@ import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 -- reflect the change.  It *is* permissable to use one of the input
 -- modules as the output module.  Note that circular imports can be
 -- created by this operation.
-mergeModules :: MonadClean m => CleanMode -> [S.ModuleName] -> S.ModuleName -> m [ModuleResult]
+mergeModules :: ModuVerse m => CleanMode -> [S.ModuleName] -> S.ModuleName -> m [ModuleResult]
 mergeModules mode inNames outName =
     do qLnPutStr ("mergeModules: [" ++ intercalate ", " (map prettyPrint inNames) ++ "] -> " ++ prettyPrint outName)
        quietly $
@@ -46,7 +45,7 @@ mergeModules mode inNames outName =
 -- The output module may not (yet) be an element of the moduVerse, in
 -- that case choose the first input modules to convert into the output
 -- module.
-doModule :: MonadClean m =>
+doModule :: ModuVerse m =>
             [S.ModuleName]  -- The names of the merge input modules
          -> S.ModuleName    -- The name of the merge destination module
          -> S.ModuleName    -- The module we will work on

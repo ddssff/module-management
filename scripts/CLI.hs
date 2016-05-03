@@ -20,14 +20,13 @@ import GHC.Generics (Generic)
 import qualified Language.Haskell.Exts.Annotated as A (Decl)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
-import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules,
-                                 modifyHsSourceDirs, ModuleName(..), MonadClean, noisily, putHsSourceDirs, putModule,
-                                 runImportsT, splitModuleBy)
-import Language.Haskell.Modules.ModuVerse (getNames, getInfo, moduleName)
-import Language.Haskell.Modules.Params (CleanMode(DoClean))
+import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules,
+                                 ModuleName(..), ModuVerse, noisily, putHsSourceDirs, putModule,
+                                 runModuVerseT, splitModuleBy)
+import Language.Haskell.Modules.ModuVerse (CleanMode(DoClean), getNames, getInfo, moduleName, Params, sourceDirs)
 import Language.Haskell.Modules.SourceDirs (getHsSourceDirs)
 import Language.Haskell.Modules.Split (T(A))
-import Language.Haskell.Modules.Util.Symbols (FoldDeclared)
+import Language.Haskell.Modules.Symbols (FoldDeclared)
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
 import Language.Haskell.TH.Syntax as TH (nameBase)
 import System.Console.Haskeline (completeFilename, CompletionFunc, defaultSettings, getInputLine, InputT, noCompletion, runInputT, setComplete, simpleCompletion)
@@ -119,7 +118,7 @@ main = do
 
 
         execCmdM :: CmdM a -> IO (Maybe GenericPackageDescription)
-        execCmdM x = runImportsT
+        execCmdM x = runModuVerseT
             $ flip execStateT pkgDesc'
             $ flip runReaderT conf
             $ runInputT (setComplete ((lift . lift) `fmap` compl conf) defaultSettings) x
@@ -155,7 +154,7 @@ noisily' act = do
     liftCT (modifyVerbosity (\x -> x - 1))
     return r
 
-compl ::  HMM -> CompletionFunc (CleanT IO)
+compl ::  HMM -> CompletionFunc (StateT Params IO)
 compl conf (xs,ys) | cmd: _ <- words (reverse xs),
     matchingCommands <- filter (cmd `isPrefixOf`) commandNames = case matchingCommands of
         _:_:_ | Nothing <- stripPrefix " " =<< stripPrefix cmd (reverse xs) ->
@@ -195,15 +194,15 @@ takesModuleNames x = x `elem` ["merge"]
 cli :: CmdM ()
 cli = cmd . concatMap words . maybeToList =<< getInputLine "> "
 
-type CmdM a = InputT (ReaderT HMM (StateT (Maybe GenericPackageDescription) (CleanT IO))) a
+type CmdM a = InputT (ReaderT HMM (StateT (Maybe GenericPackageDescription) (StateT Params IO))) a
 
 askConf :: CmdM HMM
 askConf = lift ask
 
-liftCT :: CleanT IO a -> CmdM a
+liftCT :: StateT Params IO a -> CmdM a
 liftCT = lift . lift . lift
 
-liftS :: StateT (Maybe GenericPackageDescription) (CleanT IO) a -> CmdM a
+liftS :: StateT (Maybe GenericPackageDescription) (StateT Params IO) a -> CmdM a
 liftS  = lift . lift
 
 
@@ -342,7 +341,7 @@ cabalRead _ = liftIO $ putStrLn "Usage: cabalRead <file.cabal>"
 unModuleName :: ModuleName -> String
 unModuleName (ModuleName x) = x
 
-verse :: MonadClean m => [String] -> m ()
+verse :: ModuVerse m => [String] -> m ()
 verse [] =
     do modules <- getNames
        liftIO $ putStrLn ("Usage: verse <pathormodule1> <pathormodule2> ...\n" ++
@@ -363,14 +362,14 @@ verse args =
 showVerse :: Set ModuleName -> String
 showVerse modules = "[ " ++ intercalate "\n  , " (map unModuleName (toList modules)) ++ " ]"
 
-dir :: MonadClean m => [FilePath] -> m ()
-dir [] = putHsSourceDirs []
+dir :: ModuVerse m => [FilePath] -> m ()
+dir [] = sourceDirs .= []
 dir xs =
-    do modifyHsSourceDirs (++ xs)
-       xs' <- getHsSourceDirs
+    do sourceDirs %= (++ xs)
+       xs' <- use sourceDirs
        liftIO (putStrLn $ "sourceDirs updated:\n  [ " ++ intercalate "\n  , " xs' ++ " ]")
 
-clean :: MonadClean m => [FilePath] -> m ()
+clean :: ModuVerse m => [FilePath] -> m ()
 clean [] = liftIO $ putStrLn $ "Usage: clean <modulepath1> <modulepath2> ...\n" ++
                                     "Clean up the import lists of the named modules\n"
 clean args = cleanImports args >> return ()

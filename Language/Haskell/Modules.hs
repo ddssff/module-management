@@ -3,7 +3,7 @@
 -- points are:
 --
 -- There are several features worth noting.  The 'Params' type in the
--- state of 'MonadClean' has a 'removeEmptyImports' field, which is
+-- state of 'ModuVerse' has a 'removeEmptyImports' field, which is
 -- True by default.  This determines whether imports that turn into
 -- empty lists are preserved or not - if your program needs instances
 -- from a such an import, you will either want to set this flag to
@@ -11,7 +11,7 @@
 --
 -- These are the important entry points:
 --
--- * 'runImportsT' - Sets up the environment for splitting and merging.
+-- * 'runModuVerseT' - Sets up the environment for splitting and merging.
 --   These operations require updates to be made to all the modules
 --   that import the modules being split or merged, so this
 --   environment tracks the creation and removal of modules.  This
@@ -41,13 +41,13 @@
 -- * Use 'findHsFiles' and 'cleanImports' to clean up the import lists
 -- of all the modules under @./Language@:
 --
---    @findHsFiles [\"Language\", \"Tests.hs\", \"Tests\"] >>= runImportsT . cleanImports@
+--    @findHsFiles [\"Language\", \"Tests.hs\", \"Tests\"] >>= runModuVerseT . cleanImports@
 --
 -- * Split the module @Language.Haskell.Modules.Common@, and then
 --   merge two of the declarations back in:
 --
 --   @:m +Language.Haskell.Exts.Syntax
---    findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runImportsT $
+--    findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runModuVerseT $
 --      mapM putModule modules >>
 --      splitModuleDecls \"Language\/Haskell\/Modules\/Common.hs\" >>
 --      mergeModules [ModuleName \"Language.Haskell.Modules.Common.WithCurrentDirectory\",
@@ -58,7 +58,7 @@
 --   @Tmp@ is used because using existing modules for a split is not allowed.
 --   The exception to this is that you can leave declarations in the original module.
 --
---   @findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runImportsT $
+--   @findHsModules [\"Language\", \"Tests.hs\", \"Tests\"] >>= \\ modules -> runModuVerseT $
 --      mapM putModule modules >>
 --      splitModule (\\ n -> if elem n [Just (Ident \"ModuleResult\"), Just (Ident \"doResult\")]
 --                          then ModuleName \"Tmp\"
@@ -69,7 +69,7 @@
 --
 -- * Split a module where one of the result modules needs to import the instances:
 --
---  @runImportsT $
+--  @runModuVerseT $
 --      putModule (ModuleName \"Main\") >>
 --      extraImport (ModuleName \"Main.GetPasteById\") (ModuleName \"Main.Instances\") >>
 --      splitModuleDecls \"Main.hs\"@
@@ -81,18 +81,12 @@ module Language.Haskell.Modules
     , splitModuleBy
     , mergeModules
     -- * Runtime environment
-    , MonadClean
-    , CleanT
-    , runImportsT
+    , ModuVerse
+    , Params
+    , extensions
+    , runModuVerseT
     , putModule
     , findModule
-    , getHsSourceDirs
-    , modifyDryRun
-    , modifyHsFlags
-    , modifyRemoveEmptyImports
-    , modifyExtensions
-    , modifyHsSourceDirs
-    , putHsSourceDirs
     , extraImport
     -- * Progress reporting
     , noisily
@@ -102,18 +96,22 @@ module Language.Haskell.Modules
     , Name(Ident, Symbol)
     -- * Helper functions
     , modulePathBase
+    , SourceDirs(getHsSourceDirs, putHsSourceDirs)
     , findHsModules
     , findHsFiles
     , withCurrentDirectory
+    , hsFlags
+    , CleanMode(DoClean, NoClean)
+    , RelPath(unRelPath)
     ) where
 
 import Language.Haskell.Exts (ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
-import Language.Haskell.Modules.ModuVerse (findModule, modifyExtensions, putModule)
-import Language.Haskell.Modules.Params (CleanT, extraImport, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, MonadClean, runImportsT)
-import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, modulePathBase, SourceDirs(getHsSourceDirs, putHsSourceDirs))
+import Language.Haskell.Modules.ModuVerse {-(CleanT, extraImport, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, ModuVerse, runModuVerseT,
+                                           findModule, modifyExtensions, putModule)-}
+import Language.Haskell.Modules.SourceDirs (modulePathBase, SourceDirs(getHsSourceDirs, putHsSourceDirs), RelPath(..))
 import Language.Haskell.Modules.Split (splitModule, splitModuleBy)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
 import Language.Haskell.Modules.Util.Test (findHsFiles, findHsModules) -- (findHsFiles, findHsModules)

@@ -12,10 +12,9 @@ import qualified Language.Haskell.Exts.Parser as Exts
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldModule, ModuleInfo(..))
-import Language.Haskell.Modules.ModuVerse (parseModule)
-import Language.Haskell.Modules.Params (runImportsT)
+import Language.Haskell.Modules.ModuVerse (parseModule, runModuVerseT)
 import Language.Haskell.Modules.SourceDirs (pathKey, APath(..))
-import Language.Haskell.Modules.Util.SrcLoc (HasSpanInfo(..), makeTree)
+import Language.Haskell.Modules.SrcLoc (HasSpanInfo(..), makeTree)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
 deriving instance Eq (Exts.ParseResult (A.Module SrcSpanInfo, [A.Comment]))
@@ -28,7 +27,7 @@ test1 :: Test
 test1 =
     TestLabel "test1" $ TestCase $ withCurrentDirectory "testdata/debian" $
     do let path = APath "Debian/Repo/Slice.hs"
-       mi <- runImportsT $ pathKey path >>= parseModule
+       mi <- runModuVerseT $ pathKey path >>= parseModule
        let (output, original) = test mi
        assertEqual "echo" original output
     where
@@ -39,7 +38,7 @@ test1b :: Test
 test1b =
     TestLabel "test1b" $ TestCase $ withCurrentDirectory "testdata/debian" $
     do let path = APath "Debian/Repo/Slice.hs"
-       mi <- runImportsT $ pathKey path >>= parseModule
+       mi <- runModuVerseT $ pathKey path >>= parseModule
        let output = parseTestOutput mi
        assertEqual "echo" mempty (Seq.filter (\ (a, b) -> a /= b) (Seq.zip expected output))
     where
@@ -121,7 +120,7 @@ test3 :: Test
 test3 =
     TestLabel "test3" $ TestCase $ withCurrentDirectory "tests/data" $
     do let path = APath "Equal.hs"
-       mi <- runImportsT $ pathKey path >>= parseModule
+       mi <- runModuVerseT $ pathKey path >>= parseModule
        let (output, original) = test mi
        assertEqual "echo" original output
     where
@@ -132,7 +131,7 @@ fold3b :: Test
 fold3b =
     TestLabel "fold3b" $ TestCase $ withCurrentDirectory "tests/data" $
     do let path = APath "fold3b/Main.hs"
-       mi <- runImportsT $ pathKey path >>= parseModule
+       mi <- runModuVerseT $ pathKey path >>= parseModule
        let (output, original) = test mi
        assertEqual "echo" original output
     where
@@ -143,7 +142,7 @@ fold3c :: Test
 fold3c =
     TestLabel "fold3c" $ TestCase $
     do let path = APath "tests/data/fold9.hs"
-       mi <- runImportsT $ pathKey path >>= parseModule
+       mi <- runModuVerseT $ pathKey path >>= parseModule
        let (output, original) = test mi
        assertEqual "echo" original output
     where
@@ -154,7 +153,7 @@ test5 :: Test
 test5 =
     TestLabel "fold5" $ TestCase $
     do let path = APath "tests/data/fold5.hs" -- "tests/data/logic/Data/Logic/Classes/Literal.hs"
-       mi <- runImportsT $ pathKey path >>= parseModule
+       mi <- runModuVerseT $ pathKey path >>= parseModule
        -- let actual = map f (adjustSpans text comments (spans m))
        -- assertEqual "spans" original actual
        let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) mi []
@@ -168,7 +167,7 @@ test5b :: Test
 test5b =
     TestLabel "test5b" $ TestCase $
     do let path = APath "tests/data/logic/Data/Logic/Classes/Literal.hs"
-       mi <- runImportsT $ pathKey path >>= parseModule
+       mi <- runModuVerseT $ pathKey path >>= parseModule
        let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) mi []
        assertEqual "spans" expected actual
     where
@@ -227,7 +226,7 @@ test4 = TestCase (assertEqual "test4" (SrcLoc "<unknown>.hs" 2 24 < SrcLoc "<unk
 test7 :: Test
 test7 =
     TestCase $
-    do mi <- runImportsT $ pathKey (APath "tests/data/Fold7.hs") >>= parseModule
+    do mi <- runModuVerseT $ pathKey (APath "tests/data/Fold7.hs") >>= parseModule
        let actual = foldModule (\ s r -> r |> (s, "", ""))
                                (\ _ b s a r -> r |> (b, s, a))
                                (\ _ b s a r -> r |> (b, s, a))

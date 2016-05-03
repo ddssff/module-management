@@ -3,7 +3,7 @@
 module SrcLoc where
 
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..))
-import Language.Haskell.Modules.Util.SrcLoc (srcPairText)
+import Language.Haskell.Modules.SrcLoc (srcPairText)
 import Prelude hiding (rem)
 import Test.HUnit (assertEqual, Test(TestCase, TestList))
 
