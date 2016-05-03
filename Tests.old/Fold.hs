@@ -22,7 +22,7 @@ deriving instance Eq (Exts.ParseResult (A.Module SrcSpanInfo, [A.Comment]))
 deriving instance Show (Exts.ParseMode)
 
 tests :: Test
-tests = TestLabel "Clean" (TestList [test1, test1b, test3, fold3b, fold3c, test4, test5, test5b, test6, test7])
+tests = TestLabel "Clean" (TestList [test1, {-test1b,-} test3, fold3b, fold3c, test4, test5, test5b, test6, test7])
 
 test1 :: Test
 test1 =

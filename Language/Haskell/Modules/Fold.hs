@@ -13,12 +13,11 @@ module Language.Haskell.Modules.Fold
     , ignore2
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Monad (when)
 import Control.Monad.State (get, put, runState, State)
 import Data.Char (isSpace)
 import Data.List (tails)
-import Data.Monoid ((<>), Monoid)
+import Data.Monoid ((<>))
 import Data.Sequence (Seq, (|>))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.Comments (Comment(..))

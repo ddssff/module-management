@@ -27,7 +27,7 @@ import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldIm
 import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, ModuleInfo(..), moduleName, parseModule)
 import Language.Haskell.Modules.Params (markForDelete, MonadClean(getParams), Params(hsFlags, removeEmptyImports, scratchDir),
                                         CleanMode(..))
-import Language.Haskell.Modules.SourceDirs (modifyDirs, pathKey, APath(..), PathKey(..), PathKey(unPathKey), SourceDirs(getDirs, putDirs))
+import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, pathKey, APath(..), PathKey(..), PathKey(unPathKey), SourceDirs(getHsSourceDirs, putHsSourceDirs))
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Language.Haskell.Modules.Util.SrcLoc (srcLoc)
@@ -125,7 +125,7 @@ dumpImports keys =
        liftIO $ createDirectoryIfMissing True scratch
        let cmd = "ghc"
        args <- hsFlags <$> getParams
-       dirs <- getDirs
+       dirs <- getHsSourceDirs
        exts <- getExtensions
        let args' = args ++
                    ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs] ++
@@ -169,9 +169,9 @@ checkImports _ = error "Unsupported module type"
 
 withDot :: MonadClean m => m a -> m a
 withDot a =
-    bracket (getDirs)
-            (modifyDirs . const)
-            (\ _ -> putDirs ["."] >> a)
+    bracket (getHsSourceDirs)
+            (modifyHsSourceDirs . const)
+            (\ _ -> putHsSourceDirs ["."] >> a)
 
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
@@ -340,8 +340,8 @@ compareSpecs a b =
       EQ -> compare (sImportSpec a) (sImportSpec b)
       x -> x
 
-equalSpecs :: A.ImportSpec SrcSpanInfo -> A.ImportSpec SrcSpanInfo -> Bool
-equalSpecs a b = compareSpecs a b == EQ
+-- equalSpecs :: A.ImportSpec SrcSpanInfo -> A.ImportSpec SrcSpanInfo -> Bool
+-- equalSpecs a b = compareSpecs a b == EQ
 
 -- Merge elements of a sorted spec list as possible
 -- unimplemented, should merge Foo and Foo(..) into Foo(..), and the like

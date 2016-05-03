@@ -20,10 +20,12 @@ import GHC.Generics (Generic)
 import qualified Language.Haskell.Exts.Annotated as A (Decl)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
-import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules, modifyDirs, ModuleName(..), MonadClean, noisily, putDirs, putModule, runImportsT, splitModuleDecls, splitModuleBy)
+import Language.Haskell.Modules (cleanImports, CleanT, findHsModules, mergeModules,
+                                 modifyHsSourceDirs, ModuleName(..), MonadClean, noisily, putHsSourceDirs, putModule,
+                                 runImportsT, splitModuleDecls, splitModuleBy)
 import Language.Haskell.Modules.ModuVerse (getNames, getInfo, moduleName)
 import Language.Haskell.Modules.Params (CleanMode(DoClean))
-import Language.Haskell.Modules.SourceDirs (getDirs)
+import Language.Haskell.Modules.SourceDirs (getHsSourceDirs)
 import Language.Haskell.Modules.Split (T(A))
 import Language.Haskell.Modules.Util.Symbols (FoldDeclared)
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
@@ -325,7 +327,7 @@ cabalRead [f] = throwIO . Callback "cabalRead" $ \next -> do
     pd <- liftIO $ Cabal.readPackageDescription (toEnumBounded (verbosityCabal conf)) f
 
     liftCT $ do
-        ds <- getDirs
+        ds <- getHsSourceDirs
         let ds' = Cabal.getSrcDirs pd
         unless (null $ ds' \\ ds) $ dir ds'
 
@@ -360,10 +362,10 @@ showVerse :: Set ModuleName -> String
 showVerse modules = "[ " ++ intercalate "\n  , " (map unModuleName (toList modules)) ++ " ]"
 
 dir :: MonadClean m => [FilePath] -> m ()
-dir [] = putDirs []
+dir [] = putHsSourceDirs []
 dir xs =
-    do modifyDirs (++ xs)
-       xs' <- getDirs
+    do modifyHsSourceDirs (++ xs)
+       xs' <- getHsSourceDirs
        liftIO (putStrLn $ "sourceDirs updated:\n  [ " ++ intercalate "\n  , " xs' ++ " ]")
 
 clean :: MonadClean m => [FilePath] -> m ()

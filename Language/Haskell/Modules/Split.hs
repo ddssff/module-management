@@ -37,7 +37,9 @@ import Language.Haskell.Modules.Util.Symbols (exports, imports, symbolsDeclaredB
 import Prelude hiding (writeFile)
 import System.FilePath ((<.>))
 
--- type ToModuleArg = (forall t. FoldDeclared t => Maybe S.Name -> t -> S.ModuleName)
+-- | The purpose of this module is to move declartions between
+-- modules, and the basic input is a funcion that decides what the
+-- destination module is for a declaration.
 data T = A (A.Decl SrcSpanInfo) | B (A.ImportSpec SrcSpanInfo) | C (A.ExportSpec SrcSpanInfo)
 type ToModuleArg = Maybe S.Name -> T -> S.ModuleName
 

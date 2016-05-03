@@ -23,7 +23,6 @@ module Language.Haskell.Modules.ModuVerse
     , unloadModule
     ) where
 
-import Control.Applicative ((<$>))
 import Control.Exception.Lifted as IO (catch, throw)
 import Control.Monad.Trans (liftIO, MonadIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
@@ -105,6 +104,8 @@ putName name info = modifyModuVerse (\ s -> s {moduleNames_ = Just (Map.insert n
 putModule :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m ()
 putModule name = pathKey (modulePathBase "hs" name) >>= parseModule >>= putName name
 
+-- | Update the ModuVerse info for a module by re-reading its (perhaps
+-- altered) source text.
 putModuleAnew :: (ModuVerse m, MonadVerbosity m) => S.ModuleName -> m PathKey
 putModuleAnew name =
     do key <- pathKey (modulePathBase "hs" name)
@@ -132,8 +133,8 @@ modifyExtensions :: ModuVerse m => ([Extension] -> [Extension]) -> m ()
 modifyExtensions f = modifyModuVerse (\ s -> s {extensions_ = f (extensions_ s)})
 
 instance ModuVerse m => SourceDirs m where
-    putDirs xs = modifyModuVerse (\ s -> s {sourceDirs_ = xs})
-    getDirs = getModuVerse >>= return . sourceDirs_
+    putHsSourceDirs xs = modifyModuVerse (\ s -> s {sourceDirs_ = xs})
+    getHsSourceDirs = getModuVerse >>= return . sourceDirs_
 
 {-
 getSourceDirs :: ModuVerse m => m [FilePath]

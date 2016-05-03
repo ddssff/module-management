@@ -17,8 +17,8 @@ import System.Process (system)
 import Test.HUnit (assertEqual, Counts(..), runTestTT, Test(TestList, TestCase, TestLabel))
 
 import qualified Fold as Fold (tests)
-{-
 import qualified Imports as Imports (tests)
+{-
 import qualified Merge as Merge (tests)
 import qualified Split as Split (tests, slow)
 -}
@@ -27,7 +27,7 @@ import qualified Symbols as Symbols (tests)
 
 main :: IO ()
 main =
-    do _ <- system "[ -d testdata ] || tar xfz testdata.tar.gz"
+    do -- _ <- system "[ -d testdata ] || tar xfz testdata.tar.gz"
        counts <- runTestTT Main.tests
        putStrLn (show counts)
        case (errors counts + failures counts) of
@@ -50,8 +50,8 @@ tests = TestList [
                    TestLabel "Symbols" Symbols.tests
                  , TestLabel "SrcLoc" SrcLoc.tests
                  , TestLabel "Fold" Fold.tests
-{-
                  , TestLabel "Imports" Imports.tests
+{-
                  , TestLabel "Split" Split.tests
                  , TestLabel "Merge" Merge.tests
                  , Main.test1

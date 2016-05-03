@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.SourceDirs
     ( SourceDirs(..)
-    , modifyDirs
+    , modifyHsSourceDirs
     , withModifiedDirs
     , withDirs
     , RelPath(..)
@@ -22,22 +22,22 @@ import System.Directory (canonicalizePath, doesFileExist, getCurrentDirectory)
 import System.FilePath ((<.>), (</>))
 
 class (MonadIO m, MonadBaseControl IO m) => SourceDirs m where
-    putDirs :: [FilePath] -> m ()
+    putHsSourceDirs :: [FilePath] -> m ()
     -- ^ Set the list of directories that will be searched for
     -- imported modules.  Similar to the Hs-Source-Dirs field in the
     -- cabal file.
-    getDirs :: m [FilePath]
+    getHsSourceDirs :: m [FilePath]
 
 -- | Modify the list of directories that will be searched for imported
 -- modules.
-modifyDirs :: SourceDirs m => ([FilePath] -> [FilePath]) -> m ()
-modifyDirs f = getDirs >>= putDirs . f
+modifyHsSourceDirs :: SourceDirs m => ([FilePath] -> [FilePath]) -> m ()
+modifyHsSourceDirs f = getHsSourceDirs >>= putHsSourceDirs . f
 
 withDirs :: SourceDirs m => [FilePath] -> m a -> m a
 withDirs dirs action = withModifiedDirs (const dirs) action
 
 withModifiedDirs :: SourceDirs m => ([FilePath] -> [FilePath]) -> m a -> m a
-withModifiedDirs f action = bracket (getDirs >>= \save -> putDirs (f save) >> return save) putDirs (const action)
+withModifiedDirs f action = bracket (getHsSourceDirs >>= \save -> putHsSourceDirs (f save) >> return save) putHsSourceDirs (const action)
 
 -- | A FilePath that can be assumed to be unique.
 newtype PathKey = PathKey {unPathKey :: FilePath} deriving (Eq, Ord, Show)
@@ -55,7 +55,7 @@ modulePath ext name =
     findFile path `IO.catch` (\ (_ :: IOError) -> makePath)
     where
       makePath =
-          do dirs <- getDirs
+          do dirs <- getHsSourceDirs
              case dirs of
                [] -> error "Empty $PATH" -- return (APath (unRelPath path)) -- should this be an error?
                (d : _) -> return . APath $ d </> unRelPath path
@@ -84,7 +84,7 @@ class Path a where
 
 instance Path RelPath where
     findFileMaybe (RelPath path) =
-        getDirs >>= f
+        getHsSourceDirs >>= f
         where
           f (dir : dirs) =
               do let x = dir </> path
@@ -106,13 +106,15 @@ instance Path APath where
         do mpath <- findFileMaybe x
            maybe (return Nothing) (\ (APath y) -> liftIO (canonicalizePath y) >>= return . Just . PathKey) mpath
 
+-- | Find a source file using $PWD and the Hs-Source-Dirs directory list.
 findFile :: (SourceDirs m, Path p, Show p) => p -> m APath
 findFile path =
     findFileMaybe path >>=
     maybe (do here <- liftIO getCurrentDirectory
-              dirs <- getDirs
+              dirs <- getHsSourceDirs
               liftIO . throw . userError $ "findFile failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ show path)
           return
 
+-- | 
 pathKey :: (SourceDirs m, Path p, Show p) => p -> m PathKey
 pathKey path = findFile path >>= liftIO . canonicalizePath . unAPath >>= return . PathKey
