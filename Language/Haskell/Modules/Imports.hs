@@ -336,7 +336,8 @@ unModuleName (A.ModuleName _ x) = x
 -- Compare function used to sort the symbols within an import.
 compareSpecs :: A.ImportSpec SrcSpanInfo -> A.ImportSpec SrcSpanInfo -> Ordering
 compareSpecs a b =
-    case compare (Set.map (Prelude.map toLower . nameString) $ symbolsDeclaredBy a) (Set.map (Prelude.map toLower . nameString) $ symbolsDeclaredBy b) of
+    case compare (Set.map (Prelude.map toLower . nameString) $ Set.fromList $ symbolsDeclaredBy a)
+                 (Set.map (Prelude.map toLower . nameString) $ Set.fromList $ symbolsDeclaredBy b) of
       EQ -> compare (sImportSpec a) (sImportSpec b)
       x -> x
 

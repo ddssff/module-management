@@ -17,17 +17,18 @@ module Split1
     , reachable'
     ) where
 
+import Control.Lens (Field2(_2), Field3(_3), view)
 import Control.Lens hiding (cons)
 import Control.Monad (foldM)
 import Data.Generics (Data, everywhere, mkT)
-import Data.Graph as Graph
-import Data.Map as Map (Map, fromList, toList)
+import Data.Graph as Graph (Graph, reachable, Vertex)
+import Data.Map as Map (fromList, Map, toList)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Set as Set (fromList, Set, toList)
-import Language.Haskell.TH
-import Language.Haskell.TH.PprLib
+import Language.Haskell.TH (Con(..), Dec(..), Info(PrimTyConI), mkName, Name, nameBase, Ppr(ppr), Type(AppT, ConT, ForallT))
+import Language.Haskell.TH.PprLib (ptext, to_HPJ_Doc)
 import Language.Haskell.TH.Syntax (Lift(lift), Name(Name), NameFlavour(NameS), Quasi(qReify), StrictType, VarStrictType)
-import qualified Text.PrettyPrint as HPJ
+import qualified Text.PrettyPrint as HPJ (Mode(LeftMode, OneLineMode), renderStyle, style, Style(lineLength, mode))
 
 -- | Perform a fold over the Type and Info values embedded in t
 class OverTypes t where

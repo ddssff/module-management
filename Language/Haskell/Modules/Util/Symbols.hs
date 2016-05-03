@@ -144,28 +144,28 @@ instance FoldDeclared (A.ExportSpec l) where
 -- Return the set of symbols appearing in a construct.  Some
 -- constructs, such as instance declarations, declare no symbols, in
 -- which case Nothing is returned.  Some declare more than one.
-symbolsDeclaredBy :: FoldDeclared a => a -> Set S.Name
-symbolsDeclaredBy = foldDeclared insert empty
+symbolsDeclaredBy :: FoldDeclared a => a -> [S.Name]
+symbolsDeclaredBy = reverse . foldDeclared (:) mempty
 
-members :: FoldMembers a => a -> Set S.Name
-members = foldMembers insert empty
+members :: FoldMembers a => a -> [S.Name]
+members = foldMembers (:) mempty
 
-exports :: (FoldDeclared a, FoldMembers a) => a -> Set S.ExportSpec
+exports :: (FoldDeclared a, FoldMembers a) => a -> [S.ExportSpec]
 exports x = case (symbolsDeclaredBy x, members x) of
               ([n], []) -> [S.EVar (S.UnQual n)]
-              ([n], ms) -> [S.EThingWith (S.UnQual n) (Set.toAscList (Set.map S.VarName ms))]
+              ([n], ms) -> [S.EThingWith (S.UnQual n) (Prelude.map S.VarName ms)]
               ([], []) -> []
               ([], _) -> error "exports: members with no top level name"
-              (ns, []) -> Set.map (S.EVar . S.UnQual) ns
+              (ns, []) -> Prelude.map (S.EVar . S.UnQual) ns
               y -> error $ "exports: multiple top level names and member names: " ++ show y
 
-imports :: (FoldDeclared a, FoldMembers a) => a -> Set S.ImportSpec
+imports :: (FoldDeclared a, FoldMembers a) => a -> [S.ImportSpec]
 imports x = case (symbolsDeclaredBy x, members x) of
               ([n], []) -> [S.IVar n]
-              ([n], ms) -> [S.IThingWith n (Set.toAscList (Set.map S.VarName ms))]
+              ([n], ms) -> [S.IThingWith n (Prelude.map S.VarName ms)]
               ([], []) -> []
               ([], _ms) -> error "exports: members with no top level name"
-              (ns, []) -> Set.map S.IVar ns
+              (ns, []) -> Prelude.map S.IVar ns
               y -> error $ "imports: multiple top level names and member names: " ++ show y
 
 -- | Fold over the declared members - e.g. the method names of a class
