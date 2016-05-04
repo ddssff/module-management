@@ -14,6 +14,7 @@
 module Language.Haskell.Modules.ModuVerse
     ( Params, dryRun, extraImports, hsFlags, junk, removeEmptyImports
     , scratchDir, verbosity, moduleNames, moduleInfo, extensions, sourceDirs
+    , declMap, symbolMap, testMode
     , CleanMode(DoClean, NoClean)
     , ModuVerse
     , runModuVerseT
@@ -109,29 +110,19 @@ data Params
       -- ^ Deciding whether a module needs to be imported can be
       -- difficult when instances are involved, this is a cheat to force
       -- keys of the map to import the corresponding elements.
-      -- , testMode :: CleanMode
+      , _testMode :: CleanMode
       -- ^ For testing, do not run cleanImports on the results of the
       -- splitModule and catModules operations.
+      , _symbolMap :: Map (S.ModuleName, S.Name) (A.Decl SrcSpanInfo)
+      -- ^ Look up a symbol's declaration
+      , _declMap :: Map (S.ModuleName, A.Decl SrcSpanInfo) S.ModuleName
+      -- ^ Look up where a declaration will be moved to
       } deriving (Eq, Ord, Show)
 
 $(makeLenses ''Params)
 
-{-
--- | An instance of ModuVerse.
-type CleanT m = StateT Params m
+class (MonadIO m, MonadBaseControl IO m, Functor m, MonadState Params m) => ModuVerse m
 
-instance ModuVerse m => ModuVerse m where
-    getModuVerse = getParams >>= return . _moduVerse
-    modifyModuVerse f = modifyParams (\ p -> p {_moduVerse = f (_moduVerse p)})
--}
-
-class (MonadIO m, MonadBaseControl IO m, Functor m, MonadState Params m) => ModuVerse m {- where
-    getParams :: m Params
-    putParams :: Params -> m ()
-
-modifyParams :: ModuVerse m => (Params -> Params) -> m ()
-modifyParams f = getParams >>= putParams . f
--}
 instance (MonadIO m, MonadBaseControl IO m, Functor m) => ModuVerse (StateT Params m)
 
 instance ModuVerse m => MonadVerbosity m where
@@ -141,6 +132,10 @@ instance ModuVerse m => MonadVerbosity m where
 instance ModuVerse m => MonadDryRun m where
     dry = use dryRun
     putDry x = dryRun .= x
+
+instance ModuVerse m => SourceDirs m where
+    putHsSourceDirs xs = sourceDirs .= xs
+    getHsSourceDirs = use sourceDirs
 
 -- | Create the environment required to do import cleaning and module
 -- splitting/merging.  This environment, @StateT Params m a@, is an
@@ -157,7 +152,9 @@ runModuVerseT action =
                                                      _extensions = Exts.extensions Exts.defaultParseMode ++
                                                                    [nameToExtension StandaloneDeriving], -- allExtensions
                                                      _sourceDirs = ["."],
-                                                     -- _moduVerse = moduVerseInit,
+                                                     _symbolMap = Map.empty,
+                                                     _declMap = Map.empty,
+                                                     _testMode = DoClean,
                                                      _junk = Set.empty,
                                                      _removeEmptyImports = True,
                                                      _extraImports = Map.empty})
@@ -166,29 +163,6 @@ runModuVerseT action =
 
 markForDelete :: ModuVerse m => FilePath -> m ()
 markForDelete x = junk %= Set.insert x
-
--- | If this flag is set, imports that become empty are removed.
--- Sometimes this will lead to errors, specifically when an instance
--- in the removed import that was required is no longer be available.
--- (Note that this reflects a limitation of the
--- @-ddump-minimal-imports@ option of GHC.)  If this happens this flag
--- should be set.  Note that an import that is already empty when
--- @cleanImports@ runs will never be removed, on the assumption that
--- it was placed there only to import instances.  Default is True.
-{-
-modifyRemoveEmptyImports :: ModuVerse m => (Bool -> Bool) -> m ()
-modifyRemoveEmptyImports f = removeEmptyImports %= f
-
--- | Modify the list of extra flags passed to GHC.  Default is @[]@.
-modifyHsFlags :: ModuVerse m => ([String] -> [String]) -> m ()
-modifyHsFlags f = hsFlags %= f
-
--- | Controls whether file updates will actually be performed.
--- Default is False.  (I recommend running in a directory controlled
--- by a version control system so you don't have to worry about this.)
-modifyDryRun :: ModuVerse m => (Bool -> Bool) -> m ()
-modifyDryRun f = modifyParams (\ p -> p {_dryRun = f (_dryRun p)})
--}
 
 -- | When we write module @m@, insert an extra line that imports the
 -- instances (only) from module @i@.
@@ -207,38 +181,10 @@ extraImport m i =
 nameToExtension :: KnownExtension -> Extension
 nameToExtension x = EnableExtension x
 
-{-
-moduleName :: A.Module a -> S.ModuleName
-moduleName (A.Module _ (Just (A.ModuleHead _ x _ _)) _ _ _) = sModuleName x
-moduleName _ = S.ModuleName "Main"
--}
-
 moduleName :: ModuleInfo -> S.ModuleName
 moduleName (ModuleInfo (A.Module _ mh _ _ _) _ _ _) =
     S.ModuleName $ maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh
 moduleName (ModuleInfo m _ _ _) = error $ "Unsupported Module: " ++ show m
-
-{-
-data ModuVerseState =
-    ModuVerseState { _moduleNames :: Maybe (Map S.ModuleName ModuleInfo)
-                   , _moduleInfo :: Map PathKey ModuleInfo
-                   , _extensions :: [Extension]
-                   , _sourceDirs :: [FilePath]
-                   -- ^ Top level directories to search for source files and
-                   -- imports.  These directories would be the value used in the
-                   -- hs-source-dirs parameter of a cabal file, and passed to ghc
-                   -- via the -i option.
-                   } deriving (Eq, Ord, Show)
-
-$(makeLenses ''ModuVerseState)
-
-moduVerseInit :: ModuVerseState
-moduVerseInit =
-    ModuVerseState { _moduleNames = Nothing
-                   , _moduleInfo = Map.empty
-                   , _extensions = Exts.extensions Exts.defaultParseMode ++ [nameToExtension StandaloneDeriving] -- allExtensions
-                   , _sourceDirs = ["."] }
--}
 
 -- | From hsx2hs, but removing Arrows because it makes test case fold3c and others fail.
 hseExtensions :: [Extension]
@@ -290,12 +236,6 @@ delName name = do
   moduleNames %= Just . Map.delete name . fromMaybe Map.empty
   moduleInfo .= Map.empty
 
-{-
-class (MonadIO m, MonadBaseControl IO m, Functor m) => ModuVerse m where
-    getModuVerse :: m ModuVerseState
-    modifyModuVerse :: (ModuVerseState -> ModuVerseState) -> m ()
--}
-
 getExtensions :: ModuVerse m => m [Extension]
 getExtensions = use extensions
 
@@ -304,21 +244,6 @@ getExtensions = use extensions
 -- module's LANGUAGE pragma, so this can usually be left alone.
 modifyExtensions :: ModuVerse m => ([Extension] -> [Extension]) -> m ()
 modifyExtensions f = extensions %= f
-
-instance ModuVerse m => SourceDirs m where
-    putHsSourceDirs xs = sourceDirs .= xs
-    getHsSourceDirs = use sourceDirs
-
-{-
-getSourceDirs :: ModuVerse m => m [FilePath]
-getSourceDirs = getModuVerse >>= return . sourceDirs_
-
--- | Modify the list of directories that will be searched for source
--- files, in a similar way to the Hs-Source-Dirs field in a cabal
--- file.  Default is @[\".\"]@.
-modifySourceDirs :: ModuVerse m => ([FilePath] -> [FilePath]) -> m ()
-modifySourceDirs f = modifyModuVerse (\ p -> p {sourceDirs_ = f (sourceDirs_ p)})
--}
 
 parseModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ModuleInfo
 parseModule key = parseModuleMaybe (Just key) >>= maybe (error $ "parseModule - not found: " ++ show key) return

@@ -1,3 +1,6 @@
+-- | Code for dealing with the ways ghc finds files based on module
+-- name and its -i argument (aka the cabal hs-sources-list.)
+
 {-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.SourceDirs
@@ -8,10 +11,10 @@ module Language.Haskell.Modules.SourceDirs
     , RelPath(..)
     , PathKey(..)
     , APath(..)
-    , pathKey
-    , Path(..)
     , modulePath
     , modulePathBase
+    , Path(..)
+    , pathKey
     ) where
 
 import Control.Exception.Lifted as IO (catch, throw, bracket)
@@ -78,6 +81,7 @@ modulePathBase ext (S.ModuleName name) =
           f '.' = '/'
           f c = c
 
+-- | Something we can use to find a file.
 class Path a where
     findFileMaybe :: SourceDirs m => a -> m (Maybe APath)
     pathKeyMaybe :: SourceDirs m => a -> m (Maybe PathKey)
@@ -115,6 +119,5 @@ findFile path =
               liftIO . throw . userError $ "findFile failed, cwd=" ++ here ++ ", dirs=" ++ show dirs ++ ", path=" ++ show path)
           return
 
--- | 
 pathKey :: (SourceDirs m, Path p, Show p) => p -> m PathKey
 pathKey path = findFile path >>= liftIO . canonicalizePath . unAPath >>= return . PathKey
