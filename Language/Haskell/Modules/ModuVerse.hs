@@ -13,7 +13,7 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
     ( Params, dryRun, extraImports, hsFlags, junk, removeEmptyImports
-    , scratchDir, verbosity, moduleNames, moduleInfo, extensions, sourceDirs
+    , scratchDir, verbosity, moduleInfo, moduleByKey, extensions, sourceDirs
     , declMap, symbolMap, testMode
     , CleanMode(DoClean, NoClean)
     , ModuVerse
@@ -63,7 +63,6 @@ import System.Directory (removeFile)
 import Control.Exception.Lifted as IO (catch, throw)
 import Control.Lens (use, (%=), (.=))
 import Data.Map as Map (delete, insert, keys, lookup)
-import Data.Maybe (fromMaybe)
 import Data.Set as Set (fromList, minView)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
 import Language.Haskell.Exts.Comments (Comment(..))
@@ -92,8 +91,8 @@ data Params
       -- ^ Increase or decrease the amount of progress reporting.
       , _hsFlags :: [String]
       -- ^ Extra flags to pass to GHC.
-      , _moduleNames :: Maybe (Map S.ModuleName ModuleInfo)
-      , _moduleInfo :: Map PathKey ModuleInfo
+      , _moduleInfo :: Map S.ModuleName ModuleInfo
+      , _moduleByKey :: Map PathKey ModuleInfo
       -- ^ The set of modules that splitModules and catModules will
       -- check for imports of symbols that moved.
       , _extensions :: [Extension]
@@ -152,7 +151,7 @@ runModuVerseT action =
                                                      _dryRun = False,
                                                      _verbosity = 1,
                                                      _hsFlags = [],
-                                                     _moduleNames = Nothing,
+                                                     _moduleByKey = Map.empty,
                                                      _moduleInfo = Map.empty,
                                                      _extensions = Exts.extensions Exts.defaultParseMode ++
                                                                    [nameToExtension StandaloneDeriving], -- allExtensions
@@ -203,13 +202,13 @@ hseExtensions = map nameToExtension
     ]
 
 getNames :: ModuVerse m => m (Set S.ModuleName)
-getNames = Set.fromList . keys . fromMaybe (error "No modules in ModuVerse, use putModule") <$> use moduleNames
+getNames = Set.fromList . keys <$> use moduleInfo
 
 getInfo :: ModuVerse m => S.ModuleName -> m (Maybe ModuleInfo)
-getInfo name = Map.lookup name . fromMaybe (error "No modules in ModuVerse, use putModule") <$> use moduleNames
+getInfo name = Map.lookup name <$> use moduleInfo
 
 putName :: ModuVerse m => S.ModuleName -> ModuleInfo -> m ()
-putName name info = moduleNames %= Just . Map.insert name info . fromMaybe Map.empty
+putName name info = moduleInfo %= Map.insert name info
 
 putModule :: ModuVerse m => S.ModuleName -> m ()
 putModule name = pathKey (modulePathBase "hs" name) >>= parseModule >>= putName name
@@ -238,8 +237,8 @@ findSymbolDecl modu name =
 
 delName :: ModuVerse m => S.ModuleName -> m ()
 delName name = do
-  moduleNames %= Just . Map.delete name . fromMaybe Map.empty
-  moduleInfo .= Map.empty
+  moduleInfo %= Map.delete name
+  moduleByKey .= Map.empty
 
 getExtensions :: ModuVerse m => m [Extension]
 getExtensions = use extensions
@@ -258,7 +257,7 @@ parseModuleMaybe Nothing = return Nothing
 parseModuleMaybe (Just key) =
     (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e || isUserError e then return Nothing else throw e)
     where
-      look = Map.lookup key <$> use moduleInfo
+      look = Map.lookup key <$> use moduleByKey
       load (Just x) = return (Just x)
       load Nothing = Just <$> loadModule key
 
@@ -268,11 +267,11 @@ loadModule key =
     do text <- liftIO $ readFile (unPathKey key)
        quietly $ qLnPutStr ("parsing " ++ unPathKey key)
        (parsed, comments) <- parseFileWithComments (unPathKey key) >>= return . Exts.fromParseResult
-       moduleInfo %= Map.insert key (ModuleInfo parsed text comments key)
+       moduleByKey %= Map.insert key (ModuleInfo parsed text comments key)
        return (ModuleInfo parsed text comments key)
 
 unloadModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ()
-unloadModule key = moduleInfo %= Map.delete key
+unloadModule key = moduleByKey %= Map.delete key
 
 -- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))
