@@ -38,13 +38,17 @@ module Language.Haskell.Modules.ModuVerse
     , parseModuleMaybe
     , loadModule
     , unloadModule
+    , buildSymbolMap
+    , buildDeclMap
     ) where
 
 import Control.Exception (SomeException, try)
 import Control.Lens (makeLenses)
+import Control.Monad as List (foldM)
 import Control.Monad.Trans.Control as IO (MonadBaseControl)
 import Control.Monad.State (MonadState, StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
+import Data.List as List (foldl')
 import Data.Map as Map (empty, Map, insertWith)
 import Data.Monoid ((<>))
 import Data.Set as Set (empty, insert, Set, toList)
@@ -69,6 +73,7 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..), Name)
 import Language.Haskell.Modules.Fold (foldDecls, ModuleInfo(..))
 import Language.Haskell.Modules.SourceDirs (modulePathBase, PathKey(..), Path(..), pathKey, SourceDirs(..))
+import Language.Haskell.Modules.Symbols (symbolsDeclaredBy)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
@@ -275,3 +280,37 @@ parseFileWithComments path =
     liftIO (A.parseFileWithComments mode path)
     where
       mode = Exts.defaultParseMode {Exts.extensions = hseExtensions, Exts.parseFilename = path, Exts.fixities = Nothing }
+
+buildDeclMap :: forall m. ModuVerse m =>
+                (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName)
+             -> m ()
+buildDeclMap newModule = do
+  names <- Set.toList <$> getNames :: m [S.ModuleName]
+  mp <- foldM doModule mempty names
+  declMap .= mp
+    where
+      doModule mp oldModule = do
+        Just oldInfo <- getInfo oldModule
+        let mp' = foldDecls (\d _ _ _ r ->
+                               let m :: S.ModuleName
+                                   m = newModule oldModule d in
+                               if oldModule /= m
+                               then (Map.insert (oldModule, d) m r :: Map (S.ModuleName, A.Decl SrcSpanInfo) S.ModuleName)
+                               else r)
+                            (\_ r -> r)
+                            oldInfo mp
+        return mp'
+
+buildSymbolMap :: forall m. ModuVerse m => m ()
+buildSymbolMap = do
+  symbolMap .= mempty
+  names <- Set.toList <$> getNames :: m [S.ModuleName]
+  mp <- foldM doModule mempty names
+  symbolMap .= mp
+    where
+      doModule mp oldModule = do
+        Just oldInfo <- getInfo oldModule
+        let mp'' = foldDecls (\d _ _ _ r -> foldl' (\mp' s -> Map.insert (oldModule, s) d mp') r (symbolsDeclaredBy d))
+                             (\_ r -> r)
+                             oldInfo mp
+        return mp''
