@@ -13,8 +13,8 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
     ( Params, dryRun, extraImports, hsFlags, junk, removeEmptyImports
-    , scratchDir, verbosity, moduleInfo, moduleByKey, extensions, sourceDirs
-    , declMap, symbolMap, testMode
+    , scratchDir, verbosity, moduleInfo, moduleByKey
+    , extensions, sourceDirs, declMap, symbolMap, testMode
     , CleanMode(DoClean, NoClean)
     , ModuVerse
     , runModuVerseT
@@ -91,10 +91,6 @@ data Params
       -- ^ Increase or decrease the amount of progress reporting.
       , _hsFlags :: [String]
       -- ^ Extra flags to pass to GHC.
-      , _moduleInfo :: Map S.ModuleName ModuleInfo
-      , _moduleByKey :: Map PathKey ModuleInfo
-      -- ^ The set of modules that splitModules and catModules will
-      -- check for imports of symbols that moved.
       , _extensions :: [Extension]
       , _sourceDirs :: [FilePath]
       -- ^ Top level directories to search for source files and
@@ -117,11 +113,19 @@ data Params
       , _testMode :: CleanMode
       -- ^ For testing, do not run cleanImports on the results of the
       -- splitModule and catModules operations.
+
+      , _moduleInfo :: Map S.ModuleName ModuleInfo
+      , _moduleByKey :: Map PathKey ModuleInfo -- This redundancy must go
+      -- ^ The set of modules that splitModules and catModules will
+      -- check for imports of symbols that moved.
       , _symbolMap :: Map (S.ModuleName, S.Name) (A.Decl SrcSpanInfo)
       -- ^ Look up a symbol's declaration
       , _declMap :: Map (S.ModuleName, A.Decl SrcSpanInfo) S.ModuleName
       -- ^ Look up where a declaration will be moved to
       } deriving (Eq, Ord, Show)
+
+
+data ModuleStatus = Unchanged | Modified | Created | Removed deriving (Eq, Ord, Show)
 
 $(makeLenses ''Params)
 

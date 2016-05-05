@@ -502,6 +502,7 @@ Library
     Language.Haskell.Modules.Imports,
     Language.Haskell.Modules.Merge,
     Language.Haskell.Modules.ModuVerse,
+    Language.Haskell.Modules.Move,
     Language.Haskell.Modules.SourceDirs,
     Language.Haskell.Modules.SrcLoc,
     Language.Haskell.Modules.Split,
