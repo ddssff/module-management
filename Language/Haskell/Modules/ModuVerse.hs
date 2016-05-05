@@ -13,7 +13,7 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
     ( Params, dryRun, extraImports, hsFlags, junk, removeEmptyImports
-    , scratchDir, verbosity, moduleInfo, moduleByKey
+    , scratchDir, verbosity, moduleInfo, modulesOld
     , extensions, sourceDirs, declMap, symbolMap, testMode
     , CleanMode(DoClean, NoClean)
     , ModuVerse
@@ -111,7 +111,7 @@ data Params
       -- ^ For testing, do not run cleanImports on the results of the
       -- splitModule and catModules operations.
 
-      , _moduleByKey :: Map PathKey ModuleInfo
+      , _modulesOld :: Map PathKey ModuleInfo
       -- ^ The original module info, associated with the key used to
       -- find the module.
       , _moduleInfo :: Map S.ModuleName ModuleInfo
@@ -157,7 +157,7 @@ runModuVerseT action =
                                                      _dryRun = False,
                                                      _verbosity = 1,
                                                      _hsFlags = [],
-                                                     _moduleByKey = Map.empty,
+                                                     _modulesOld = Map.empty,
                                                      _moduleInfo = Map.empty,
                                                      _extensions = Exts.extensions Exts.defaultParseMode ++
                                                                    [nameToExtension StandaloneDeriving], -- allExtensions
@@ -239,7 +239,7 @@ findSymbolDecl modu name =
 delName :: ModuVerse m => S.ModuleName -> m ()
 delName name = do
   moduleInfo %= Map.delete name
-  moduleByKey .= Map.empty
+  modulesOld .= Map.empty
 
 getExtensions :: ModuVerse m => m [Extension]
 getExtensions = use extensions
@@ -258,7 +258,7 @@ parseModuleMaybe Nothing = return Nothing
 parseModuleMaybe (Just key) =
     (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e || isUserError e then return Nothing else throw e)
     where
-      look = Map.lookup key <$> use moduleByKey
+      look = Map.lookup key <$> use modulesOld
       load (Just x) = return (Just x)
       load Nothing = Just <$> loadModule key
 
@@ -268,11 +268,11 @@ loadModule key =
     do text <- liftIO $ readFile (unPathKey key)
        quietly $ qLnPutStr ("parsing " ++ unPathKey key)
        (parsed, comments) <- parseFileWithComments (unPathKey key) >>= return . Exts.fromParseResult
-       moduleByKey %= Map.insert key (ModuleInfo parsed text comments key)
+       modulesOld %= Map.insert key (ModuleInfo parsed text comments key)
        return (ModuleInfo parsed text comments key)
 
 unloadModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ()
-unloadModule key = moduleByKey %= Map.delete key
+unloadModule key = modulesOld %= Map.delete key
 
 -- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))
