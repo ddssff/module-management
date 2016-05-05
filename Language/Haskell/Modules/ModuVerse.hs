@@ -13,7 +13,7 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
     ( Params, dryRun, extraImports, hsFlags, junk, removeEmptyImports
-    , scratchDir, verbosity, moduleInfo, modulesOld
+    , scratchDir, verbosity, moduleInfo, modulesOld, moduleKey
     , extensions, sourceDirs, declMap, symbolMap, testMode
     , CleanMode(DoClean, NoClean)
     , ModuVerse
@@ -114,6 +114,8 @@ data Params
       , _modulesOld :: Map PathKey ModuleInfo
       -- ^ The original module info, associated with the key used to
       -- find the module.
+      , _moduleKey :: Map S.ModuleName PathKey
+      -- ^ Map from module names back to the path
       , _moduleInfo :: Map S.ModuleName ModuleInfo
       -- ^ The modified modules.  When we are modifying modules we
       -- refer to them by module name, which for these computations
@@ -159,6 +161,7 @@ runModuVerseT action =
                                                      _hsFlags = [],
                                                      _modulesOld = Map.empty,
                                                      _moduleInfo = Map.empty,
+                                                     _moduleKey = Map.empty,
                                                      _extensions = Exts.extensions Exts.defaultParseMode ++
                                                                    [nameToExtension StandaloneDeriving], -- allExtensions
                                                      _sourceDirs = ["."],
@@ -264,15 +267,18 @@ parseModuleMaybe (Just key) =
 
 -- | Force a possibly cached module to be reloaded.
 loadModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ModuleInfo
-loadModule key =
+loadModule key@(PathKey _ name) =
     do text <- liftIO $ readFile (unPathKey key)
        quietly $ qLnPutStr ("parsing " ++ unPathKey key)
        (parsed, comments) <- parseFileWithComments (unPathKey key) >>= return . Exts.fromParseResult
        modulesOld %= Map.insert key (ModuleInfo parsed text comments key)
+       moduleKey %= Map.insertWith (\ a b -> error ("Multiple modules " ++ show name ++ ": " ++ show (a, b))) name key
        return (ModuleInfo parsed text comments key)
 
 unloadModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ()
-unloadModule key = modulesOld %= Map.delete key
+unloadModule key@(PathKey _ name) = do
+  modulesOld %= Map.delete key
+  moduleKey %= Map.delete name
 
 -- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))
