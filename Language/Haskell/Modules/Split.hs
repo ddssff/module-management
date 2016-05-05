@@ -12,7 +12,7 @@ import Control.Monad as List (mapM, mapM_)
 import Data.Default (Default(def))
 import Data.Foldable as Foldable (fold)
 import Data.List as List (group, intercalate, map, nub, sort)
-import Data.Map as Map (delete, elems, empty, filter, insertWith, lookup, Map, mapWithKey)
+import Data.Map as Map (delete, elems, empty, filter, insertWith, keys, lookup, Map, mapWithKey)
 import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import Data.Sequence ((<|), (|>))
@@ -26,7 +26,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(.
 import Language.Haskell.Modules.Common (doResult, ModuleResult(..), reportResult)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (extraImports, CleanMode, findModule, getNames, moduleName, ModuVerse, parseModule)
+import Language.Haskell.Modules.ModuVerse (extraImports, CleanMode, findModule, moduleInfo, moduleName, ModuVerse, parseModule)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
 import Language.Haskell.Modules.Symbols (exports, imports, symbolsDeclaredBy, members)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
@@ -139,7 +139,7 @@ splitModuleBy mode toModule inInfo =
          do eiMap <- use extraImports
             -- The name of the module to be split
             let inName = moduleName inInfo
-            allNames <- getNames >>= return . Set.union outNames
+            allNames <- (Set.fromList . keys <$> use moduleInfo) >>= return . Set.union outNames
             changes <- List.mapM (doModule toModule eiMap inInfo inName outNames) (toList allNames)
             -- Now we have to clean the import lists of the new
             -- modules, which means writing the files and doing an IO

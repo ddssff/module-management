@@ -22,9 +22,6 @@ module Language.Haskell.Modules.ModuVerse
     , extraImport
     , moduleName
     -- , ModuVerse(..)
-    , getNames
-    , getInfo
-    -- , putName
     , putModule
     , putModuleAnew
     , findModule
@@ -63,7 +60,7 @@ import System.Directory (removeFile)
 import Control.Exception.Lifted as IO (catch, throw)
 import Control.Lens (use, (%=), (.=))
 import Data.Map as Map (delete, insert, keys, lookup)
-import Data.Set as Set (fromList, minView)
+import Data.Set as Set (minView)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
@@ -205,25 +202,20 @@ hseExtensions = map nameToExtension
     , ExplicitNamespaces
     ]
 
-getNames :: ModuVerse m => m (Set S.ModuleName)
-getNames = Set.fromList . keys <$> use moduleInfo
-
-getInfo :: ModuVerse m => S.ModuleName -> m (Maybe ModuleInfo)
-getInfo name = Map.lookup name <$> use moduleInfo
-
-putName :: ModuVerse m => S.ModuleName -> ModuleInfo -> m ()
-putName name info = moduleInfo %= Map.insert name info
-
 putModule :: ModuVerse m => S.ModuleName -> m ()
-putModule name = pathKey (modulePathBase "hs" name) >>= parseModule >>= putName name
+putModule name = do
+  key <- pathKey (modulePathBase "hs" name)
+  info <- parseModule key
+  moduleInfo %= Map.insert name info
 
 -- | Update the ModuVerse info for a module by re-reading its (perhaps
 -- altered) source text.
 putModuleAnew :: ModuVerse m => S.ModuleName -> m PathKey
-putModuleAnew name =
-    do key <- pathKey (modulePathBase "hs" name)
-       loadModule key >>= putName name
-       return key
+putModuleAnew name = do
+  key <- pathKey (modulePathBase "hs" name)
+  info <- loadModule key
+  moduleInfo %= Map.insert name info
+  return key
 
 findModule :: ModuVerse m => S.ModuleName -> m (Maybe ModuleInfo)
 findModule name = pathKeyMaybe (modulePathBase "hs" name) >>= parseModuleMaybe
@@ -232,7 +224,7 @@ findModule name = pathKeyMaybe (modulePathBase "hs" name) >>= parseModuleMaybe
 -- return the Decl that creates it.
 findSymbolDecl :: ModuVerse m => S.ModuleName -> S.Name -> m (Maybe (A.Decl SrcSpanInfo))
 findSymbolDecl modu name =
-    do Just info <- getInfo modu
+    do Just info <- Map.lookup modu <$> use moduleInfo
        let s = foldDecls (\d _ _ _ r -> Set.insert d r) (\_ r -> r) info mempty
        case Set.minView s of
          Nothing -> return Nothing
@@ -288,12 +280,12 @@ buildDeclMap :: forall m. ModuVerse m =>
                 (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName)
              -> m ()
 buildDeclMap newModule = do
-  names <- Set.toList <$> getNames :: m [S.ModuleName]
+  names <- keys <$> use moduleInfo :: m [S.ModuleName]
   mp <- foldM doModule mempty names
   declMap .= mp
     where
       doModule mp oldModule = do
-        Just oldInfo <- getInfo oldModule
+        Just oldInfo <- Map.lookup oldModule <$> use moduleInfo
         let mp' = foldDecls (\d _ _ _ r ->
                                let m :: S.ModuleName
                                    m = newModule oldModule d in
@@ -307,12 +299,12 @@ buildDeclMap newModule = do
 buildSymbolMap :: forall m. ModuVerse m => m ()
 buildSymbolMap = do
   symbolMap .= mempty
-  names <- Set.toList <$> getNames :: m [S.ModuleName]
+  names <- keys <$> use moduleInfo :: m [S.ModuleName]
   mp <- foldM doModule mempty names
   symbolMap .= mp
     where
       doModule mp oldModule = do
-        Just oldInfo <- getInfo oldModule
+        Just oldInfo <- Map.lookup oldModule <$> use moduleInfo
         let mp'' = foldDecls (\d _ _ _ r -> foldl' (\mp' s -> Map.insert (oldModule, s) d mp') r (symbolsDeclaredBy d))
                              (\_ r -> r)
                              oldInfo mp

@@ -4,11 +4,13 @@ module Language.Haskell.Modules.Merge
     ( mergeModules
     ) where
 
+import Control.Lens (use)
 import Control.Monad as List (mapM, mapM_, when)
 import Control.Exception.Lifted as IO (catch)
 import Data.Foldable (fold)
 import Data.Generics (Data, everywhere, mkT, Typeable)
 import Data.List as List (find, intercalate, map)
+import Data.Map (keys)
 import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Sequence as Seq ((<|), null, Seq, (|>))
@@ -21,7 +23,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, impor
 import Language.Haskell.Modules.Common (doResult, fixExport, ModuleResult(..), reportResult)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (CleanMode, getNames, moduleName, ModuVerse, parseModule, parseModuleMaybe)
+import Language.Haskell.Modules.ModuVerse (CleanMode, moduleInfo, moduleName, ModuVerse, parseModule, parseModuleMaybe)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, pathKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 
@@ -34,7 +36,7 @@ mergeModules :: ModuVerse m => CleanMode -> [S.ModuleName] -> S.ModuleName -> m 
 mergeModules mode inNames outName =
     do qLnPutStr ("mergeModules: [" ++ intercalate ", " (map prettyPrint inNames) ++ "] -> " ++ prettyPrint outName)
        quietly $
-         do univ <- getNames
+         do univ <- (Set.fromList . keys) <$> use moduleInfo
             let allNames = toList $ union univ (Set.fromList (outName : inNames))
             results <- List.mapM (doModule inNames outName) allNames
             results' <- List.mapM doResult results

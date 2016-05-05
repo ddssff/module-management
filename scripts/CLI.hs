@@ -2,54 +2,47 @@
 {-# LANGUAGE CPP, DeriveDataTypeable, DeriveGeneric, PatternGuards, RankNTypes, StandaloneDeriving, ViewPatterns #-}
 module Main where
 
-import System.Console.Haskeline
-import Control.Monad.State
-
-import System.Environment
-import System.Directory
+import qualified CLI.Cabal as Cabal
 import CLI.HaskelineTransAdapter ()
+import Control.Exception (fromException)
+import Control.Lens
 import Control.Monad as List (mapM_)
+import Control.Monad.Reader
+import Control.Monad.State
 import Control.Monad.Trans (MonadIO(liftIO), MonadTrans(..))
-import Data.List
-import Data.Maybe (maybeToList)
 import Data.Char (toLower)
-import qualified Data.Set as S (member, toList, map)
+import Data.Data
+import Data.Foldable(traverse_)
+import Data.List
+import Data.Map as Map (keys, lookup)
+import Data.Maybe (maybeToList)
+import qualified Data.Set as Set (fromList, member, toList, map)
 import Data.Set.Extra as Set (Set, toList)
+import Distribution.PackageDescription (GenericPackageDescription)
 import Distribution.Package (InstalledPackageId(..))
+import qualified Distribution.Verbosity
 import GHC.Generics (Generic)
 import qualified Language.Haskell.Exts.Annotated as A (Decl)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
-import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules,
-                                 ModuleName(..), ModuVerse, noisily, putHsSourceDirs, putModule,
-                                 runModuVerseT, splitModuleBy)
-import Language.Haskell.Modules.ModuVerse (CleanMode(DoClean), getNames, getInfo, moduleName, Params, sourceDirs)
+import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules, ModuleName(..), ModuVerse,
+                                 noisily, putHsSourceDirs, putModule, runModuVerseT, splitModuleBy)
+import Language.Haskell.Modules.ModuVerse (CleanMode(DoClean), moduleInfo, moduleName, Params, sourceDirs)
 import Language.Haskell.Modules.SourceDirs (getHsSourceDirs)
 import Language.Haskell.Modules.Split (T(A))
 import Language.Haskell.Modules.Symbols (FoldDeclared)
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
 import Language.Haskell.TH.Syntax as TH (nameBase)
-import System.Console.Haskeline (completeFilename, CompletionFunc, defaultSettings, getInputLine, InputT, noCompletion, runInputT, setComplete, simpleCompletion)
+import System.Console.CmdArgs
+import System.Console.Haskeline
+import System.Console.Haskeline (completeFilename, CompletionFunc, defaultSettings, getInputLine, InputT,
+                                 noCompletion, runInputT, setComplete, simpleCompletion)
+import System.Console.Haskeline.MonadException
+import System.Directory
+import System.Environment
+import System.Exit
 import System.IO (hPutStrLn, stderr)
 import Text.Regex (mkRegex, matchRegex)
-
-import System.Console.CmdArgs
-import Control.Lens
-import Data.Maybe
-
-import Control.Monad.Reader
-
-import Distribution.PackageDescription (GenericPackageDescription)
-
-import qualified CLI.Cabal as Cabal
-import qualified Distribution.Verbosity
-import Data.Data
-
-import Data.Foldable(traverse_)
-import System.Console.Haskeline.MonadException
-import Control.Exception (fromException)
-
-import System.Exit
 
 data HMM = CLI
   { verbosity :: Int,
@@ -163,9 +156,9 @@ compl conf (xs,ys) | cmd: _ <- words (reverse xs),
 
         [x] | cmd `notElem` commandNames -> return ("", [simpleCompletion x])
             | takesModuleNames cmd -> do
-                ns <- getNames
-                let complAllModules = map (simpleCompletion . moduleNameToStr) (S.toList ns)
-                    nsLower = S.map (ModuleName . map toLower . moduleNameToStr) ns
+                ns <- Set.fromList . keys <$> use moduleInfo
+                let complAllModules = map (simpleCompletion . moduleNameToStr) (Set.toList ns)
+                    nsLower = Set.map (ModuleName . map toLower . moduleNameToStr) ns
                     transform
                         | caseSensitiveCompletion conf = id
                         | nsLower == ns = map toLower
@@ -173,10 +166,10 @@ compl conf (xs,ys) | cmd: _ <- words (reverse xs),
                 return $ case span (/=' ') xs of
                     (reverse -> cw @ (_:_), rest) ->
                         case filter (isPrefixOf (transform cw) . transform)
-                                        (moduleNameToStr `map` S.toList ns) of
+                                        (moduleNameToStr `map` Set.toList ns) of
                             -- this first case isn't really needed: it should do the same as the
                             -- next case but possibly be more efficient
-                            _ | ModuleName cw `S.member` ns -> (rest, [simpleCompletion cw])
+                            _ | ModuleName cw `Set.member` ns -> (rest, [simpleCompletion cw])
                             [modName] -> (rest, [simpleCompletion modName])
                             _ -> (rest, complAllModules)
                     _ -> (xs, complAllModules)
@@ -343,14 +336,14 @@ unModuleName (ModuleName x) = x
 
 verse :: ModuVerse m => [String] -> m ()
 verse [] =
-    do modules <- getNames
+    do modules <- Set.fromList . keys <$> use moduleInfo
        liftIO $ putStrLn ("Usage: verse <pathormodule1> <pathormodule2> ...\n" ++
                                   "Add the module or all the modules below a directory to the moduVerse\n" ++
                                   "Currently:\n  " ++ showVerse modules)
 verse args =
     do new <- mapM (liftIO . find) args
        List.mapM_ (List.mapM_ putModule) new
-       modules <- getNames
+       modules <- Set.fromList . keys <$> use moduleInfo
        liftIO (putStrLn $ "moduVerse updated:\n  " ++ showVerse modules)
     where
       find s =
@@ -385,7 +378,7 @@ split _ = liftIO $ putStrLn "Usage: split <modulepath>"
 
 splitBy :: [String] -> CmdM ()
 splitBy [regex, newModule, oldModule] = do
-  r <- liftCT (getInfo (ModuleName oldModule) >>=
+  r <- liftCT (Map.lookup (ModuleName oldModule) <$> use moduleInfo >>=
                maybe (error $ "Module not found: " ++ show oldModule)
                      (\oldModuleInfo -> splitModuleBy DoClean pred oldModuleInfo))
   lift (modify (Cabal.update r))
