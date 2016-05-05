@@ -32,7 +32,7 @@ test1 =
        assertEqual "echo" original output
     where
       test :: ModuleInfo -> (String, String)
-      test m@(ModuleInfo _ text _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
+      test m@(ModuleInfo _ text _ _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
 
 test1b :: Test
 test1b =
@@ -125,7 +125,7 @@ test3 =
        assertEqual "echo" original output
     where
       test :: ModuleInfo -> (String, String)
-      test m@(ModuleInfo _ text _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
+      test m@(ModuleInfo _ text _ _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
 
 fold3b :: Test
 fold3b =
@@ -136,7 +136,7 @@ fold3b =
        assertEqual "echo" original output
     where
       test :: ModuleInfo -> (String, String)
-      test m@(ModuleInfo _ text _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
+      test m@(ModuleInfo _ text _ _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
 
 fold3c :: Test
 fold3c =
@@ -147,7 +147,7 @@ fold3c =
        assertEqual "echo" original output
     where
       test :: ModuleInfo -> (String, String)
-      test m@(ModuleInfo _ text _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
+      test m@(ModuleInfo _ text _ _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
 
 test5 :: Test
 test5 =

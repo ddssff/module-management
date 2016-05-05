@@ -23,7 +23,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, impor
 import Language.Haskell.Modules.Common (doResult, fixExport, ModuleResult(..), reportResult)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (CleanMode, moduleInfo, moduleName, ModuVerse, parseModule, parseModuleMaybe)
+import Language.Haskell.Modules.ModuVerse (CleanMode, modulesOrig, moduleKey, modulesNew, moduleName, ModuVerse, parseModule, parseModuleMaybe)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, pathKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 
@@ -36,7 +36,7 @@ mergeModules :: ModuVerse m => CleanMode -> [S.ModuleName] -> S.ModuleName -> m 
 mergeModules mode inNames outName =
     do qLnPutStr ("mergeModules: [" ++ intercalate ", " (map prettyPrint inNames) ++ "] -> " ++ prettyPrint outName)
        quietly $
-         do univ <- (Set.fromList . keys) <$> use moduleInfo
+         do univ <- (Set.fromList . keys) <$> use moduleKey
             let allNames = toList $ union univ (Set.fromList (outName : inNames))
             results <- List.mapM (doModule inNames outName) allNames
             results' <- List.mapM doResult results
@@ -130,7 +130,7 @@ moduleImports inNames outName thisName x pref s suff r =
 -- modules in oldmap with an "as" qualifier, identifiers using the
 -- module name in the "as" qualifier must use new instead.
 moduleDecls :: [S.ModuleName] -> S.ModuleName -> S.ModuleName -> ModuleInfo -> String
-moduleDecls inNames outName thisName info@(ModuleInfo (A.Module _ _ _ imports _) _ _ _) =
+moduleDecls inNames outName thisName info@(ModuleInfo (A.Module _ _ _ imports _) _ _ _ _) =
     -- Get the import list for this module
     let inNames' = inNames ++ if thisName == outName then mapMaybe qualifiedImportName imports else [] in
     fold (foldDecls (\ d pref s suff r ->
@@ -147,7 +147,7 @@ moduleDecls inNames outName thisName info@(ModuleInfo (A.Module _ _ _ imports _)
             True -> Just (sModuleName a)
             _ -> Nothing
       qualifiedImportName _ = Nothing
-moduleDecls _ _ _ (ModuleInfo m _ _ _) = error $ "Unsupported module type: " ++ show m
+moduleDecls _ _ _ (ModuleInfo m _ _ _ _) = error $ "Unsupported module type: " ++ show m
 
 -- | Change any ModuleName in 'old' to 'new'.
 fixReferences :: (Data a, Typeable a) => [S.ModuleName] -> S.ModuleName -> a -> a

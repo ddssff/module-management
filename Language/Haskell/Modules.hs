@@ -81,6 +81,8 @@ module Language.Haskell.Modules
     , splitModuleBy
     , mergeModules
     -- * Runtime environment
+    , module Language.Haskell.Modules.ModuVerse
+{-
     , ModuVerse
     , Params
     , extensions
@@ -88,6 +90,7 @@ module Language.Haskell.Modules
     , putModule
     , findModule
     , extraImport
+-}
     -- * Progress reporting
     , noisily
     , quietly
@@ -100,7 +103,6 @@ module Language.Haskell.Modules
     , findHsModules
     , findHsFiles
     , withCurrentDirectory
-    , hsFlags
     , CleanMode(DoClean, NoClean)
     , RelPath(unRelPath)
     -- * Move

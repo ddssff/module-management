@@ -26,7 +26,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(.
 import Language.Haskell.Modules.Common (doResult, ModuleResult(..), reportResult)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (extraImports, CleanMode, findModule, moduleInfo, moduleName, ModuVerse, parseModule)
+import Language.Haskell.Modules.ModuVerse (extraImports, CleanMode, findModule, modulesNew, moduleName, ModuVerse, parseModule)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
 import Language.Haskell.Modules.Symbols (exports, imports, symbolsDeclaredBy, members)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
@@ -128,18 +128,18 @@ splitModuleBy :: ModuVerse m =>
               -> ModuleInfo
               -- ^ The parsed input module.
               -> m [ModuleResult]
-splitModuleBy _ _ (ModuleInfo (A.XmlPage {}) _ _ _) = error "XmlPage"
-splitModuleBy _ _ (ModuleInfo (A.XmlHybrid {}) _ _ _) = error "XmlPage"
-splitModuleBy _ _ m@(ModuleInfo (A.Module _ _ _ _ []) _ _ key) = return [Unchanged (moduleName m) key] -- No declarations - nothing to split
-splitModuleBy _ _ m@(ModuleInfo (A.Module _ _ _ _ [_]) _ _ key) = return [Unchanged (moduleName m) key] -- One declaration - nothing to split (but maybe we should anyway?)
-splitModuleBy _ _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = throw $ userError $ "splitModule: no explicit header"
+splitModuleBy _ _ (ModuleInfo (A.XmlPage {}) _ _ _ _) = error "XmlPage"
+splitModuleBy _ _ (ModuleInfo (A.XmlHybrid {}) _ _ _ _) = error "XmlPage"
+splitModuleBy _ _ m@(ModuleInfo (A.Module _ _ _ _ []) _ _ key _) = return [Unchanged (moduleName m) key] -- No declarations - nothing to split
+splitModuleBy _ _ m@(ModuleInfo (A.Module _ _ _ _ [_]) _ _ key _) = return [Unchanged (moduleName m) key] -- One declaration - nothing to split (but maybe we should anyway?)
+splitModuleBy _ _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _ _) = throw $ userError $ "splitModule: no explicit header"
 splitModuleBy mode toModule inInfo =
     do qLnPutStr ("Splitting module " ++ prettyPrint (moduleName inInfo))
        quietly $
          do eiMap <- use extraImports
             -- The name of the module to be split
             let inName = moduleName inInfo
-            allNames <- (Set.fromList . keys <$> use moduleInfo) >>= return . Set.union outNames
+            allNames <- (Set.fromList . keys <$> use modulesNew) >>= return . Set.union outNames
             changes <- List.mapM (doModule toModule eiMap inInfo inName outNames) (toList allNames)
             -- Now we have to clean the import lists of the new
             -- modules, which means writing the files and doing an IO
@@ -174,7 +174,7 @@ doModule toModule eiMap inInfo inName outNames thisName =
                             _ -> ToBeCreated thisName (newModule toModule inInfo thisName eiMap)
         | thisName == inName -> return (ToBeRemoved thisName (key_ inInfo))
         | True ->
-            pathKey (modulePathBase "hs" thisName) >>= parseModule >>= \ oldInfo@(ModuleInfo _ oldText _ _) ->
+            pathKey (modulePathBase "hs" thisName) >>= parseModule >>= \ oldInfo@(ModuleInfo _ oldText _ _ _) ->
             let newText = updateImports toModule oldInfo inInfo inName thisName eiMap outNames in
             return $ if newText /= oldText then ToBeModified thisName (key_ oldInfo) newText else Unchanged thisName (key_ oldInfo)
 
@@ -253,9 +253,9 @@ modDecls :: ToModuleArg -> ModuleInfo -> S.ModuleName -> [(A.Decl SrcSpanInfo, S
 modDecls toModule inInfo thisName = fromMaybe [] (Map.lookup thisName (moduleDeclMap toModule inInfo))
 
 moduleExports :: ModuleInfo -> Maybe (A.ExportSpecList SrcSpanInfo)
-moduleExports (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _) = Nothing
-moduleExports (ModuleInfo (A.Module _ (Just (A.ModuleHead _ _ _ x)) _ _ _) _ _ _) = x
-moduleExports (ModuleInfo _ _ _ _) = error "Unsupported module type"
+moduleExports (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _ _) = Nothing
+moduleExports (ModuleInfo (A.Module _ (Just (A.ModuleHead _ _ _ x)) _ _ _) _ _ _ _) = x
+moduleExports (ModuleInfo _ _ _ _ _) = error "Unsupported module type"
 
 -- Update the imports to reflect the changed module names in toModule.
 -- Update re-exports of the split module.
@@ -382,8 +382,8 @@ declClass info eed name =
 
 -- | Classify the symbols of a Decl or ExportSpec.
 declClasses :: ModuleInfo -> Either (A.ExportSpec SrcSpanInfo) (A.Decl SrcSpanInfo) -> Set SymbolClass -- Map S.Name SymbolClass?
-declClasses (ModuleInfo _ _ _ _) (Right decl@(A.InstDecl {})) = singleton (Instance decl)
-declClasses info@(ModuleInfo m _ _ _) eed =
+declClasses (ModuleInfo _ _ _ _ _) (Right decl@(A.InstDecl {})) = singleton (Instance decl)
+declClasses info@(ModuleInfo m _ _ _ _) eed =
     Set.map symbolClass (Set.fromList (either symbolsDeclaredBy symbolsDeclaredBy eed))
     where
       -- mp = Map.fromSet symbolClass (union (symbolsDeclaredBy decl) exportedSymbols)

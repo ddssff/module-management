@@ -14,7 +14,7 @@ import Data.Char (toLower)
 import Data.Data
 import Data.Foldable(traverse_)
 import Data.List
-import Data.Map as Map (keys, lookup)
+import Data.Map as Map (elems, keys, lookup)
 import Data.Maybe (maybeToList)
 import qualified Data.Set as Set (fromList, member, toList, map)
 import Data.Set.Extra as Set (Set, toList)
@@ -27,7 +27,8 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
 import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules, ModuleName(..), ModuVerse,
                                  noisily, putHsSourceDirs, putModule, runModuVerseT, splitModuleBy)
-import Language.Haskell.Modules.ModuVerse (CleanMode(DoClean), moduleInfo, moduleName, Params, sourceDirs)
+import Language.Haskell.Modules.Fold (ModuleInfo(..))
+import Language.Haskell.Modules.ModuVerse -- (CleanMode(DoClean), moduleInfo, moduleName, Params, sourceDirs)
 import Language.Haskell.Modules.SourceDirs (getHsSourceDirs)
 import Language.Haskell.Modules.Split (T(A))
 import Language.Haskell.Modules.Symbols (FoldDeclared)
@@ -156,7 +157,7 @@ compl conf (xs,ys) | cmd: _ <- words (reverse xs),
 
         [x] | cmd `notElem` commandNames -> return ("", [simpleCompletion x])
             | takesModuleNames cmd -> do
-                ns <- Set.fromList . keys <$> use moduleInfo
+                ns <- Set.fromList . map name_ . elems <$> use modulesOrig
                 let complAllModules = map (simpleCompletion . moduleNameToStr) (Set.toList ns)
                     nsLower = Set.map (ModuleName . map toLower . moduleNameToStr) ns
                     transform
@@ -334,16 +335,16 @@ cabalRead _ = liftIO $ putStrLn "Usage: cabalRead <file.cabal>"
 unModuleName :: ModuleName -> String
 unModuleName (ModuleName x) = x
 
-verse :: ModuVerse m => [String] -> m ()
+verse :: forall m. ModuVerse m => [String] -> m ()
 verse [] =
-    do modules <- Set.fromList . keys <$> use moduleInfo
+    do modules <- Set.fromList . map name_ . elems <$> use modulesOrig
        liftIO $ putStrLn ("Usage: verse <pathormodule1> <pathormodule2> ...\n" ++
                                   "Add the module or all the modules below a directory to the moduVerse\n" ++
                                   "Currently:\n  " ++ showVerse modules)
 verse args =
-    do new <- mapM (liftIO . find) args
-       List.mapM_ (List.mapM_ putModule) new
-       modules <- Set.fromList . keys <$> use moduleInfo
+    do new <- concat <$> mapM (liftIO . find) args
+       List.mapM_ putModule new
+       modules <- Set.fromList . map name_ . elems <$> use modulesOrig
        liftIO (putStrLn $ "moduVerse updated:\n  " ++ showVerse modules)
     where
       find s =
@@ -378,7 +379,7 @@ split _ = liftIO $ putStrLn "Usage: split <modulepath>"
 
 splitBy :: [String] -> CmdM ()
 splitBy [regex, newModule, oldModule] = do
-  r <- liftCT (Map.lookup (ModuleName oldModule) <$> use moduleInfo >>=
+  r <- liftCT (Map.lookup (ModuleName oldModule) <$> use modulesNew >>=
                maybe (error $ "Module not found: " ++ show oldModule)
                      (\oldModuleInfo -> splitModuleBy DoClean pred oldModuleInfo))
   lift (modify (Cabal.update r))

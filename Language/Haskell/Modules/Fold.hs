@@ -23,6 +23,7 @@ import Data.Sequence (Seq, (|>))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
+import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 -- import Language.Haskell.Modules.ModuVerse (ModuleInfo(ModuleInfo))
 import Language.Haskell.Modules.SourceDirs (PathKey)
 import Language.Haskell.Modules.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, srcLoc, srcPairText)
@@ -152,7 +153,8 @@ data ModuleInfo
       { module_ :: A.Module SrcSpanInfo
       , modtext_ :: String
       , comments_ :: [Comment]
-      , key_ :: PathKey }
+      , key_ :: PathKey
+      , name_ :: S.ModuleName }
     deriving (Eq, Ord, Show)
 
 -- | Given the result of parseModuleWithComments and the original
@@ -178,9 +180,9 @@ foldModule :: forall r. (Show r) =>
            -> ModuleInfo -- ^ Parsed module
            -> r -- ^ Fold initialization value
            -> r -- ^ Result
-foldModule _ _ _ _ _ _ _ _ _ _ (ModuleInfo (A.XmlPage _ _ _ _ _ _ _) _ _ _) _ = error "XmlPage: unsupported"
-foldModule _ _ _ _ _ _ _ _ _ _ (ModuleInfo (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ _) _ = error "XmlHybrid: unsupported"
-foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (ModuleInfo (m@(A.Module (SrcSpanInfo (SrcSpan path _ _ _ _) _) mh ps is ds)) text comments _) r0 =
+foldModule _ _ _ _ _ _ _ _ _ _ (ModuleInfo (A.XmlPage _ _ _ _ _ _ _) _ _ _ _) _ = error "XmlPage: unsupported"
+foldModule _ _ _ _ _ _ _ _ _ _ (ModuleInfo (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ _ _) _ = error "XmlHybrid: unsupported"
+foldModule topf pragmaf namef warnf pref exportf postf importf declf sepf (ModuleInfo (m@(A.Module (SrcSpanInfo (SrcSpan path _ _ _ _) _) mh ps is ds)) text comments _ _) r0 =
     (\ (_, (_, _, _, r)) -> r) $ runState doModule (text, (SrcLoc path 1 1), spans m, r0)
     where
       doModule =

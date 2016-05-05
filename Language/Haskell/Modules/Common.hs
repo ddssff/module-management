@@ -10,17 +10,19 @@ module Language.Haskell.Modules.Common
     ) where
 
 import Control.Exception.Lifted as IO (bracket, catch, throw)
+import Control.Lens ((%=))
 import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.List (groupBy, sortBy)
+import Data.Map as Map (delete)
 import Data.Monoid ((<>))
 import Data.Sequence as Seq (Seq, (|>))
 import qualified Language.Haskell.Exts.Annotated as A (ExportSpec)
 import Language.Haskell.Exts.Annotated.Simplify (sExportSpec)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
-import Language.Haskell.Modules.ModuVerse (delName, ModuVerse, putModuleAnew, unloadModule)
+import Language.Haskell.Modules.ModuVerse (ModuVerse, putModuleAnew, unloadModule, modulesOrig, moduleKey, modulesNew)
 import Language.Haskell.Modules.SourceDirs (modulePath, PathKey(..), APath(..))
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qLnPutStr, quietly)
@@ -80,7 +82,9 @@ doResult (ToBeRemoved name key) =
        unloadModule key
        -- I think this event handler is redundant.
        removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-       delName name
+       modulesOrig %= Map.delete key
+       moduleKey %= Map.delete name
+       modulesNew %= Map.delete name
        return $ JustRemoved name key
 
 doResult (ToBeModified name key text) =

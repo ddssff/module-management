@@ -6,33 +6,19 @@ module Language.Haskell.Modules.Move
     ) where
 
 import Debug.Trace
-import Control.Exception (throw)
 import Control.Lens -- (at, use, (%=))
-import Control.Monad as List (foldM, mapM, mapM_)
-import Control.Monad.State (get)
 import Control.Monad.Trans (liftIO)
-import Data.Default (Default(def))
-import Data.Foldable as Foldable (fold)
-import Data.List as List (foldl', group, intercalate, map, nub, partition, sort)
-import Data.Map as Map (adjust, adjustWithKey, delete, elems, empty, filter, insert, insertWith, keys, lookup, Map, mapWithKey, toList)
-import Data.Maybe (fromMaybe)
-import Data.Monoid ((<>))
-import Data.Sequence ((<|), (|>))
-import Data.Set as Set (empty, filter, fold, fromList, insert, intersection, map, member, null, Set, singleton, toList, union)
-import Data.Set.Extra as Set (gFind)
-import qualified Language.Haskell.Exts.Annotated as A -- (Decl(InstDecl), ExportSpec(..), ExportSpecList, ImportDecl(..), ImportSpec(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
-import Language.Haskell.Exts.Annotated.Simplify (sExportSpec, sImportDecl, sImportSpec, sModule, sModuleName, sName)
-import Language.Haskell.Exts.Pretty (defaultMode, prettyPrint, prettyPrintWithMode)
-import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo(..))
+import Data.List as List (partition)
+import Data.Map as Map (adjust, insert, lookup, Map, mapWithKey, toList)
+import Data.Set as Set (fromList, member)
+import qualified Language.Haskell.Exts.Annotated as A
+import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S -- (ExportSpec(..), ImportDecl(..), Module(..), ModuleName(..), Name(..))
-import Language.Haskell.Modules.Common (doResult, ModuleResult(..), reportResult)
-import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2, ModuleInfo(..))
-import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (buildSymbolMap, buildDeclMap, CleanMode, findModule,
-                                           moduleName, ModuVerse(..), Params, extraImports, moduleInfo, parseModule)
-import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
-import Language.Haskell.Modules.Symbols (exports, foldDeclared, imports, symbolsDeclaredBy, members)
-import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
+import Language.Haskell.Modules.Fold (ModuleInfo(..))
+import Language.Haskell.Modules.ModuVerse (buildSymbolMap, buildDeclMap,
+                                           modulesNew, modulesOrig, ModuVerse)
+import Language.Haskell.Modules.SourceDirs (PathKey)
+import Language.Haskell.Modules.Symbols (foldDeclared, symbolsDeclaredBy)
 import Prelude hiding (writeFile)
 
 -- | Perform the changes described by the newModule function on all
@@ -48,8 +34,13 @@ moveDeclsBy :: forall m. (ModuVerse m) =>
 moveDeclsBy newModule = do
   buildSymbolMap
   buildDeclMap newModule
-  mapM_ (uncurry $ doModule newModule) . Map.toList =<< use moduleInfo
+  mapM_ copyModule . Map.toList =<< use modulesOrig
+  mapM_ (uncurry $ doModule newModule) . Map.toList =<< use modulesOrig
   writeChanges
+    where
+      copyModule :: (PathKey, ModuleInfo) -> m ()
+      copyModule (_key, info@(ModuleInfo _ _ _ _ name)) = do
+        modulesNew %= Map.insert name info
 
 -- | Perform the modifications required for the declarations in the
 -- one module.  This may change anything - declarations will be
@@ -57,15 +48,16 @@ moveDeclsBy newModule = do
 -- and exports everywhere may change.
 doModule :: forall m. (ModuVerse m) =>
             (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName)
-         -> S.ModuleName
+         -> PathKey
          -> ModuleInfo
          -> m ()
-doModule newModule oldName info@(ModuleInfo {module_ = A.Module _ _ _ _ decls}) =
+doModule newModule _oldKey (ModuleInfo {module_ = A.Module _ _ _ _ decls, name_ = oldName}) =
     mapM_ doDecl decls
     where
-      doDecl decl = case newModule oldName decl of
-                      newName | newName == oldName -> return ()
-                      newName -> moveDecl decl oldName newName
+      doDecl decl =
+          case newModule oldName decl of
+            newName | newName == oldName -> return ()
+            newName -> moveDecl decl oldName newName
 doModule _ _ _ = return ()
 
 -- | Move decl from oldName to newName
@@ -76,10 +68,10 @@ moveDecl :: forall m. (ModuVerse m) =>
          -> m ()
 moveDecl decl oldName newName = do
   -- moduleInfo %= Map.delete oldName
-  moduleInfo %= Map.adjust updateOldModule oldName
-  moduleInfo %= Map.adjust updateNewModule newName
+  modulesNew %= Map.adjust updateOldModule oldName
+  modulesNew %= Map.adjust updateNewModule newName
   transferExports
-  moduleInfo %= Map.mapWithKey updateImports
+  modulesNew %= Map.mapWithKey updateImports
   -- use moduleInfo >>= mapM_ (\name -> moduleInfo %= Map.adjustWithKey updateImports) . Map.keys
     where
       symbols = Set.fromList (symbolsDeclaredBy decl)
@@ -88,7 +80,7 @@ moveDecl decl oldName newName = do
       -- the old module.  Whether we need to add imports of these
       -- symbols must be specified by the AddImports flag.
       updateOldModule :: ModuleInfo -> ModuleInfo
-      updateOldModule info@(ModuleInfo {module_ = m@(A.Module l h p i decls)}) =
+      updateOldModule info@(ModuleInfo {module_ = A.Module l h p i decls}) =
           info {module_ = A.Module l (fmap removeOldExports h) p i (Prelude.filter (/= decl) decls)}
           where
             removeOldExports :: A.ModuleHead SrcSpanInfo -> A.ModuleHead SrcSpanInfo
@@ -101,8 +93,8 @@ moveDecl decl oldName newName = do
             addImports (A.Module l h p imports d) = A.Module l h p (imports ++ toImportSpec decl) d
       -- Add the declaration to the new module, Add the exports of the declaration's symbols to the new module
       updateNewModule :: ModuleInfo -> ModuleInfo
-      updateNewModule (ModuleInfo {module_ = A.Module l h p i d}) =
-          ModuleInfo {module_ = A.Module l h p i (d ++ [decl])}
+      updateNewModule (info@(ModuleInfo {module_ = A.Module l h p i d})) =
+          info {module_ = A.Module l h p i (d ++ [decl])}
       updateNewModule info = info
 
       -- If the old module exported the symbols, move those exports to
@@ -116,11 +108,11 @@ moveDecl decl oldName newName = do
       -- symbols that are never imported.
       transferExports :: m () -- Map S.ModuleName ModuleInfo -> Map S.ModuleName ModuleInfo
       transferExports = do
-        (toMove, toKeep) <- partitionImports <$> use moduleInfo
-        moduleInfo %= Map.adjust (\(ModuleInfo {module_ = A.Module l h p i d}) ->
-                                      ModuleInfo {module_ = A.Module l h p toKeep d}) oldName
-        moduleInfo %= Map.adjust (\(ModuleInfo {module_ = A.Module l h p i d}) ->
-                                      ModuleInfo {module_ = A.Module l h p (i ++ toMove) d}) newName
+        (toMove, toKeep) <- partitionImports <$> use modulesNew
+        modulesNew %= Map.adjust (\(info@(ModuleInfo {module_ = A.Module l h p i d})) ->
+                                      info {module_ = A.Module l h p toKeep d}) oldName
+        modulesNew %= Map.adjust (\(info@(ModuleInfo {module_ = A.Module l h p i d})) ->
+                                      info {module_ = A.Module l h p (i ++ toMove) d}) newName
       -- Extract the exports of the symbols of decls
       partitionImports :: Map S.ModuleName ModuleInfo -> ([A.ImportDecl SrcSpanInfo], [A.ImportDecl SrcSpanInfo])
       partitionImports mp =
@@ -149,7 +141,7 @@ moveDecl decl oldName newName = do
 
 writeChanges :: ModuVerse m => m ()
 writeChanges = do
-  mp <- use moduleInfo
+  mp <- use modulesNew
   mapM_ (\(name, info) -> liftIO (putStrLn (show name))) (Map.toList mp)
 
 class ToImportSpec a where
