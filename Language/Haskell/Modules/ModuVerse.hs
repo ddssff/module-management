@@ -111,10 +111,15 @@ data Params
       -- ^ For testing, do not run cleanImports on the results of the
       -- splitModule and catModules operations.
 
+      , _moduleByKey :: Map PathKey ModuleInfo
+      -- ^ The original module info, associated with the key used to
+      -- find the module.
       , _moduleInfo :: Map S.ModuleName ModuleInfo
-      , _moduleByKey :: Map PathKey ModuleInfo -- This redundancy must go
-      -- ^ The set of modules that splitModules and catModules will
-      -- check for imports of symbols that moved.
+      -- ^ The modified modules.  When we are modifying modules we
+      -- refer to them by module name, which for these computations
+      -- must be unique.  the key that was originally used to obtain
+      -- the module is stored in ModuleInfo so we can later go back
+      -- and see what changes occurred.
       , _symbolMap :: Map (S.ModuleName, S.Name) (A.Decl SrcSpanInfo)
       -- ^ Look up a symbol's declaration
       , _declMap :: Map (S.ModuleName, A.Decl SrcSpanInfo) S.ModuleName

@@ -149,7 +149,8 @@ checkImports :: ModuVerse m => ModuleInfo -> m ModuleResult
 checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _) =
     do
        scratch <- use scratchDir
-       let importsPath = scratch </> maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh ++ ".imports"
+       let name = maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh
+       let importsPath = scratch </> name ++ ".imports"
 
        -- The .imports file will appear in the real current directory,
        -- ignore the source dir path.  This may change in future
@@ -157,7 +158,7 @@ checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _) =
        markForDelete importsPath
        (ModuleInfo newImports _ _ _) <-
            withDot $
-               (parseModule (PathKey importsPath)
+               (parseModule (PathKey importsPath (S.ModuleName name))
                   `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here ->
                                                           throw . userError $ here ++ ": " ++ show e)))
        updateSource info newImports extraImports

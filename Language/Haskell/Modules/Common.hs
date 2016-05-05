@@ -10,6 +10,7 @@ module Language.Haskell.Modules.Common
     ) where
 
 import Control.Exception.Lifted as IO (bracket, catch, throw)
+import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.List (groupBy, sortBy)
@@ -93,7 +94,8 @@ doResult (ToBeModified name key text) =
 
 doResult (ToBeCreated name text) =
     do qLnPutStr ("creating: " ++ prettyPrint name)
-       path <- modulePath "hs" name
+       (path, name') <- modulePath "hs" name
+       when (name /= name') (qLnPutStr ("Module name mismatch: " ++ show name ++ " vs. " ++ show name'))
        -- qLnPutStr ("creating " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension . unAPath $ path)
