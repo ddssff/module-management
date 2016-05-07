@@ -2,26 +2,22 @@
 {-# OPTIONS -Wall #-}
 
 import Control.Exception (SomeException, try)
-import Data.List (isPrefixOf)
-import Language.Haskell.Exts.Annotated (defaultParseMode, exactPrint, parseFileWithComments, ParseResult(ParseOk))
+import Language.Haskell.Exts.Annotated (defaultParseMode, {-exactPrint,-} parseFileWithComments, ParseResult(ParseOk))
 import Language.Haskell.Exts.Annotated.Syntax as A (Module)
 import Language.Haskell.Exts.Comments (Comment)
-import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
+--import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
-import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
-import Language.Haskell.Modules (mergeModules, extensions, ModuVerse, noisily, putModule, runModuVerseT, withCurrentDirectory,
-                                 CleanMode(DoClean))
-import Language.Haskell.Modules.Util.Test (diff', logicModules, rsync)
+--import Language.Haskell.Exts.Syntax (ModuleName(ModuleName))
+import Language.Haskell.Modules ({-mergeModules, extensions, ModuVerse, CleanMode(DoClean), noisily, putModule, runModuVerseT,-} withCurrentDirectory)
+--import Language.Haskell.Modules.Util.Test (diff', logicModules, rsync)
 import System.Exit (ExitCode(ExitSuccess, ExitFailure), exitWith)
-import System.Process (system)
-import Test.HUnit (assertEqual, Counts(..), runTestTT, Test(TestList, TestCase, TestLabel))
+--import System.Process (system)
+import Test.HUnit ({-assertEqual,-} Counts(..), runTestTT, Test(TestList, {-TestCase,-} TestLabel))
 
 import qualified Fold as Fold (tests)
 import qualified Imports as Imports (tests)
-{-
 import qualified Merge as Merge (tests)
-import qualified Split as Split (tests, slow)
--}
+import qualified Split as Split (tests)
 import qualified SrcLoc as SrcLoc (tests)
 import qualified Symbols as Symbols (tests)
 
@@ -35,7 +31,7 @@ main =
          _ -> exitWith (ExitFailure 1)
 
 withTestData :: (A.Module SrcSpanInfo -> [Comment] -> String -> IO r) -> FilePath -> IO r
-withTestData f path = withCurrentDirectory "testdata/debian" $
+withTestData f path = withCurrentDirectory "tests/data/debian" $
     do text <- try (readFile path)
        source <- try (parseFileWithComments defaultParseMode path)
        case (text, source) of
@@ -51,11 +47,9 @@ tests = TestList [
                  , TestLabel "SrcLoc" SrcLoc.tests
                  , TestLabel "Fold" Fold.tests
                  , TestLabel "Imports" Imports.tests
-{-
                  , TestLabel "Split" Split.tests
                  , TestLabel "Merge" Merge.tests
-                 , Main.test1
--}
+                 -- , Main.test1
                  ]
 
 {-
@@ -82,9 +76,9 @@ slow = TestList [ -- No need to do test2b or test2a if test2c passes.
 logictest :: String -> ([ModuleName] -> StateT Params IO ()) -> Test
 logictest s f =
     TestLabel s $ TestCase $
-    do _ <- rsync "testdata/logic" "tmp"
+    do _ <- rsync "tests/data/logic" "tmp"
        _ <- withCurrentDirectory "tmp" $ runModuVerseT $ noisily $ f (map ModuleName logicModules)
-       (code, out, err) <- diff' ("testdata/" ++ s ++ "-expected") "tmp"
+       (code, out, err) <- diff' ("tests/data/" ++ s ++ "-expected") "tmp"
        let out' = unlines (filter (not . isPrefixOf "Binary files") . map (takeWhile (/= '\t')) $ (lines out))
        assertEqual s (ExitSuccess, "", "") (code, out', err)
 

@@ -10,111 +10,20 @@ import qualified Language.Haskell.Exts.Annotated as A
 import Language.Haskell.Exts.Annotated.Syntax ({- Eq Module -})
 import qualified Language.Haskell.Exts.Parser as Exts
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
+import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Modules.Common (withCurrentDirectory)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldModule, ModuleInfo(..))
 import Language.Haskell.Modules.ModuVerse (parseModule, runModuVerseT)
 import Language.Haskell.Modules.SourceDirs (pathKey, APath(..))
 import Language.Haskell.Modules.SrcLoc (HasSpanInfo(..), makeTree)
+import Language.Haskell.Modules.Symbols (foldDeclared)
 import Test.HUnit (assertEqual, Test(TestList, TestCase, TestLabel))
 
 deriving instance Eq (Exts.ParseResult (A.Module SrcSpanInfo, [A.Comment]))
 deriving instance Show (Exts.ParseMode)
 
 tests :: Test
-tests = TestLabel "Clean" (TestList [{-test1, test1b,-} test3, fold3b, fold3c, test4, test5, {-test5b,-} test6, test7])
-
-test1 :: Test
-test1 =
-    TestLabel "test1" $ TestCase $ withCurrentDirectory "testdata/debian" $
-    do let path = APath "Debian/Repo/Slice.hs"
-       mi <- runModuVerseT $ pathKey path >>= parseModule
-       let (output, original) = test mi
-       assertEqual "echo" original output
-    where
-      test :: ModuleInfo -> (String, String)
-      test m@(ModuleInfo _ text _ _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
-
-test1b :: Test
-test1b =
-    TestLabel "test1b" $ TestCase $ withCurrentDirectory "testdata/debian" $
-    do let path = APath "Debian/Repo/Slice.hs"
-       mi <- runModuVerseT $ pathKey path >>= parseModule
-       let output = parseTestOutput mi
-       assertEqual "echo" mempty (Seq.filter (\ (a, b) -> a /= b) (Seq.zip expected output))
-    where
-      expected :: Seq (String, String, String, String)
-      expected = Seq.fromList
-                   [("","","",""),
-                    ("","{-# LANGUAGE DeriveDataTypeable, FlexibleInstances, PackageImports, StandaloneDeriving, TupleSections #-}","\n","[1.1:1.106]"),
-                    ("-- |Types that represent a \"slice\" of a repository, as defined by a\n-- list of DebSource.  This is called a slice because some sections\n-- may be omitted, and because different repositories may be combined\n-- in the list.\nmodule ","Debian.Repo.Slice","\n","[6.8:6.25]"),
-                    ("    ( ","","",""),
-                    ("","Slice(..)","\n","[7.7:7.16]"),
-                    ("    , ","SliceList(..)","\n","[8.7:8.20]"),
-                    ("    , ","NamedSliceList(..)","\n","[9.7:9.25]"),
-                    ("    , ","sourceSlices","\n","[10.7:10.19]"),
-                    ("    , ","binarySlices","\n","[11.7:11.19]"),
-                    ("    , ","inexactPathSlices","\n","[12.7:12.24]"),
-                    ("    , ","releaseSlices","\n","[13.7:13.20]"),
-                    ("    , ","appendSliceLists","\n","[14.7:14.23]"),
-                    ("    , ","UpdateError(..)","\n","[15.7:15.22]"),
-                    ("    , ","SourcesChangedAction(..)","\n","[16.7:16.31]"),
-                    ("    , ","doSourcesChangedAction","\n","[17.7:17.29]"),
-                    ("    ) where","","",""),
-                    ("\n\n","import Control.Exception (Exception)","\n","[20.1:20.37]"),
-                    ("","import Data.Data (Data)","\n","[21.1:21.24]"),
-                    ("","import Data.List (intersperse)","\n","[22.1:22.31]"),
-                    ("","import Data.Typeable (Typeable)","\n","[23.1:23.32]"),
-                    ("","import Debian.Pretty (PP(..), ppDisplay, ppPrint)","\n","[24.1:24.50]"),
-                    ("","import Debian.Release (ReleaseName(relName))","\n","[25.1:25.45]"),
-                    ("","import Debian.Repo.Prelude (replaceFile)","\n","[26.1:26.41]"),
-                    ("","import Debian.Repo.Prelude.Verbosity (ePutStr, ePutStrLn)","\n","[27.1:27.58]"),
-                    ("","import Debian.Repo.Repo (RepoKey)","\n","[28.1:28.34]"),
-                    ("","import Debian.Sources (DebSource(..), SliceName, SourceType(..))","\n","[29.1:29.65]"),
-                    ("","import System.Directory (createDirectoryIfMissing, removeFile)","\n","[30.1:30.63]"),
-                    ("","import System.IO (hGetLine, stdin)","\n","[31.1:31.35]"),
-                    ("","import System.Unix.Directory (removeRecursiveSafely)","\n","[32.1:32.53]"),
-                    ("","import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), hcat, text)","\n","[33.1:33.67]"),
-                    ("\n","data Slice = Slice {sliceRepoKey :: RepoKey, sliceSource :: DebSource} deriving (Eq, Ord, Show)","\n","[35.1:35.96]"),
-                    ("\n-- | Each line of the sources.list represents a slice of a repository\n","data SliceList = SliceList {slices :: [Slice]} deriving (Eq, Ord, Show)","\n","[38.1:38.72]"),
-                    ("\n","data NamedSliceList\n    = NamedSliceList { sliceList :: SliceList\n                     , sliceListName :: SliceName\n                     } deriving (Eq, Ord, Show)","\n","[40.1:43.48]"),
-                    ("\n","instance Pretty (PP SliceList) where\n    pPrint = hcat . intersperse (text \"\\n\") . map (ppPrint . sliceSource) . slices . unPP","\n","[45.1:48.0]"),
-                    ("\n","instance Pretty (PP NamedSliceList) where\n    pPrint = ppPrint . sliceList . unPP","\n","[48.1:51.0]"),
-                    ("\n","instance Pretty (PP ReleaseName) where\n    pPrint = ppPrint . relName . unPP","\n","[51.1:54.0]"),
-                    ("\n","deriving instance Show SourceType","\n","[54.1:54.34]"),
-                    ("","deriving instance Show DebSource","\n","[55.1:55.33]"),
-                    ("\n","sourceSlices :: SliceList -> SliceList","\n","[57.1:57.39]"),
-                    ("","sourceSlices = SliceList . filter ((== DebSrc) . sourceType . sliceSource) . slices","\n","[58.1:58.84]"),
-                    ("\n","binarySlices :: SliceList -> SliceList","\n","[60.1:60.39]"),
-                    ("","binarySlices = SliceList . filter ((== Deb) . sourceType . sliceSource) . slices","\n","[61.1:61.81]"),
-                    ("\n","inexactPathSlices :: SliceList -> SliceList","\n","[63.1:63.44]"),
-                    ("","inexactPathSlices = SliceList . filter (either (const False) (const True) . sourceDist . sliceSource) . slices","\n","[64.1:64.111]"),
-                    ("\n","releaseSlices :: ReleaseName -> SliceList -> SliceList","\n","[66.1:66.55]"),
-                    ("","releaseSlices release list =\n    SliceList . filter (isRelease . sourceDist . sliceSource) $ (slices list)\n    where isRelease = either (const False) (\\ (x, _) -> x == release)","\n","[67.1:71.0]"),
-                    ("\n","appendSliceLists :: [SliceList] -> SliceList","\n","[71.1:71.45]"),
-                    ("","appendSliceLists lists =\n    SliceList { slices = concat (map slices lists) }","\n","[72.1:73.53]"),
-                    ("\n{-\n-- |Return the list of releases in a repository, which is the\n-- list of directories in the dists subdirectory.  Currently\n-- this is only known to work with Apache.  Note that some of\n-- the returned directories may be symlinks.\nuriSubdirs :: (Maybe EnvRoot) -> URI -> IO [Text]\nuriSubdirs root uri =\n    liftIO (dirFromURI uri') >>= either throw (return . map pack)\n    where\n      uri' = case uriScheme uri of\n               \"file:\" -> uri {uriPath = maybe \"\" rootPath root ++ (uriPath uri)}\n               _ -> uri\n\nreadRelease :: URI -> Text -> IO (Maybe (Paragraph' Text))\nreadRelease uri name =\n    do output <- liftIO (fileFromURI uri')\n       case output of\n         Left e -> throw e\n         Right s -> case parseControl (show uri') (B.concat . L.toChunks $ s) of\n                      Right (Control [paragraph]) -> return (Just (decodeParagraph paragraph))\n                      _ -> return Nothing\n    where\n      uri' = uri {uriPath = uriPath uri </> \"dists\" </> unpack name </> \"Release\"}\n-}\n\n","data UpdateError\n    = Changed ReleaseName FilePath SliceList SliceList\n    | Missing ReleaseName FilePath\n    | Flushed\n    deriving Typeable","\n","[100.1:104.22]"),
-                    ("\n","instance Exception UpdateError","\n","[106.1:106.31]"),
-                    ("\n","instance Show UpdateError where\n    show (Changed r p l1 l2) = unwords [\"Changed\", show r, show p, ppDisplay l1, ppDisplay l2]\n    show (Missing r p) = unwords [\"Missing\", show r, show p]\n    show Flushed = \"Flushed\"","\n","[108.1:113.0]"),
-                    ("\n","data SourcesChangedAction =\n    SourcesChangedError |\n    UpdateSources |\n    RemoveRelease\n    deriving (Eq, Show, Data, Typeable)","\n","[113.1:117.40]"),
-                    ("\n","doSourcesChangedAction :: FilePath -> FilePath -> NamedSliceList -> SliceList -> SourcesChangedAction -> IO ()","\n","[119.1:119.111]"),
-                    ("","doSourcesChangedAction dir sources baseSources fileSources SourcesChangedError = do\n  ePutStrLn (\"The sources.list in the existing '\" ++ (relName . sliceListName $ baseSources) ++ \"' in \" ++ dir ++\n             \" apt-get environment doesn't match the parameters passed to the autobuilder\" ++ \":\\n\\n\" ++\n             sources ++ \":\\n\\n\" ++\n             ppDisplay fileSources ++\n\t     \"\\nRun-time parameters:\\n\\n\" ++\n             ppDisplay baseSources ++ \"\\n\" ++\n\t     \"It is likely that the build environment in\\n\" ++\n             dir ++ \" is invalid and should be rebuilt.\")\n  ePutStr $ \"Remove it and continue (or exit)?  [y/n]: \"\n  result <- hGetLine stdin\n  case result of\n    ('y' : _) ->\n        do removeRecursiveSafely dir\n           createDirectoryIfMissing True dir\n           replaceFile sources (ppDisplay baseSources)\n    _ -> error (\"Please remove \" ++ dir ++ \" and restart.\")\n\ndoSourcesChangedAction dir sources baseSources _fileSources RemoveRelease = do\n  ePutStrLn $ \"Removing suspect environment: \" ++ dir\n  removeRecursiveSafely dir\n  createDirectoryIfMissing True dir\n  replaceFile sources (ppDisplay baseSources)\n\ndoSourcesChangedAction dir sources baseSources _fileSources UpdateSources = do\n  -- The sources.list has changed, but it should be\n  -- safe to update it.\n  ePutStrLn $ \"Updating environment with new sources.list: \" ++ dir\n  removeFile sources\n  replaceFile sources (ppDisplay baseSources)","\n","[120.1:150.0]"),
-                    ("","","","")]
-
-
-parseTestOutput :: ModuleInfo -> Seq (String, String, String, String)
-parseTestOutput m =
-          foldModule tailf pragmaf namef warningf tailf exportf tailf importf declf tailf m mempty
-          where
-            pragmaf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
-            namef x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
-            warningf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
-            exportf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
-            importf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
-            declf x pref s suff r = r |> (pref, s, suff,int (spanInfo x))
-            tailf s r = r |> (s, "", "", "")
-
-int :: HasSpanInfo a => a -> String
-int x = let (SrcSpanInfo (SrcSpan _ a b c d) _) = spanInfo x in "[" ++ show a ++ "." ++ show b ++ ":" ++ show c ++ "." ++ show d ++ "]"
+tests = TestLabel "Clean" (TestList [{-test1, test1b,-} test3a, fold3b, fold3c, test4, test5, {-test5b,-} test6, test7])
 
 test3 :: Test
 test3 =
@@ -126,6 +35,83 @@ test3 =
     where
       test :: ModuleInfo -> (String, String)
       test m@(ModuleInfo _ text _ _ _) = (fold (foldModule echo2 echo echo echo echo2 echo echo2 echo echo echo2 m mempty), text)
+
+test3a :: Test
+test3a =
+    TestLabel "test3a" $ TestCase $ withCurrentDirectory "tests/data" $
+    do let path = APath "imports7/CLI.hs"
+       mi <- runModuVerseT $ pathKey path >>= parseModule
+       let syms = test mi
+       assertEqual "Equal.hs symbols" expected syms
+    where
+      test :: ModuleInfo -> [S.Name]
+      test m@(ModuleInfo (A.Module _ _ _ _ ds) text _ _ _) = foldr (\d r -> foldDeclared (\x r' -> x : r') r d) [] ds
+      expected = [S.Ident "HMM",
+                  S.Ident "defaultHMM",
+                  S.Ident "enumHelp",
+                  S.Ident "rangeOfBounded",
+                  S.Ident "toEnumBounded",
+                  S.Ident "toEnumBounded",
+                  S.Ident "main",
+                  S.Ident "main",
+                  S.Ident "noisily'",
+                  S.Ident "quietly'",
+                  S.Ident "quietly'",
+                  S.Ident "noisily'",
+                  S.Ident "compl",
+                  S.Ident "compl",
+                  S.Ident "compl",
+                  S.Ident "moduleNameToStr",
+                  S.Ident "moduleNameToStr",
+                  S.Ident "takesModuleNames",
+                  S.Ident "takesModuleNames",
+                  S.Ident "cli",
+                  S.Ident "cli",
+                  S.Ident "CmdM",
+                  S.Ident "askConf",
+                  S.Ident "askConf",
+                  S.Ident "liftCT",
+                  S.Ident "liftCT",
+                  S.Ident "liftS",
+                  S.Ident "liftS",
+                  S.Ident "cmd",
+                  S.Ident "cmd",
+                  S.Ident "cmd",
+                  S.Ident "Callback",
+                  S.Ident "Command",
+                  S.Ident "commandNames",
+                  S.Ident "commandNames",
+                  S.Ident "cmds_",
+                  S.Ident "cmds_",
+                  S.Ident "helpMessage",
+                  S.Ident "helpMessage",
+                  S.Ident "cabalPrint",
+                  S.Ident "cabalPrint",
+                  S.Ident "cabalRead",
+                  S.Ident "cabalWrite",
+                  S.Ident "cabalWrite",
+                  S.Ident "cabalWrite",
+                  S.Ident "cabalWrite",
+                  S.Ident "cabalRead",
+                  S.Ident "cabalRead",
+                  S.Ident "unModuleName",
+                  S.Ident "unModuleName",
+                  S.Ident "verse",
+                  S.Ident "verse",
+                  S.Ident "verse",
+                  S.Ident "showVerse",
+                  S.Ident "showVerse",
+                  S.Ident "dir",
+                  S.Ident "dir",
+                  S.Ident "dir",
+                  S.Ident "clean",
+                  S.Ident "clean",
+                  S.Ident "clean",
+                  S.Ident "splitBy",
+                  S.Ident "splitBy",
+                  S.Ident "splitBy",
+                  S.Ident "merge",
+                  S.Ident "merge"]
 
 fold3b :: Test
 fold3b =

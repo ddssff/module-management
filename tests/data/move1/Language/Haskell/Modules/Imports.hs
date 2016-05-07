@@ -31,7 +31,7 @@ import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, pathKey, APath(.
 import Language.Haskell.Modules.SrcLoc (srcLoc)
 import Language.Haskell.Modules.Symbols (symbolsDeclaredBy)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
---import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
+import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>))
@@ -133,7 +133,7 @@ dumpImports keys =
                    Set.toList (Set.map unPathKey keys)
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
-         ExitSuccess -> {-quietly (qLnPutStr (showCommandForUser cmd args' ++ " -> Ok")) >>-} return ()
+         ExitSuccess -> quietly (qLnPutStr (showCommandForUser cmd args' ++ " -> Ok")) >> return ()
          ExitFailure _ -> error ("dumpImports: compile failed\n " ++ showCommandForUser cmd args' ++ " ->\n" ++ err)
 
     where
@@ -146,19 +146,18 @@ dumpImports keys =
 -- that are types that appear in standalone instance derivations so
 -- their members are imported too.
 checkImports :: ModuVerse m => ModuleInfo -> m ModuleResult
-checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _ _) =
+checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _) =
     do
        scratch <- use scratchDir
-       let name = maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh
-       let importsPath = scratch </> name ++ ".imports"
+       let importsPath = scratch </> maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh ++ ".imports"
 
        -- The .imports file will appear in the real current directory,
        -- ignore the source dir path.  This may change in future
        -- versions of GHC, see http://ghc.haskell.org/trac/ghc/ticket/7957
        markForDelete importsPath
-       (ModuleInfo newImports _ _ _ _) <-
+       (ModuleInfo newImports _ _ _) <-
            withDot $
-               (parseModule (PathKey importsPath (S.ModuleName name))
+               (parseModule (PathKey importsPath)
                   `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here ->
                                                           throw . userError $ here ++ ": " ++ show e)))
        updateSource info newImports extraImports
@@ -177,11 +176,11 @@ withDot a =
 -- | If all the parsing went well and the new imports differ from the
 -- old, update the source file with the new imports.
 updateSource :: ModuVerse m => ModuleInfo -> A.Module SrcSpanInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
-updateSource m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ key _) (A.Module _ _ _ newImports _) extraImports =
+updateSource m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ key) (A.Module _ _ _ newImports _) extraImports =
     do remove <- use removeEmptyImports
-       maybe ({-qLnPutStr ("cleanImports: no changes to " ++ show key) >>-} return (Unchanged (moduleName m) key))
+       maybe (qLnPutStr ("cleanImports: no changes to " ++ show key) >> return (Unchanged (moduleName m) key))
              (\ text' ->
-                  -- qLnPutStr ("cleanImports: modifying " ++ show key) >>
+                  qLnPutStr ("cleanImports: modifying " ++ show key) >>
                   replaceFile tildeBackup (unPathKey key) text' >>
                   return (JustModified (moduleName m) key))
              (replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m)
@@ -260,9 +259,9 @@ fixNewImports remove m oldImports imports =
       sdTypes = standaloneDerivingTypes m
 
 standaloneDerivingTypes :: ModuleInfo -> Set (Maybe S.ModuleName, S.Name)
-standaloneDerivingTypes (ModuleInfo (A.XmlPage _ _ _ _ _ _ _) _ _ _ _) = error "standaloneDerivingTypes A.XmlPage"
-standaloneDerivingTypes (ModuleInfo (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ _ _) = error "standaloneDerivingTypes A.XmlHybrid"
-standaloneDerivingTypes (ModuleInfo (A.Module _ _ _ _ decls) _ _ _ _) =
+standaloneDerivingTypes (ModuleInfo (A.XmlPage _ _ _ _ _ _ _) _ _ _) = error "standaloneDerivingTypes A.XmlPage"
+standaloneDerivingTypes (ModuleInfo (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ _) = error "standaloneDerivingTypes A.XmlHybrid"
+standaloneDerivingTypes (ModuleInfo (A.Module _ _ _ _ decls) _ _ _) =
     unions (Prelude.map derivDeclTypes decls)
 
 -- | Collect the declared types of a standalone deriving declaration.

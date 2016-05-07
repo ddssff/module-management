@@ -15,7 +15,7 @@ import Data.Data
 import Data.Foldable(traverse_)
 import Data.List
 import Data.Map as Map (elems, keys, lookup)
-import Data.Maybe (maybeToList)
+import Data.Maybe (isJust, maybeToList)
 import qualified Data.Set as Set (fromList, member, toList, map)
 import Data.Set.Extra as Set (Set, toList)
 import Distribution.PackageDescription (GenericPackageDescription)
@@ -25,13 +25,14 @@ import GHC.Generics (Generic)
 import qualified Language.Haskell.Exts.Annotated as A (Decl)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
+import qualified Language.Haskell.Exts.Syntax as S
 import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules, ModuleName(..), ModuVerse,
                                  noisily, putHsSourceDirs, putModule, runModuVerseT, splitModuleBy)
 import Language.Haskell.Modules.Fold (ModuleInfo(..))
 import Language.Haskell.Modules.ModuVerse -- (CleanMode(DoClean), moduleInfo, moduleName, Params, sourceDirs)
 import Language.Haskell.Modules.SourceDirs (getHsSourceDirs)
 import Language.Haskell.Modules.Split (T(A))
-import Language.Haskell.Modules.Symbols (FoldDeclared)
+import Language.Haskell.Modules.Symbols (FoldDeclared(foldDeclared))
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
 import Language.Haskell.TH.Syntax as TH (nameBase)
 import System.Console.CmdArgs
@@ -368,14 +369,14 @@ clean [] = liftIO $ putStrLn $ "Usage: clean <modulepath1> <modulepath2> ...\n" 
                                     "Clean up the import lists of the named modules\n"
 clean args = cleanImports args >> return ()
 
-#if 0
+{-
 split :: [String] -> CmdM ()
 split [arg] = do
     r <- liftCT (splitModuleDecls DoClean arg)
     lift (modify (Cabal.update r))
     return ()
 split _ = liftIO $ putStrLn "Usage: split <modulepath>"
-#endif
+-}
 
 splitBy :: [String] -> CmdM ()
 splitBy [regex, newModule, oldModule] = do
@@ -385,15 +386,16 @@ splitBy [regex, newModule, oldModule] = do
   lift (modify (Cabal.update r))
   return ()
     where
-      -- pred :: Maybe Name -> T -> ModuleName
-      pred name decl =
+      pred :: S.ModuleName -> T -> ModuleName
+      pred _ (A decl) =
           -- declarations not associated with symbols stay in
           -- oldModules (e.g. instances.)  Decarations of matching
           -- symbols go to newModule
-          let match = name >>= (\x -> Just $ case x of Ident s -> s; Symbol s -> s) >>= matchRegex (mkRegex regex)
-              modname = ModuleName (maybe oldModule (const newModule) match) in
+          let match1 sym = matchRegex (mkRegex regex) (case sym of Ident s -> s; Symbol s -> s)
+              match = foldDeclared (\sym r -> r || isJust (match1 sym)) False decl
+              modname = ModuleName (if match then newModule else oldModule) in
           {- trace ("Symbol " ++ show name ++ " -> " ++ show modname ++ ", matchRegex (mkRegex " ++ show regex ++ ") -> " ++ show match)-}
-                modname
+          modname
 
 splitBy _ = liftIO $ putStrLn "Usage: splitBy <regexp> <newmodule> <oldmodule>"
 

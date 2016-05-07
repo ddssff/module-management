@@ -5,24 +5,20 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
-module Split1
+module Split2
     ( pprint1
     , pprintW
     , pprintL
+    , pprintStyle
     , friendlyNames
     ) where
 
 import Control.Lens hiding (cons)
-import Control.Monad (foldM)
 import Data.Generics (Data, everywhere, mkT)
-import Data.Graph as Graph
-import Data.Map as Map (Map, fromList, toList)
-import Data.Maybe (fromJust, fromMaybe)
-import Data.Set as Set (fromList, Set, toList)
-import Language.Haskell.TH
-import Language.Haskell.TH.PprLib
-import Language.Haskell.TH.Syntax (Lift(lift), Name(Name), NameFlavour(NameS), Quasi(qReify), StrictType, VarStrictType)
-import qualified Text.PrettyPrint as HPJ
+import Language.Haskell.TH (Ppr(ppr))
+import Language.Haskell.TH.PprLib (ptext, to_HPJ_Doc)
+import Language.Haskell.TH.Syntax (Name(Name), NameFlavour(NameS))
+import qualified Text.PrettyPrint as HPJ (Mode(LeftMode, OneLineMode), renderStyle, style, Style(lineLength, mode))
 
 instance Ppr () where
     ppr () = ptext "()"
@@ -55,4 +51,4 @@ friendlyNames :: Data a => a -> a
 friendlyNames =
     everywhere (mkT friendlyName)
     where
-      friendlyName (Name x _) = Name x NameS -- Remove all module qualifiers
+      friendlyName (Name x _) = Name x NameS

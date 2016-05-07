@@ -200,7 +200,7 @@ srcPairText b0 e0 s0 =
                _ ->
                    return (r, s)
 
--- | Build a tree of SrcSpanInfo
+-- | Build a tree of SrcSpanInfo 
 makeTree :: (HasSpanInfo a, Show a, Eq a, Ord a) => Set a -> Tree a
 makeTree s =
     case findRoots (toList s) of

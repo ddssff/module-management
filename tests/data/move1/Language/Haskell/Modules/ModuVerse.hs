@@ -13,21 +13,27 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.ModuVerse
     ( Params, dryRun, extraImports, hsFlags, junk, removeEmptyImports
-    , scratchDir, verbosity, modulesOrig, moduleKey, modulesNew
-    , extensions, sourceDirs, declMap, symbolMap, testMode
+    , scratchDir, verbosity, moduleInfo, moduleByKey, extensions, sourceDirs
+    , declMap, symbolMap, testMode
     , CleanMode(DoClean, NoClean)
     , ModuVerse
     , runModuVerseT
     , markForDelete
     , extraImport
     , moduleName
+    -- , ModuVerse(..)
+    , getNames
+    , getInfo
+    -- , putName
     , putModule
     , putModuleAnew
     , findModule
-    -- , findSymbolDecl
-    -- , delName
+    , findSymbolDecl
+    , delName
     , getExtensions
     , modifyExtensions
+    -- , getSourceDirs
+    -- , modifySourceDirs
     , parseModule
     , parseModuleMaybe
     , loadModule
@@ -57,6 +63,7 @@ import System.Directory (removeFile)
 import Control.Exception.Lifted as IO (catch, throw)
 import Control.Lens (use, (%=), (.=))
 import Data.Map as Map (delete, insert, keys, lookup)
+import Data.Set as Set (fromList, minView)
 import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
@@ -66,7 +73,7 @@ import Language.Haskell.Exts.Syntax as S (ModuleName(..), Name)
 import Language.Haskell.Modules.Fold (foldDecls, ModuleInfo(..))
 import Language.Haskell.Modules.SourceDirs (modulePathBase, PathKey(..), Path(..), pathKey, SourceDirs(..))
 import Language.Haskell.Modules.Symbols (symbolsDeclaredBy)
---import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
+import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
 data CleanMode = DoClean | NoClean deriving (Eq, Ord, Show)
@@ -107,25 +114,15 @@ data Params
       -- ^ For testing, do not run cleanImports on the results of the
       -- splitModule and catModules operations.
 
-      , _modulesOrig :: Map PathKey ModuleInfo
-      -- ^ The info about the modules as they were loaded from disk,
-      -- associated with the key used to find the module.
-      , _moduleKey :: Map S.ModuleName PathKey
-      -- ^ Map from module names back to the path
-      , _modulesNew :: Map S.ModuleName ModuleInfo
-      -- ^ The modified modules.  When we are modifying modules we
-      -- refer to them by module name, which for these computations
-      -- must be unique.  the key that was originally used to obtain
-      -- the module is stored in ModuleInfo so we can later go back
-      -- and see what changes occurred.
+      , _moduleInfo :: Map S.ModuleName ModuleInfo
+      , _moduleByKey :: Map PathKey ModuleInfo -- This redundancy must go
+      -- ^ The set of modules that splitModules and catModules will
+      -- check for imports of symbols that moved.
       , _symbolMap :: Map (S.ModuleName, S.Name) (A.Decl SrcSpanInfo)
       -- ^ Look up a symbol's declaration
       , _declMap :: Map (S.ModuleName, A.Decl SrcSpanInfo) S.ModuleName
       -- ^ Look up where a declaration will be moved to
       } deriving (Eq, Ord, Show)
-
-
-data ModuleStatus = Unchanged | Modified | Created | Removed deriving (Eq, Ord, Show)
 
 $(makeLenses ''Params)
 
@@ -155,9 +152,8 @@ runModuVerseT action =
                                                      _dryRun = False,
                                                      _verbosity = 1,
                                                      _hsFlags = [],
-                                                     _modulesOrig = Map.empty,
-                                                     _moduleKey = Map.empty,
-                                                     _modulesNew = Map.empty,
+                                                     _moduleByKey = Map.empty,
+                                                     _moduleInfo = Map.empty,
                                                      _extensions = Exts.extensions Exts.defaultParseMode ++
                                                                    [nameToExtension StandaloneDeriving], -- allExtensions
                                                      _sourceDirs = ["."],
@@ -191,9 +187,9 @@ nameToExtension :: KnownExtension -> Extension
 nameToExtension x = EnableExtension x
 
 moduleName :: ModuleInfo -> S.ModuleName
-moduleName (ModuleInfo (A.Module _ mh _ _ _) _ _ _ _) =
+moduleName (ModuleInfo (A.Module _ mh _ _ _) _ _ _) =
     S.ModuleName $ maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh
-moduleName (ModuleInfo m _ _ _ _) = error $ "Unsupported Module: " ++ show m
+moduleName (ModuleInfo m _ _ _) = error $ "Unsupported Module: " ++ show m
 
 -- | From hsx2hs, but removing Arrows because it makes test case fold3c and others fail.
 hseExtensions :: [Extension]
@@ -206,33 +202,34 @@ hseExtensions = map nameToExtension
     , ExplicitNamespaces
     ]
 
+getNames :: ModuVerse m => m (Set S.ModuleName)
+getNames = Set.fromList . keys <$> use moduleInfo
+
+getInfo :: ModuVerse m => S.ModuleName -> m (Maybe ModuleInfo)
+getInfo name = Map.lookup name <$> use moduleInfo
+
+putName :: ModuVerse m => S.ModuleName -> ModuleInfo -> m ()
+putName name info = moduleInfo %= Map.insert name info
+
 putModule :: ModuVerse m => S.ModuleName -> m ()
-putModule name = do
-  key <- pathKey (modulePathBase "hs" name)
-  info <- parseModule key
-  modulesOrig %= Map.insert key info
-  moduleKey %= Map.insert name key
+putModule name = pathKey (modulePathBase "hs" name) >>= parseModule >>= putName name
 
 -- | Update the ModuVerse info for a module by re-reading its (perhaps
 -- altered) source text.
 putModuleAnew :: ModuVerse m => S.ModuleName -> m PathKey
-putModuleAnew name = do
-  key <- pathKey (modulePathBase "hs" name)
-  info <- loadModule key
-  modulesOrig %= Map.insert key info
-  moduleKey %= Map.insert name key
-  modulesNew %= Map.delete name
-  return key
+putModuleAnew name =
+    do key <- pathKey (modulePathBase "hs" name)
+       loadModule key >>= putName name
+       return key
 
 findModule :: ModuVerse m => S.ModuleName -> m (Maybe ModuleInfo)
 findModule name = pathKeyMaybe (modulePathBase "hs" name) >>= parseModuleMaybe
 
-{-
 -- | Given a symbol name and the module from which it can be imported,
 -- return the Decl that creates it.
 findSymbolDecl :: ModuVerse m => S.ModuleName -> S.Name -> m (Maybe (A.Decl SrcSpanInfo))
 findSymbolDecl modu name =
-    do Just info <- Map.lookup modu <$> use modulesNew
+    do Just info <- getInfo modu
        let s = foldDecls (\d _ _ _ r -> Set.insert d r) (\_ r -> r) info mempty
        case Set.minView s of
          Nothing -> return Nothing
@@ -242,8 +239,7 @@ findSymbolDecl modu name =
 delName :: ModuVerse m => S.ModuleName -> m ()
 delName name = do
   moduleInfo %= Map.delete name
-  modulesOrig .= Map.empty
--}
+  moduleByKey .= Map.empty
 
 getExtensions :: ModuVerse m => m [Extension]
 getExtensions = use extensions
@@ -262,24 +258,21 @@ parseModuleMaybe Nothing = return Nothing
 parseModuleMaybe (Just key) =
     (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e || isUserError e then return Nothing else throw e)
     where
-      look = Map.lookup key <$> use modulesOrig
+      look = Map.lookup key <$> use moduleByKey
       load (Just x) = return (Just x)
       load Nothing = Just <$> loadModule key
 
 -- | Force a possibly cached module to be reloaded.
 loadModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ModuleInfo
-loadModule key@(PathKey _ name) =
+loadModule key =
     do text <- liftIO $ readFile (unPathKey key)
-       -- quietly $ qLnPutStr ("parsing " ++ unPathKey key)
+       quietly $ qLnPutStr ("parsing " ++ unPathKey key)
        (parsed, comments) <- parseFileWithComments (unPathKey key) >>= return . Exts.fromParseResult
-       modulesOrig %= Map.insert key (ModuleInfo parsed text comments key name)
-       moduleKey %= Map.insertWith (\ a b -> error ("Multiple modules " ++ show name ++ ": " ++ show (a, b))) name key
-       return (ModuleInfo parsed text comments key name)
+       moduleByKey %= Map.insert key (ModuleInfo parsed text comments key)
+       return (ModuleInfo parsed text comments key)
 
 unloadModule :: (ModuVerse m, MonadVerbosity m) => PathKey -> m ()
-unloadModule key@(PathKey _ name) = do
-  modulesOrig %= Map.delete key
-  moduleKey %= Map.delete name
+unloadModule key = moduleByKey %= Map.delete key
 
 -- | Run 'A.parseFileWithComments' with the extensions stored in the state.
 parseFileWithComments :: ModuVerse m => FilePath -> m (Exts.ParseResult (A.Module SrcSpanInfo, [Comment]))
@@ -292,13 +285,12 @@ buildDeclMap :: forall m. ModuVerse m =>
                 (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName)
              -> m ()
 buildDeclMap newModule = do
-  names <- keys <$> use moduleKey :: m [S.ModuleName]
+  names <- Set.toList <$> getNames :: m [S.ModuleName]
   mp <- foldM doModule mempty names
   declMap .= mp
     where
       doModule mp oldModule = do
-        Just key <- Map.lookup oldModule <$> use moduleKey
-        Just oldInfo <- Map.lookup key <$> use modulesOrig
+        Just oldInfo <- getInfo oldModule
         let mp' = foldDecls (\d _ _ _ r ->
                                let m :: S.ModuleName
                                    m = newModule oldModule d in
@@ -312,13 +304,12 @@ buildDeclMap newModule = do
 buildSymbolMap :: forall m. ModuVerse m => m ()
 buildSymbolMap = do
   symbolMap .= mempty
-  names <- keys <$> use moduleKey :: m [S.ModuleName]
+  names <- Set.toList <$> getNames :: m [S.ModuleName]
   mp <- foldM doModule mempty names
   symbolMap .= mp
     where
       doModule mp oldModule = do
-        Just key <- Map.lookup oldModule <$> use moduleKey
-        Just oldInfo <- Map.lookup key <$> use modulesOrig
+        Just oldInfo <- getInfo oldModule
         let mp'' = foldDecls (\d _ _ _ r -> foldl' (\mp' s -> Map.insert (oldModule, s) d mp') r (symbolsDeclaredBy d))
                              (\_ r -> r)
                              oldInfo mp

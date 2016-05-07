@@ -25,10 +25,10 @@ import Data.Graph as Graph (Graph, reachable, Vertex)
 import Data.Map as Map (fromList, Map, toList)
 import Data.Maybe (fromJust, fromMaybe)
 import Data.Set as Set (fromList, Set, toList)
-import Language.Haskell.TH (Con(..), Dec(..), Info(PrimTyConI), mkName, Name, nameBase, Ppr(ppr), Type(AppT, ConT, ForallT))
-import Language.Haskell.TH.PprLib (ptext, to_HPJ_Doc)
-import Language.Haskell.TH.Syntax (Lift(lift), Name(Name), NameFlavour(NameS), Quasi(qReify), StrictType, VarStrictType)
-import qualified Text.PrettyPrint as HPJ (Mode(LeftMode, OneLineMode), renderStyle, style, Style(lineLength, mode))
+import Language.Haskell.TH (Con(..), Dec(..), Info(PrimTyConI), mkName, Name, nameBase, Type(AppT, ConT, ForallT))
+import Language.Haskell.TH.Syntax (Lift(..), Quasi(qReify), StrictType, VarStrictType)
+      -- Remove all module qualifiers (this comment ends up in the wrong place, because
+      -- it is associated with class OverTypes declaration below.)
 
 -- | Perform a fold over the Type and Info values embedded in t
 class OverTypes t where

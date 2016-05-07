@@ -10,22 +10,19 @@ module Language.Haskell.Modules.Common
     ) where
 
 import Control.Exception.Lifted as IO (bracket, catch, throw)
-import Control.Lens ((%=))
---import Control.Monad (when)
 import Control.Monad.Trans (MonadIO, liftIO)
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.List (groupBy, sortBy)
-import Data.Map as Map (delete)
 import Data.Monoid ((<>))
 import Data.Sequence as Seq (Seq, (|>))
 import qualified Language.Haskell.Exts.Annotated as A (ExportSpec)
 import Language.Haskell.Exts.Annotated.Simplify (sExportSpec)
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
-import Language.Haskell.Modules.ModuVerse (ModuVerse, putModuleAnew, unloadModule, modulesOrig, moduleKey, modulesNew)
+import Language.Haskell.Modules.ModuVerse (delName, ModuVerse, putModuleAnew, unloadModule)
 import Language.Haskell.Modules.SourceDirs (modulePath, PathKey(..), APath(..))
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
-import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..) {-, qLnPutStr, quietly-})
+import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..), qLnPutStr, quietly)
 import Prelude hiding (writeFile, writeFile)
 import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.FilePath (dropExtension, takeDirectory)
@@ -73,22 +70,20 @@ reportResult (ToBeRemoved _ key) = "to be removed: " ++ show key
 -- so that all the compiles required for import cleaning succeed.  On
 -- the other hand, we might be able to maintain the moduVerse here.
 doResult :: (ModuVerse m, MonadDryRun m, MonadVerbosity m) => ModuleResult -> m ModuleResult
-doResult x@(Unchanged _name _) =
-    do -- quietly (qLnPutStr ("unchanged: " ++ prettyPrint name))
+doResult x@(Unchanged name _) =
+    do quietly (qLnPutStr ("unchanged: " ++ prettyPrint name))
        return x
 doResult (ToBeRemoved name key) =
-    do -- qLnPutStr ("removing: " ++ prettyPrint name)
+    do qLnPutStr ("removing: " ++ prettyPrint name)
        let path = unPathKey key
        unloadModule key
        -- I think this event handler is redundant.
        removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-       modulesOrig %= Map.delete key
-       moduleKey %= Map.delete name
-       modulesNew %= Map.delete name
+       delName name
        return $ JustRemoved name key
 
 doResult (ToBeModified name key text) =
-    do -- qLnPutStr ("modifying: " ++ prettyPrint name)
+    do qLnPutStr ("modifying: " ++ prettyPrint name)
        let path = unPathKey key
        -- qLnPutStr ("modifying " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
@@ -97,9 +92,8 @@ doResult (ToBeModified name key text) =
        return $ JustModified name key
 
 doResult (ToBeCreated name text) =
-    do -- qLnPutStr ("creating: " ++ prettyPrint name)
-       (path, _name') <- modulePath "hs" name
-       -- when (name /= name') (qLnPutStr ("Module name mismatch: " ++ show name ++ " vs. " ++ show name'))
+    do qLnPutStr ("creating: " ++ prettyPrint name)
+       path <- modulePath "hs" name
        -- qLnPutStr ("creating " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
        createDirectoryIfMissing True (takeDirectory . dropExtension . unAPath $ path)
