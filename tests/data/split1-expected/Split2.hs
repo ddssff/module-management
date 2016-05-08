@@ -51,4 +51,6 @@ friendlyNames :: Data a => a -> a
 friendlyNames =
     everywhere (mkT friendlyName)
     where
-      friendlyName (Name x _) = Name x NameS
+      friendlyName (Name x _) = Name x NameS -- Remove all module qualifiers
+      -- (this comment ends up in the wrong place, because
+      -- it is associated with class OverTypes declaration below.)
