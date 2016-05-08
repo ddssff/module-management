@@ -10,7 +10,7 @@ import Data.IxSet (IxSet, Indexable, Proxy(..), (@=), getEQ, getOne, ixSet, ixFu
 import Data.Text  (Text)
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text as Text
-import Data.Time.Clock (UTCTime, getCurrentTime)
+import Data.Time.Clock (UTCTime, getCurrentTime) -- comment
 
 ------------------------------------------------------------------------------
 -- Model
