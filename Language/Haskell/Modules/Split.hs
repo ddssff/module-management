@@ -11,6 +11,7 @@ module Language.Haskell.Modules.Split
 import Control.Exception (throw)
 import Control.Lens (use)
 import Control.Monad as List (mapM {-, mapM_-})
+import Control.Monad.State (get, put, runState, State)
 import Data.Default (Default(def))
 import Data.Foldable as Foldable (fold)
 import Data.List as List (group, intercalate, map, nub, sort)
@@ -28,7 +29,7 @@ import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(.
 import Language.Haskell.Modules.Common (doResult, ModuleResult(..) {-, reportResult-})
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (extraImports, CleanMode, findModule, modulesNew, moduleName, ModuVerse, parseModule)
+import Language.Haskell.Modules.ModuVerse (extraImports, CleanMode, findModule, modulesNew, moduleName, ModuVerse, Params, parseModule)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
 import Language.Haskell.Modules.Symbols (exports, foldDeclared, imports, symbolsDeclaredBy, members)
 --import Language.Haskell.Modules.Util.QIO (qLnPutStr {-, quietly-})
@@ -141,14 +142,13 @@ splitModuleBy _ _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _ _) = throw $ user
 splitModuleBy mode toModule inInfo@(ModuleInfo (A.Module _ (Just (A.ModuleHead _ inName _ _)) _ _ _) _ _ _ _) =
     do -- qLnPutStr ("Splitting module " ++ prettyPrint (moduleName inInfo))
        -- quietly $
-       eiMap <- use extraImports
        -- The name of the module to be split
        -- let inName = moduleName inInfo
        let outModuleNames :: Set S.ModuleName
            outModuleNames =
               foldDecls (\d  _ _ _ s -> Set.insert (toModule (sModuleName inName) (A d)) s) (\_ s -> s) inInfo mempty
        allModuleNames <- Set.union outModuleNames <$> (Set.fromList . keys <$> use modulesNew)
-       changes <- List.mapM (doModule toModule eiMap inInfo (sModuleName inName) outModuleNames)
+       changes <- List.mapM (doModule toModule inInfo (sModuleName inName) outModuleNames)
                             (toList allModuleNames)
        -- Now we have to clean the import lists of the new
        -- modules, which means writing the files and doing an IO
@@ -162,45 +162,46 @@ splitModuleBy mode toModule inInfo@(ModuleInfo (A.Module _ (Just (A.ModuleHead _
 -- | Perform updates a module.
 doModule :: ModuVerse m =>
             ToModuleArg
-         -> Map S.ModuleName [S.ImportDecl]
          -> ModuleInfo
          -> S.ModuleName
          -> Set S.ModuleName
          -> S.ModuleName
          -> m ModuleResult
-doModule toModule eiMap inInfo inName outNames thisName = do
+doModule toModule inInfo inName outNames thisName = do
   thisInfo <- findModule thisName
   case (member thisName outNames, thisName == inName) of
     (True, True) ->
-        pure $ ToBeModified thisName (key_ inInfo) (newModule toModule inInfo thisName eiMap)
+        ToBeModified thisName (key_ inInfo) <$> newModule toModule inInfo thisName
     (True, False)
         | isJust thisInfo ->
             error $ "splitModule: output module already exists: " ++ show (key_ (fromJust thisInfo))
     (True, False) ->
-        pure $ ToBeCreated thisName (newModule toModule inInfo thisName eiMap)
+        ToBeCreated thisName <$> newModule toModule inInfo thisName
     (False, True) ->
         pure $ ToBeRemoved thisName (key_ inInfo)
-    _ ->
-        pathKey (modulePathBase "hs" thisName) >>= parseModule >>= \ oldInfo@(ModuleInfo _ oldText _ _ _) ->
-        let newText = updateImports toModule oldInfo inInfo inName thisName eiMap outNames in
-        pure $ if newText /= oldText then ToBeModified thisName (key_ oldInfo) newText else Unchanged thisName (key_ oldInfo)
+    _ -> do
+      oldInfo@(ModuleInfo _ oldText _ _ _) <- pathKey (modulePathBase "hs" thisName) >>= parseModule
+      newText <- updateImports toModule oldInfo inInfo inName thisName outNames
+      pure $ if newText /= oldText then ToBeModified thisName (key_ oldInfo) newText else Unchanged thisName (key_ oldInfo)
 
 -- | Build the text of a new module given its name and the list of
 -- declarations it should contain.
-newModule :: ToModuleArg -> ModuleInfo -> S.ModuleName -> Map S.ModuleName [S.ImportDecl] -> String
-newModule toModule inInfo thisName eiMap =
-    newHeader inInfo thisName <>
-    newExports toModule inInfo thisName <>
-    newImports toModule inInfo thisName eiMap <>
-    newDecls toModule inInfo thisName
+newModule :: ModuVerse m => ToModuleArg -> ModuleInfo -> S.ModuleName -> m String
+newModule toModule inInfo thisName = do
+  h <- newHeader inInfo thisName
+  e <- newExports toModule inInfo thisName
+  i <- newImports toModule inInfo thisName
+  d <- newDecls toModule inInfo thisName
+  return $ h <> e <> i <> d
 
 -- Change the module name in the header
-newHeader :: ModuleInfo -> S.ModuleName -> String
+newHeader :: ModuVerse m => ModuleInfo -> S.ModuleName -> m String
 newHeader inInfo thisName =
-        Foldable.fold (foldHeader echo2 echo (\ _n pref _ suff r -> r |> pref <> prettyPrint thisName <> suff) echo inInfo mempty)
+        pure (Foldable.fold (foldHeader echo2 echo (\ _n pref _ suff r -> r |> pref <> prettyPrint thisName <> suff) echo inInfo mempty))
 
-newExports :: ToModuleArg -> ModuleInfo -> S.ModuleName -> String
+newExports :: ModuVerse m => ToModuleArg -> ModuleInfo -> S.ModuleName -> m String
 newExports toModule inInfo thisName =
+    pure $
         -- If the module has an export list use its outline
         maybe "\n    ( " (\ _ -> Foldable.fold $ foldExports (<|) ignore ignore2 inInfo mempty) (moduleExports inInfo) <>
 
@@ -228,21 +229,24 @@ newExports toModule inInfo thisName =
 
             sep = exportSep "\n    , " inInfo
 
-newImports :: ToModuleArg -> ModuleInfo -> S.ModuleName -> Map S.ModuleName [S.ImportDecl] -> String
-newImports toModule inInfo thisName eiMap =
-          case (oldImportText, newImports'') of
-            ([], "") -> "\n"
-            ([], s) -> s
-            ((pref, s, suff) : more, i) -> pref <> i <> s <> suff ++ concatMap (\ (pref', s', suff') -> pref' <> s' <> suff') more
-            _ -> error "newImports"
-          where
+newImports :: ModuVerse m => ToModuleArg -> ModuleInfo -> S.ModuleName -> m String
+newImports toModule inInfo thisName = do
+  ni <- newImports''
+  case (oldImportText, ni) of
+    ([], "") -> pure "\n"
+    ([], s) -> pure s
+    ((pref, s, suff) : more, i) -> pure (pref <> i <> s <> suff ++ concatMap (\ (pref', s', suff') -> pref' <> s' <> suff') more)
+    _ -> error "newImports"
+    where
             oldImportText :: [(String, String, String)]
             oldImportText = foldImports (\ _ pref s suff r -> r ++ [(pref, s, suff)]) inInfo []
-            newImports'' :: String
+            newImports'' :: ModuVerse m => m String
             newImports'' =
-                case Map.lookup thisName (moduleDeclMap toModule inInfo) of
-                  Nothing -> ""
-                  Just _ -> unlines (List.map (prettyPrintWithMode defaultMode) (newImports' <> instanceImports thisName eiMap))
+              case Map.lookup thisName (moduleDeclMap toModule inInfo) of
+                Nothing -> pure ""
+                Just _ -> do
+                  eiMap <- use extraImports
+                  pure $ unlines (List.map (prettyPrintWithMode defaultMode) (newImports' <> instanceImports thisName eiMap))
             -- Import all the referenced symbols that are declared in
             -- the original module and referenced in the new module.
             newImports' :: [S.ImportDecl]
@@ -259,8 +263,8 @@ newImports toModule inInfo thisName eiMap =
                       not (Set.null (Set.intersection (Set.fromList declared') (referenced toModule inInfo thisName)))
 
 -- | Build the text of the declaration section of the new module
-newDecls :: ToModuleArg -> ModuleInfo -> S.ModuleName -> String
-newDecls toModule inInfo thisName = concatMap snd (modDecls toModule inInfo thisName)
+newDecls :: ModuVerse m => ToModuleArg -> ModuleInfo -> S.ModuleName -> m String
+newDecls toModule inInfo thisName = pure $ concatMap snd (modDecls toModule inInfo thisName)
 
 modDecls :: ToModuleArg -> ModuleInfo -> S.ModuleName -> [(A.Decl SrcSpanInfo, String)]
 modDecls toModule inInfo thisName = fromMaybe [] (Map.lookup thisName (moduleDeclMap toModule inInfo))
@@ -272,9 +276,10 @@ moduleExports (ModuleInfo _ _ _ _ _) = error "Unsupported module type"
 
 -- Update the imports to reflect the changed module names in toModule.
 -- Update re-exports of the split module.
-updateImports :: ToModuleArg -> ModuleInfo -> ModuleInfo -> S.ModuleName -> S.ModuleName -> Map S.ModuleName [S.ImportDecl] -> Set S.ModuleName -> String
-updateImports toModule oldInfo inInfo inName thisName eiMap outNames =
-          Foldable.fold (foldModule echo2 echo echo echo echo2
+updateImports :: ModuVerse m => ToModuleArg -> ModuleInfo -> ModuleInfo -> S.ModuleName -> S.ModuleName -> Set S.ModuleName -> m String
+updateImports toModule oldInfo inInfo inName thisName outNames = do
+  eiMap <- use extraImports
+  pure $ Foldable.fold (foldModule echo2 echo echo echo echo2
                                     (\ e pref s suff r -> r |> pref <> fixExport s (sExportSpec e) <> suff) echo2
                                     (\ i pref s suff r -> r |> pref <> updateImportDecl toModule inInfo inName thisName eiMap s i <> suff)
                                     echo echo2 oldInfo mempty)
@@ -301,9 +306,9 @@ moduleDeclMap toModule inInfo =
 
 updateImportDecl :: ToModuleArg -> ModuleInfo -> S.ModuleName -> S.ModuleName -> Map S.ModuleName [S.ImportDecl] -> String -> A.ImportDecl SrcSpanInfo -> String
 updateImportDecl toModule inInfo inName thisName eiMap s i =
-          if sModuleName (A.importModule i) == inName
-          then intercalate "\n" (List.map prettyPrint (updateImportSpecs toModule inInfo i ++ instanceImports thisName eiMap))
-          else s
+    if sModuleName (A.importModule i) == inName
+    then intercalate "\n" (List.map prettyPrint (updateImportSpecs toModule inInfo i ++ instanceImports thisName eiMap))
+    else s
 
 -- | Build the imports for the new module.
 updateImportSpecs :: ToModuleArg
