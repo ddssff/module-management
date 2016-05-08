@@ -14,7 +14,7 @@
 module Language.Haskell.Modules.ModuVerse
     ( Params, dryRun, extraImports, hsFlags, junk, removeEmptyImports
     , scratchDir, verbosity, modulesOrig, moduleKey, modulesNew
-    , extensions, sourceDirs, declMap, symbolMap, testMode
+    , extensions, sourceDirs, declMap, symbolMap, cleanMode
     , CleanMode(DoClean, NoClean)
     , ModuVerse
     , runModuVerseT
@@ -103,7 +103,7 @@ data Params
       -- ^ Deciding whether a module needs to be imported can be
       -- difficult when instances are involved, this is a cheat to force
       -- keys of the map to import the corresponding elements.
-      , _testMode :: CleanMode
+      , _cleanMode :: CleanMode
       -- ^ For testing, do not run cleanImports on the results of the
       -- splitModule and catModules operations.
 
@@ -163,7 +163,7 @@ runModuVerseT action =
                                                      _sourceDirs = ["."],
                                                      _symbolMap = Map.empty,
                                                      _declMap = Map.empty,
-                                                     _testMode = DoClean,
+                                                     _cleanMode = DoClean,
                                                      _junk = Set.empty,
                                                      _removeEmptyImports = True,
                                                      _extraImports = Map.empty})

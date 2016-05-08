@@ -58,17 +58,16 @@ type ToModuleArg
 -- first element of the list of directories in the 'SourceDirs' list.
 -- This list is just @["."]@ by default.
 splitModule :: ModuVerse m =>
-               CleanMode
-            -> ToModuleArg
+               ToModuleArg
             -- ^ Map each symbol name to the module it will be moved
             -- to.  The name @Nothing@ is used for instance
             -- declarations.
             -> FilePath
             -- ^ The file containing the input module.
             -> m [ModuleResult]
-splitModule mode toModule path =
+splitModule toModule path =
     do info <- pathKey (APath ({-trace ("splitModule: " ++ show path)-} path)) >>= parseModule
-       splitModuleBy mode toModule info
+       splitModuleBy toModule info
 
 {-
 -- | Split each of a module's declarations into a new module.  Update
@@ -129,19 +128,18 @@ defaultToModule info (Just name) (A decl) =
 
 -- | Do splitModuleBy with the default symbol to module mapping (was splitModule)
 splitModuleBy :: ModuVerse m =>
-                 CleanMode
-              -> ToModuleArg
+                 ToModuleArg
               -- ^ Function mapping symbol names of the input module
               -- to destination module name.
               -> ModuleInfo
               -- ^ The parsed input module.
               -> m [ModuleResult]
-splitModuleBy _ _ (ModuleInfo (A.XmlPage {}) _ _ _ _) = error "XmlPage"
-splitModuleBy _ _ (ModuleInfo (A.XmlHybrid {}) _ _ _ _) = error "XmlPage"
-splitModuleBy _ _ m@(ModuleInfo (A.Module _ _ _ _ []) _ _ key _) = return [Unchanged (moduleName m) key] -- No declarations - nothing to split
-splitModuleBy _ _ m@(ModuleInfo (A.Module _ _ _ _ [_]) _ _ key _) = return [Unchanged (moduleName m) key] -- One declaration - nothing to split (but maybe we should anyway?)
-splitModuleBy _ _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _ _) = throw $ userError $ "splitModule: no explicit header"
-splitModuleBy mode toModule inInfo@(ModuleInfo (A.Module _ (Just (A.ModuleHead _ inName _ _)) _ _ _) _ _ _ _) =
+splitModuleBy _ (ModuleInfo (A.XmlPage {}) _ _ _ _) = error "XmlPage"
+splitModuleBy _ (ModuleInfo (A.XmlHybrid {}) _ _ _ _) = error "XmlPage"
+splitModuleBy _ m@(ModuleInfo (A.Module _ _ _ _ []) _ _ key _) = return [Unchanged (moduleName m) key] -- No declarations - nothing to split
+splitModuleBy _ m@(ModuleInfo (A.Module _ _ _ _ [_]) _ _ key _) = return [Unchanged (moduleName m) key] -- One declaration - nothing to split (but maybe we should anyway?)
+splitModuleBy _ (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _ _) = throw $ userError $ "splitModule: no explicit header"
+splitModuleBy toModule inInfo@(ModuleInfo (A.Module _ (Just (A.ModuleHead _ inName _ _)) _ _ _) _ _ _ _) =
     do -- qLnPutStr ("Splitting module " ++ prettyPrint (moduleName inInfo))
        -- quietly $
        -- The name of the module to be split
@@ -159,7 +157,7 @@ splitModuleBy mode toModule inInfo@(ModuleInfo (A.Module _ (Just (A.ModuleHead _
        changes' <- List.mapM doResult changes           -- Write the new modules
        -- List.mapM_ (\ x -> qLnPutStr ("splitModule: " ++ reportResult x)) changes'
        -- Clean the new modules after all edits are finished
-       cleanResults mode changes'
+       cleanResults changes'
 
 -- | Perform updates a module.
 doModule :: ModuVerse m =>

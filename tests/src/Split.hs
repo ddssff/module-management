@@ -1,13 +1,14 @@
 {-# LANGUAGE RankNTypes #-}
 module Split where
 
+import Control.Lens ((.=))
 import Control.Monad as List (mapM_)
 import Data.Monoid ((<>))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A -- (Decl)
 import Language.Haskell.Exts.Annotated.Simplify
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
-import Language.Haskell.Modules.ModuVerse (CleanMode(DoClean))
+import Language.Haskell.Modules.ModuVerse (CleanMode(DoClean), cleanMode)
 import Language.Haskell.Modules (noisily, putHsSourceDirs, putModule, runModuVerseT, splitModule, splitModuleBy, withCurrentDirectory, findHsModules, extraImport)
 import Language.Haskell.Modules.Split (T(..))
 import Language.Haskell.Modules.Symbols (foldDeclared)
@@ -19,7 +20,7 @@ import Test.HUnit -- (assertEqual, Test(TestCase, TestList, TestLabel))
 --import Debug.Trace
 
 tests :: Test
-tests = TestList [split1, {-split2a, split2b, split4,-} split4b, split4c, {-split5,-} split6, split7 {-,split7b0-}]
+tests = TestList [split1, {-split2a, split2b, split4,-} split4b, split4c, {-split5,-} split6 {-, split7,split7b-}]
 
 tmp :: FilePath
 tmp = "tests/tmp"
@@ -32,9 +33,10 @@ split1 =
     TestLabel "split1" $ TestCase $
       do _ <- rsync "tests/data/split1" tmp
          _ <- runModuVerseT $ noisily $ noisily $
-           do putHsSourceDirs [tmp]
+           do cleanMode .= DoClean
+              putHsSourceDirs [tmp]
               mapM_ putModule [S.ModuleName "Split1"]
-              splitModule DoClean f (tmp </> "Split1.hs")
+              splitModule f (tmp </> "Split1.hs")
          (code, out, err) <- diff "tests/data/split1-expected" tmp
          assertString (indent "  " $
                        (if code == ExitSuccess then "" else "Unexpected exit code: " ++ show code ++ "\n") ++
@@ -94,7 +96,7 @@ split4b =
        _ <- withCurrentDirectory tmp $
          runModuVerseT $ noisily $ noisily $
            putModule (S.ModuleName "Split4") >>
-           splitModule DoClean f "Split4.hs"
+           splitModule f "Split4.hs"
        result <- diff "tests/data/split4b-expected" tmp
        assertEqual "split4b" (ExitSuccess, "", "") result
     where
@@ -112,7 +114,7 @@ split4c =
        _ <- withCurrentDirectory tmp $
          runModuVerseT $ noisily $ noisily $
            putModule (S.ModuleName "Split4") >>
-           splitModule DoClean f "Split4.hs"
+           splitModule f "Split4.hs"
        result <- diff "tests/data/split4c-expected" tmp
        assertEqual "split4c" (ExitSuccess, "", "") result
     where
@@ -142,7 +144,7 @@ split6 =
          findHsModules ["Debian", "Text", tmp] >>= \ modules ->
          runModuVerseT $ noisily $ noisily $
            mapM putModule modules >>
-           splitModule DoClean f "Debian/Repo/Monads/Apt.hs"
+           splitModule f "Debian/Repo/Monads/Apt.hs"
        result <- diff "tests/data/split6-expected" tmp
        assertEqual "split6" (ExitSuccess, "", "") result
     where
@@ -161,7 +163,7 @@ split7 =
                extraImport (S.ModuleName "Main.GetRecentPastes") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.InitialCtrlVState") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.InsertPaste") (S.ModuleName "Main.Instances")
-               splitModule DoClean f "Main.hs"
+               splitModule f "Main.hs"
        result <- diff "tests/data/split7-expected" tmp
        assertEqual "split7" (ExitSuccess, "", "") result
     where
@@ -204,7 +206,7 @@ split7b =
                extraImport (S.ModuleName "Main.GetRecentPastes") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.InitialCtrlVState") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.InsertPaste") (S.ModuleName "Main.Instances")
-               splitModuleDecls DoClean "Main.hs"
+               splitModuleDecls "Main.hs"
        result <- diff "tests/data/split7-expected" tmp
        assertEqual "split7b" (ExitSuccess, "", "") result
 -}

@@ -25,7 +25,7 @@ import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (ModuleResult(..))
 import Language.Haskell.Modules.FoldM (foldDeclsM, foldExportsM, foldHeaderM, foldImportsM, ModuleInfo(..))
-import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, moduleName, ModuVerse, parseModule,
+import Language.Haskell.Modules.ModuVerse (cleanMode, findModule, getExtensions, loadModule, moduleName, ModuVerse, parseModule,
                                            markForDelete, hsFlags, removeEmptyImports, scratchDir, CleanMode(..))
 import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, pathKey, APath(..), PathKey(..), PathKey(unPathKey), SourceDirs(getHsSourceDirs, putHsSourceDirs))
 import Language.Haskell.Modules.SrcLoc (srcLoc)
@@ -87,10 +87,12 @@ cleanImports paths =
 -- | Do import cleaning in response to the values returned by the
 -- split and merge operations.  Module import lists are cleaned if the
 -- module is modified or created.
-cleanResults :: ModuVerse m => CleanMode -> [ModuleResult] -> m [ModuleResult]
-cleanResults NoClean results = return results
-cleanResults DoClean results =
-    dump >> clean
+cleanResults :: ModuVerse m => [ModuleResult] -> m [ModuleResult]
+cleanResults results = do
+  mode <- use cleanMode
+  case mode of
+    NoClean -> return results
+    DoClean -> dump >> clean
     where
       dump =
           mapM (\ x -> case x of

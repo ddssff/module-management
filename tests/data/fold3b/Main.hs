@@ -22,7 +22,8 @@ import Data.Time.Clock (UTCTime, getCurrentTime)
 -- id yet. Though.. I am not thrilled about 0 having special meaning
 -- that is not enforced by the type system.
 newtype PasteId = PasteId { unPasteId :: Integer }
-    deriving (Eq, Ord, Read, Show, Enum, Data, Typeable, SafeCopy)
+    deriving (Eq, Ord, Read, Show, Enum, Data, Typeable)
+$(deriveSafeCopy 0 'base ''PasteId)
 $(derivePathInfo ''PasteId)
 
 -- | The format of the paste. Currently we only support plain-text,
@@ -320,4 +321,4 @@ route url =
 
 -- | start the app. listens on port 8000 on localhost
 main :: IO ()
-main = simpleApp id defaultConf (AcidLocal Nothing initialCtrlVState) () ViewRecent "" route
+main = simpleApp id defaultConf (AcidLocal Nothing initialCtrlVState) () ViewRecent "" (undefined {-route-})

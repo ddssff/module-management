@@ -380,9 +380,10 @@ split _ = liftIO $ putStrLn "Usage: split <modulepath>"
 
 splitBy :: [String] -> CmdM ()
 splitBy [regex, newModule, oldModule] = do
-  r <- liftCT (Map.lookup (ModuleName oldModule) <$> use modulesNew >>=
-               maybe (error $ "Module not found: " ++ show oldModule)
-                     (\oldModuleInfo -> splitModuleBy DoClean pred oldModuleInfo))
+  r <- liftCT (do cleanMode .= DoClean
+                  Map.lookup (ModuleName oldModule) <$> use modulesNew >>=
+                     maybe (error $ "Module not found: " ++ show oldModule)
+                           (\oldModuleInfo -> splitModuleBy pred oldModuleInfo))
   lift (modify (Cabal.update r))
   return ()
     where
@@ -403,6 +404,7 @@ merge :: [String] -> CmdM ()
 merge args =
     case splitAt (length args - 1) args of
       (inputs, [output]) -> do
-            r <- liftCT $ mergeModules DoClean (map ModuleName inputs) (ModuleName output)
-            liftS (modify (Cabal.update r))
+        r <- liftCT $ do cleanMode .= DoClean
+                         mergeModules (map ModuleName inputs) (ModuleName output)
+        liftS (modify (Cabal.update r))
       _ -> liftIO $ putStrLn "Usage: merge <inputmodulename1> <inputmodulename2> ... <outputmodulename>"

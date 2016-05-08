@@ -23,7 +23,7 @@ import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules, ModuleName(..), splitModuleBy)
 import Language.Haskell.Modules.Fold (ModuleInfo(..))
-import Language.Haskell.Modules.ModuVerse (CleanMode(DoClean), modulesNew, modulesOrig, ModuVerse, Params, putModule, runModuVerseT, sourceDirs)
+import Language.Haskell.Modules.ModuVerse (modulesNew, modulesOrig, ModuVerse, Params, putModule, runModuVerseT, sourceDirs)
 import Language.Haskell.Modules.SourceDirs (getHsSourceDirs)
 import Language.Haskell.Modules.Split (T(A))
 import Language.Haskell.Modules.Symbols (FoldDeclared(foldDeclared))
@@ -360,7 +360,7 @@ clean args = cleanImports args >> return ()
 {-
 split :: [String] -> CmdM ()
 split [arg] = do
-    r <- liftCT (splitModuleDecls DoClean arg)
+    r <- liftCT (splitModuleDecls arg)
     lift (modify (Cabal.update r))
     return ()
 split _ = liftIO $ putStrLn "Usage: split <modulepath>"
@@ -370,7 +370,7 @@ splitBy :: [String] -> CmdM ()
 splitBy [regex, newModule, oldModule] = do
   r <- liftCT (Map.lookup (ModuleName oldModule) <$> use modulesNew >>=
                maybe (error $ "Module not found: " ++ show oldModule)
-                     (\oldModuleInfo -> splitModuleBy DoClean pred oldModuleInfo))
+                     (\oldModuleInfo -> splitModuleBy pred oldModuleInfo))
   lift (modify (Cabal.update r))
   return ()
     where
@@ -391,6 +391,6 @@ merge :: [String] -> CmdM ()
 merge args =
     case splitAt (length args - 1) args of
       (inputs, [output]) -> do
-            r <- liftCT $ mergeModules DoClean (map ModuleName inputs) (ModuleName output)
+            r <- liftCT $ mergeModules (map ModuleName inputs) (ModuleName output)
             liftS (modify (Cabal.update r))
       _ -> liftIO $ putStrLn "Usage: merge <inputmodulename1> <inputmodulename2> ... <outputmodulename>"
