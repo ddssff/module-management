@@ -24,7 +24,7 @@ import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPI
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (ModuleResult(..))
-import Language.Haskell.Modules.Fold (foldDecls, foldExports, foldHeader, foldImports, ModuleInfo(..))
+import Language.Haskell.Modules.FoldM (foldDeclsM, foldExportsM, foldHeaderM, foldImportsM, ModuleInfo(..))
 import Language.Haskell.Modules.ModuVerse (findModule, getExtensions, loadModule, moduleName, ModuVerse, parseModule,
                                            markForDelete, hsFlags, removeEmptyImports, scratchDir, CleanMode(..))
 import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, pathKey, APath(..), PathKey(..), PathKey(unPathKey), SourceDirs(getHsSourceDirs, putHsSourceDirs))
@@ -179,33 +179,39 @@ withDot a =
 updateSource :: ModuVerse m => ModuleInfo -> A.Module SrcSpanInfo -> [A.ImportDecl SrcSpanInfo] -> m ModuleResult
 updateSource m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ key _) (A.Module _ _ _ newImports _) extraImports =
     do remove <- use removeEmptyImports
+       newImports' <- replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m
        maybe ({-qLnPutStr ("cleanImports: no changes to " ++ show key) >>-} return (Unchanged (moduleName m) key))
              (\ text' ->
                   -- qLnPutStr ("cleanImports: modifying " ++ show key) >>
                   replaceFile tildeBackup (unPathKey key) text' >>
                   return (JustModified (moduleName m) key))
-             (replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m)
+             newImports'
 updateSource _ _ _ = error "updateSource"
 
 -- | Compare the old and new import sets and if they differ clip out
 -- the imports from the sourceText and insert the new ones.
-replaceImports :: [A.ImportDecl SrcSpanInfo] -> ModuleInfo -> Maybe String
-replaceImports newImports m =
-    let oldPretty = fold (foldImports (\ _ pref s suff r -> r |> (pref <> s <> suff)) m mempty)
+replaceImports :: ModuVerse m => [A.ImportDecl SrcSpanInfo] -> ModuleInfo -> m (Maybe String)
+replaceImports newImports m = do
+  oldPretty <- fold <$> (foldImportsM (\ _ pref s suff r -> pure $ r |> (pref <> s <> suff)) m mempty)
         -- Surround newPretty with the same prefix and suffix as oldPretty
-        newPretty = fromMaybe "" (foldImports (\ _ pref _ _ r -> maybe (Just pref) Just r) m Nothing) <>
-                    intercalate "\n" (Prelude.map (prettyPrintWithMode (defaultMode {layout = PPInLine})) newImports) <>
-                    foldImports (\ _ _ _ suff _ -> suff) m mempty in
-    if oldPretty == newPretty
-    then Nothing
-    else Just (fold (foldHeader (\ s r -> r |> s) (\ _ pref s suff r -> r |> (pref <> s <> suff))
-                                (\ _ pref s suff r -> r |> pref <> s <> suff)
-                                (\ _ pref s suff r -> r |> pref <> s <> suff) m mempty) ++
-               fold (foldExports (\ s r -> r |> s)
-                                 (\ _ pref s suff r -> r |> pref <> s <> suff)
-                                 (\ s r -> r |> s) m mempty) ++
-               newPretty <>
-               fold (foldDecls  (\ _ pref s suff r -> r |> pref <> s <> suff) (\ r s -> s |> r) m mempty))
+  importPref <- foldImportsM (\ _ pref _ _ r -> pure $ maybe (Just pref) Just r) m Nothing
+  importSuff <- foldImportsM (\ _ _ _ suff _ -> pure suff) m mempty
+  let newPretty = fromMaybe "" importPref <>
+                  intercalate "\n" (Prelude.map (prettyPrintWithMode (defaultMode {layout = PPInLine})) newImports) <>
+                  importSuff
+  case oldPretty == newPretty of
+    True -> pure Nothing
+    False -> do
+      h <- foldHeaderM (\ s r -> pure $ r |> s)
+                      (\ _ pref s suff r -> pure $ r |> (pref <> s <> suff))
+                      (\ _ pref s suff r -> pure $ r |> pref <> s <> suff)
+                      (\ _ pref s suff r -> pure $ r |> pref <> s <> suff) m mempty
+      e <- foldExportsM (\ s r -> pure $ r |> s)
+                       (\ _ pref s suff r -> pure $ r |> pref <> s <> suff)
+                       (\ s r -> pure $ r |> s) m mempty
+      d <- foldDeclsM  (\ _ pref s suff r -> pure $ r |> pref <> s <> suff)
+                      (\ r s -> pure $ s |> r) m mempty
+      pure $ Just (fold h ++ fold e ++ newPretty <> fold d)
 
 -- | Final touch-ups - sort and merge similar imports.
 fixNewImports :: Bool         -- ^ If true, imports that turn into empty lists will be removed
