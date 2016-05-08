@@ -499,6 +499,7 @@ Library
     Language.Haskell.Modules,
     Language.Haskell.Modules.Common,
     Language.Haskell.Modules.Fold,
+    Language.Haskell.Modules.FoldM,
     Language.Haskell.Modules.Imports,
     Language.Haskell.Modules.Merge,
     Language.Haskell.Modules.ModuVerse,
