@@ -63,7 +63,7 @@ import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename, fixities), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..), Name)
-import Language.Haskell.Modules.Fold (foldDecls, ModuleInfo(..))
+import Language.Haskell.Modules.FoldM (foldDeclsM, ModuleInfo(..))
 import Language.Haskell.Modules.SourceDirs (modulePathBase, PathKey(..), Path(..), pathKey, SourceDirs(..))
 import Language.Haskell.Modules.Symbols (symbolsDeclaredBy)
 --import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
@@ -299,13 +299,13 @@ buildDeclMap newModule = do
       doModule mp oldModule = do
         Just key <- Map.lookup oldModule <$> use moduleKey
         Just oldInfo <- Map.lookup key <$> use modulesOrig
-        let mp' = foldDecls (\d _ _ _ r ->
+        mp' <- foldDeclsM (\d _ _ _ r -> pure $
                                let m :: S.ModuleName
                                    m = newModule oldModule d in
                                if oldModule /= m
                                then (Map.insert (oldModule, d) m r :: Map (S.ModuleName, A.Decl SrcSpanInfo) S.ModuleName)
                                else r)
-                            (\_ r -> r)
+                            (\_ r -> pure r)
                             oldInfo mp
         return mp'
 
@@ -319,7 +319,6 @@ buildSymbolMap = do
       doModule mp oldModule = do
         Just key <- Map.lookup oldModule <$> use moduleKey
         Just oldInfo <- Map.lookup key <$> use modulesOrig
-        let mp'' = foldDecls (\d _ _ _ r -> foldl' (\mp' s -> Map.insert (oldModule, s) d mp') r (symbolsDeclaredBy d))
-                             (\_ r -> r)
-                             oldInfo mp
-        return mp''
+        foldDeclsM (\d _ _ _ r -> pure $ foldl' (\mp' s -> Map.insert (oldModule, s) d mp') r (symbolsDeclaredBy d))
+                   (\_ r -> pure r)
+                   oldInfo mp

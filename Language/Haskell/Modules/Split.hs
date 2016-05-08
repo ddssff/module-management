@@ -18,8 +18,9 @@ import Data.List as List (group, intercalate, map, nub, sort)
 import Data.Map as Map (delete, elems, empty, filter, insertWith, keys, lookup, Map, mapWithKey)
 import Data.Maybe (fromJust, fromMaybe, isJust)
 import Data.Monoid ((<>))
-import Data.Sequence ((<|), (|>))
-import Data.Set as Set (empty, filter, fold, fromList, insert, intersection, map, member, null, Set, singleton, toList, union)
+import Data.Sequence (Seq, (<|), (|>))
+import Data.Set as Set (empty, filter, fromList, insert, intersection, map, member, null, Set, singleton, toList, union)
+import qualified Data.Set as Set (fold)
 import Data.Set.Extra as Set (gFind)
 import qualified Language.Haskell.Exts.Annotated as A (Decl(InstDecl), ExportSpec(..), ExportSpecList, ImportDecl(..), ImportSpec(..), ImportSpecList(..), Module(..), ModuleHead(ModuleHead), Name)
 import Language.Haskell.Exts.Annotated.Simplify (sExportSpec, sImportDecl, sImportSpec, sModule, sModuleName, sName)
@@ -28,6 +29,7 @@ import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(..), ImportDecl(..), Module(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (doResult, ModuleResult(..) {-, reportResult-})
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2, ModuleInfo(..))
+import Language.Haskell.Modules.FoldM ((|$>), echoM, echo2M, foldDeclsM, foldExportsM, foldHeaderM, foldImportsM, foldModuleM, ignoreM, ignore2M)
 import Language.Haskell.Modules.Imports (cleanResults)
 import Language.Haskell.Modules.ModuVerse (extraImports, CleanMode, findModule, modulesNew, moduleName, ModuVerse, Params, parseModule)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
@@ -244,9 +246,7 @@ newImports toModule inInfo thisName = do
             newImports'' =
               case Map.lookup thisName (moduleDeclMap toModule inInfo) of
                 Nothing -> pure ""
-                Just _ -> do
-                  eiMap <- use extraImports
-                  pure $ unlines (List.map (prettyPrintWithMode defaultMode) (newImports' <> instanceImports thisName eiMap))
+                Just _ -> unlines . List.map (prettyPrintWithMode defaultMode) <$> ((<>) <$> pure newImports' <*> instanceImports thisName)
             -- Import all the referenced symbols that are declared in
             -- the original module and referenced in the new module.
             newImports' :: [S.ImportDecl]
@@ -278,11 +278,10 @@ moduleExports (ModuleInfo _ _ _ _ _) = error "Unsupported module type"
 -- Update re-exports of the split module.
 updateImports :: ModuVerse m => ToModuleArg -> ModuleInfo -> ModuleInfo -> S.ModuleName -> S.ModuleName -> Set S.ModuleName -> m String
 updateImports toModule oldInfo inInfo inName thisName outNames = do
-  eiMap <- use extraImports
-  pure $ Foldable.fold (foldModule echo2 echo echo echo echo2
-                                    (\ e pref s suff r -> r |> pref <> fixExport s (sExportSpec e) <> suff) echo2
-                                    (\ i pref s suff r -> r |> pref <> updateImportDecl toModule inInfo inName thisName eiMap s i <> suff)
-                                    echo echo2 oldInfo mempty)
+  Foldable.fold <$> (foldModuleM echo2M echoM echoM echoM echo2M
+                        (\ e pref s suff r -> pure r |$> pure pref |$> pure (fixExport s (sExportSpec e)) |$> pure suff) echo2M
+                        (\ i pref s suff r -> pure r |$> pure pref |$> updateImportDecl toModule inInfo inName thisName s i |$> pure suff)
+                        echoM echo2M oldInfo mempty)
           where
             -- If we see the input module re-exported, replace with all the output modules
             fixExport :: String -> S.ExportSpec -> String
@@ -304,24 +303,25 @@ moduleDeclMap toModule inInfo =
     foldDecls (\ d pref s suff r ->
                    insertWith (flip (<>)) (toModule (name_ inInfo) (A d)) [(d, pref <> s <> suff)] r) ignore2 inInfo Map.empty
 
-updateImportDecl :: ToModuleArg -> ModuleInfo -> S.ModuleName -> S.ModuleName -> Map S.ModuleName [S.ImportDecl] -> String -> A.ImportDecl SrcSpanInfo -> String
-updateImportDecl toModule inInfo inName thisName eiMap s i =
+updateImportDecl :: ModuVerse m => ToModuleArg -> ModuleInfo -> S.ModuleName -> S.ModuleName -> String -> A.ImportDecl SrcSpanInfo -> m String
+updateImportDecl toModule inInfo inName thisName s i =
     if sModuleName (A.importModule i) == inName
-    then intercalate "\n" (List.map prettyPrint (updateImportSpecs toModule inInfo i ++ instanceImports thisName eiMap))
-    else s
+    then (intercalate "\n" . List.map prettyPrint) <$> ((<>) <$> updateImportSpecs toModule inInfo i <*> instanceImports thisName)
+    else pure s
 
 -- | Build the imports for the new module.
-updateImportSpecs :: ToModuleArg
+updateImportSpecs :: ModuVerse m =>
+                     ToModuleArg
                   -> ModuleInfo
                   -> A.ImportDecl SrcSpanInfo
-                  -> [S.ImportDecl]
+                  -> m [S.ImportDecl]
 -- No spec list, import all the split modules
-updateImportSpecs toModule inInfo i@(A.ImportDecl _l _name _q _src _safe _pkg _as Nothing) =
+updateImportSpecs toModule inInfo i@(A.ImportDecl _l _name _q _src _safe _pkg _as Nothing) = pure $
     List.map (\ x -> (sImportDecl i) {S.importModule = x})
              (Set.toList (moduleNames toModule inInfo)) -- (Map.elems moduleMap)
 updateImportSpecs _toModule _inInfo i@(A.ImportDecl _l _modName _q _src _safe _pkg _as (Just (A.ImportSpecList _ True _specs))) =
-    [sImportDecl i]    -- If flag is True this is a "hiding" import.  Will deal with this later.
-updateImportSpecs toModule _inInfo i@(A.ImportDecl _l modName _q _src _safe _pkg _as (Just (A.ImportSpecList _ flag specs))) =
+    pure [sImportDecl i]    -- If flag is True this is a "hiding" import.  Will deal with this later.
+updateImportSpecs toModule _inInfo i@(A.ImportDecl _l modName _q _src _safe _pkg _as (Just (A.ImportSpecList _ flag specs))) = pure $
     -- We have explicit
     -- imports from the module.  Look at the symbols and find out what
     -- module they are in now.
@@ -359,8 +359,10 @@ exportSep defsep info =
 declared :: ModuleInfo -> [A.Decl SrcSpanInfo]
 declared m = foldDecls (\d _pref _s _suff r -> d : r) ignore2 m []
 
-instanceImports :: S.ModuleName -> Map S.ModuleName [S.ImportDecl] -> [S.ImportDecl]
-instanceImports name eiMap = maybe [] id (Map.lookup name eiMap)
+instanceImports :: ModuVerse m => S.ModuleName -> m [S.ImportDecl]
+instanceImports name = do
+  eiMap <- use extraImports
+  pure $ maybe [] id (Map.lookup name eiMap)
 
 data SymbolClass
     = Exported (Either (A.ExportSpec SrcSpanInfo) (A.Decl SrcSpanInfo)) S.Name

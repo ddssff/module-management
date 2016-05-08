@@ -2,7 +2,8 @@
 {-# LANGUAGE BangPatterns, CPP, FlexibleContexts, FlexibleInstances, ScopedTypeVariables, StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.FoldM
-    ( ModuleInfo(..)
+    ( (|$>)
+    , ModuleInfo(..)
     , foldModuleM
     , foldHeaderM
     , foldExportsM
@@ -29,6 +30,10 @@ import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Language.Haskell.Modules.Fold (ModuleInfo(..))
 --import Language.Haskell.Modules.SourceDirs (PathKey)
 import Language.Haskell.Modules.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, srcLoc, srcPairText)
+
+-- | Monadic version of Data.Sequence.|>
+(|$>) :: Applicative m => m (Seq a) -> m a -> m (Seq a)
+(|$>) s x = (|>) <$> s <*> x
 
 --type Module = A.Module SrcSpanInfo
 --type ModuleHead = A.ModuleHead SrcSpanInfo
@@ -298,12 +303,12 @@ foldDeclsM declf sepf m r0 =
     foldModuleM ignore2M ignoreM ignoreM ignoreM ignore2M ignoreM ignore2M ignoreM declf sepf m r0
 
 -- | This can be passed to foldModule to include the original text in the result
-echoM :: Monoid m => t -> m -> m -> m -> Seq m -> Seq m
-echoM _ pref s suff r = r |> pref <> s <> suff
+echoM :: (Monoid s, Monad m) => t -> s -> s -> s -> Seq s -> m (Seq s)
+echoM _ pref s suff r = pure $ r |> pref <> s <> suff
 
 -- | Similar to 'echo', but used for the two argument separator functions
-echo2M :: Monoid m => m -> Seq m -> Seq m
-echo2M s r = r |> s
+echo2M :: (Monoid s, Monad m) => s -> Seq s -> m (Seq s)
+echo2M s r = pure $ r |> s
 
 -- | This can be passed to foldModule to omit the original text from the result.
 ignoreM :: forall t s m r. Monad m => t -> s -> s -> s -> r -> m r
