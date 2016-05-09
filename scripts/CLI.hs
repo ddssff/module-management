@@ -31,7 +31,6 @@ import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules, Modu
 import Language.Haskell.Modules.Fold (ModuleInfo(..))
 import Language.Haskell.Modules.ModuVerse -- (CleanMode(DoClean), moduleInfo, moduleName, Params, sourceDirs)
 import Language.Haskell.Modules.SourceDirs (getHsSourceDirs)
-import Language.Haskell.Modules.Split (T(A))
 import Language.Haskell.Modules.Symbols (FoldDeclared(foldDeclared))
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
 import Language.Haskell.TH.Syntax as TH (nameBase)
@@ -387,8 +386,8 @@ splitBy [regex, newModule, oldModule] = do
   lift (modify (Cabal.update r))
   return ()
     where
-      pred :: S.ModuleName -> T -> ModuleName
-      pred _ (A decl) =
+      pred :: S.ModuleName -> A.Decl SrcSpanInfo -> ModuleName
+      pred _ decl =
           -- declarations not associated with symbols stay in
           -- oldModules (e.g. instances.)  Decarations of matching
           -- symbols go to newModule

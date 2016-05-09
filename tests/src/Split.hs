@@ -10,7 +10,6 @@ import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
 import Language.Haskell.Modules.ModuVerse (CleanMode(DoClean), cleanMode)
 import Language.Haskell.Modules (noisily, putHsSourceDirs, putModule, runModuVerseT, splitModule, splitModuleBy, withCurrentDirectory, findHsModules, extraImport)
-import Language.Haskell.Modules.Split (T(..))
 import Language.Haskell.Modules.Symbols (foldDeclared)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
 import Prelude hiding (writeFile)
@@ -43,10 +42,10 @@ split1 =
                        (if null out then "" else "Unexpected differences:\n" ++ indent "  " out) ++
                        (if null err then "" else "Unexpected error output:\n" ++ indent "  " err))
     where
-      f :: S.ModuleName -> T -> S.ModuleName
+      f :: S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName
       -- Matches an instance of class "Ppr"
-      f modName (A x@(A.InstDecl _ _ (A.IRule _ _ _ (A.IHApp _ (A.IHCon _ (A.UnQual _ (A.Ident _ "Ppr"))) _)) _)) = {-trace (show (sDecl x))-} (S.ModuleName "Split2")
-      f modName@(S.ModuleName "Split1") (A decl) =
+      f modName x@(A.InstDecl _ _ (A.IRule _ _ _ (A.IHApp _ (A.IHCon _ (A.UnQual _ (A.Ident _ "Ppr"))) _)) _) = {-trace (show (sDecl x))-} (S.ModuleName "Split2")
+      f modName@(S.ModuleName "Split1") decl =
           foldDeclared (\symName r -> if elem symName (map S.Ident ["pprint1", "pprintW", "pprintL", "pprintStyle", "friendlyNames"]) then S.ModuleName "Split2" else r) modName decl
       f modName _ = modName
 
@@ -100,12 +99,10 @@ split4b =
        result <- diff "tests/data/split4b-expected" tmp
        assertEqual "split4b" (ExitSuccess, "", "") result
     where
-      f :: forall t. S.ModuleName -> T -> S.ModuleName
-      f modName (A decl) = foldDeclared (\name r -> if elem name (map S.Ident ["getPackages", "sourcePackagesOfIndex", "binaryPackagesOfIndex"])
-                                                    then S.ModuleName "A"
-                                                    else r) (S.ModuleName "B") decl
-      f _ _ = S.ModuleName "Split4.B"
-
+      f :: forall t. S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName
+      f modName decl = foldDeclared (\name r -> if elem name (map S.Ident ["getPackages", "sourcePackagesOfIndex", "binaryPackagesOfIndex"])
+                                                then S.ModuleName "A"
+                                                else r) (S.ModuleName "B") decl
 
 split4c :: Test
 split4c =
@@ -118,9 +115,8 @@ split4c =
        result <- diff "tests/data/split4c-expected" tmp
        assertEqual "split4c" (ExitSuccess, "", "") result
     where
-      f :: S.ModuleName -> T -> S.ModuleName
-      f modName (A decl) = foldDeclared (\name r -> if name == S.Ident "getPackages" then S.ModuleName "Split4.A" else r) modName decl
-      f modName _ = modName
+      f :: S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName
+      f modName decl = foldDeclared (\name r -> if name == S.Ident "getPackages" then S.ModuleName "Split4.A" else r) modName decl
 
 {-
 -- Test what happens when a split module is re-exported
@@ -148,9 +144,8 @@ split6 =
        result <- diff "tests/data/split6-expected" tmp
        assertEqual "split6" (ExitSuccess, "", "") result
     where
-      f :: S.ModuleName -> T -> S.ModuleName
-      f modName (A decl) = foldDeclared (\name r -> if name == S.Ident "countTasks" then S.ModuleName "IO" else r) modName decl
-      f _ _ = S.ModuleName "Debian.Repo.Monads.Apt"
+      f :: S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName
+      f modName decl = foldDeclared (\name r -> if name == S.Ident "countTasks" then S.ModuleName "IO" else r) modName decl
 
 -- This code is, in some sense, inherently unsplittable.
 split7 :: Test
@@ -167,9 +162,8 @@ split7 =
        result <- diff "tests/data/split7-expected" tmp
        assertEqual "split7" (ExitSuccess, "", "") result
     where
-      f :: S.ModuleName -> T -> S.ModuleName
-      f modName (A decl) = foldDeclared g modName decl
-      f _ _ = S.ModuleName "Other"
+      f :: S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName
+      f modName decl = foldDeclared g modName decl
       g (S.Ident "appTemplate") _ = S.ModuleName "Route"
       g (S.Ident "Route") _ = S.ModuleName "Route"
       g (S.Ident "route") _ = S.ModuleName "Route"
