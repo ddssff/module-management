@@ -30,7 +30,7 @@ import Language.Haskell.Modules.Common (doResult, ModuleResult(..) {-, reportRes
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, foldModule, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.FoldM ((|$>), echoM, echo2M, foldDeclsM, foldExportsM, foldHeaderM, foldImportsM, foldModuleM, ignoreM, ignore2M)
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (buildSymbolMap, buildDeclMap, extraImports, CleanMode, findModule,
+import Language.Haskell.Modules.ModuVerse (buildSymbolMap, buildDestinationMap, extraImports, CleanMode, findModule,
                                            modulesNew, moduleName, ModuVerse, moveFunction, Params, parseModule, symbolMap)
 import Language.Haskell.Modules.SourceDirs (modulePathBase, APath(..), pathKey)
 import Language.Haskell.Modules.Symbols (exports, FoldDeclared, foldDeclared, imports, symbolsDeclaredBy, members)
@@ -129,7 +129,7 @@ splitModuleBy toModule inInfo@(ModuleInfo (A.Module _ (Just (A.ModuleHead _ inNa
     do -- qLnPutStr ("Splitting module " ++ prettyPrint (moduleName inInfo))
        moveFunction .= toModule
        buildSymbolMap
-       buildDeclMap
+       buildDestinationMap
        -- quietly $
        -- The name of the module to be split
        -- let inName = moduleName inInfo

@@ -14,7 +14,7 @@
 module Language.Haskell.Modules.ModuVerse
     ( Params, dryRun, extraImports, hsFlags, junk, removeEmptyImports
     , scratchDir, verbosity, modulesOrig, moduleKey, modulesNew
-    , extensions, sourceDirs, declMap, symbolMap, cleanMode, moveFunction
+    , extensions, sourceDirs, destinationMap, symbolMap, cleanMode, moveFunction
     , CleanMode(DoClean, NoClean)
     , ModuVerse
     , runModuVerseT
@@ -33,7 +33,7 @@ module Language.Haskell.Modules.ModuVerse
     , loadModule
     , unloadModule
     , buildSymbolMap
-    , buildDeclMap
+    , buildDestinationMap
     ) where
 
 import Control.Exception (SomeException, try)
@@ -120,7 +120,7 @@ data Params
       -- and see what changes occurred.
       , _symbolMap :: Map (S.ModuleName, S.Name) (A.Decl SrcSpanInfo)
       -- ^ Look up a symbol's declaration
-      , _declMap :: Map (S.ModuleName, A.Decl SrcSpanInfo) S.ModuleName
+      , _destinationMap :: Map (S.ModuleName, A.Decl SrcSpanInfo) S.ModuleName
       -- ^ Look up where a declaration will be moved to
       , _moveFunction :: (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName)
       -- ^ Function @(\ m d -> m')@ describing for a declaration d
@@ -165,7 +165,7 @@ runModuVerseT action =
                                                                    [nameToExtension StandaloneDeriving], -- allExtensions
                                                      _sourceDirs = ["."],
                                                      _symbolMap = Map.empty,
-                                                     _declMap = Map.empty,
+                                                     _destinationMap = Map.empty,
                                                      _cleanMode = DoClean,
                                                      _junk = Set.empty,
                                                      _removeEmptyImports = True,
@@ -293,9 +293,9 @@ parseFileWithComments path =
     where
       mode = Exts.defaultParseMode {Exts.extensions = hseExtensions, Exts.parseFilename = path, Exts.fixities = Nothing }
 
-buildDeclMap :: forall m. ModuVerse m => m ()
-buildDeclMap = do
-  declMap .= mempty
+buildDestinationMap :: forall m. ModuVerse m => m ()
+buildDestinationMap = do
+  destinationMap .= mempty
   names <- keys <$> use moduleKey :: m [S.ModuleName]
   mapM_ doModule names
     where
@@ -306,7 +306,7 @@ buildDeclMap = do
         foldDeclsM (\d _ _ _ _ -> do
                       let m = newModule oldModule d
                       when (oldModule /= m)
-                           (do declMap %= Map.insert (oldModule, d) m
+                           (do destinationMap %= Map.insert (oldModule, d) m
                                -- originMap %= Map.insertWith Set.union destinationModuleName (singleton originInfo)
                                -- declMap %= Map.insertWith (flip (<>)) (newModule (name_ originInfo) d) [(d, pref <> s <> suff)]
                            ))

@@ -16,7 +16,7 @@ import qualified Language.Haskell.Exts.Annotated as A
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S -- (ExportSpec(..), ImportDecl(..), Module(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, ModuleInfo(..))
-import Language.Haskell.Modules.ModuVerse (buildSymbolMap, buildDeclMap,
+import Language.Haskell.Modules.ModuVerse (buildSymbolMap, buildDestinationMap,
                                            modulesNew, modulesOrig, ModuVerse)
 import Language.Haskell.Modules.SourceDirs (PathKey)
 --import Language.Haskell.Modules.Split (newModule)
@@ -35,7 +35,7 @@ moveDeclsBy :: forall m. (ModuVerse m) =>
             -> m ()
 moveDeclsBy newModule = do
   buildSymbolMap
-  buildDeclMap
+  buildDestinationMap
   -- Insert information found in modulesOrig into modulesNew
   Map.toList <$> use modulesOrig >>= mapM_ copyModule
   -- Get the list of existing module names
