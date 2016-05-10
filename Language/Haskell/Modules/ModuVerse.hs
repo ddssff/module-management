@@ -14,7 +14,7 @@
 module Language.Haskell.Modules.ModuVerse
     ( Params, dryRun, extraImports, hsFlags, junk, removeEmptyImports
     , scratchDir, verbosity, modulesOrig, moduleKey, modulesNew
-    , extensions, sourceDirs, declMap, symbolMap, cleanMode
+    , extensions, sourceDirs, declMap, symbolMap, cleanMode, moveFunction
     , CleanMode(DoClean, NoClean)
     , ModuVerse
     , runModuVerseT
@@ -38,7 +38,7 @@ module Language.Haskell.Modules.ModuVerse
 
 import Control.Exception (SomeException, try)
 import Control.Lens (makeLenses)
-import Control.Monad as List (foldM)
+import Control.Monad as List (foldM, when)
 import Control.Monad.Trans.Control as IO (MonadBaseControl)
 import Control.Monad.State (MonadState, StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
@@ -122,7 +122,10 @@ data Params
       -- ^ Look up a symbol's declaration
       , _declMap :: Map (S.ModuleName, A.Decl SrcSpanInfo) S.ModuleName
       -- ^ Look up where a declaration will be moved to
-      } deriving (Eq, Ord, Show)
+      , _moveFunction :: (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName)
+      -- ^ Function @(\ m d -> m')@ describing for a declaration d
+      -- originating in module m what module to move it into.
+      }
 
 
 data ModuleStatus = Unchanged | Modified | Created | Removed deriving (Eq, Ord, Show)
@@ -166,7 +169,9 @@ runModuVerseT action =
                                                      _cleanMode = DoClean,
                                                      _junk = Set.empty,
                                                      _removeEmptyImports = True,
-                                                     _extraImports = Map.empty})
+                                                     _extraImports = Map.empty,
+                                                     _moveFunction = \m _ -> m
+                                                    })
        mapM_ (\ x -> liftIO (try (removeFile x)) >>= \ (_ :: Either SomeException ()) -> return ()) (toList (_junk params))
        return result
 
@@ -288,26 +293,25 @@ parseFileWithComments path =
     where
       mode = Exts.defaultParseMode {Exts.extensions = hseExtensions, Exts.parseFilename = path, Exts.fixities = Nothing }
 
-buildDeclMap :: forall m. ModuVerse m =>
-                (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName)
-             -> m ()
-buildDeclMap newModule = do
+buildDeclMap :: forall m. ModuVerse m => m ()
+buildDeclMap = do
+  declMap .= mempty
   names <- keys <$> use moduleKey :: m [S.ModuleName]
-  mp <- foldM doModule mempty names
-  declMap .= mp
+  mapM_ doModule names
     where
-      doModule mp oldModule = do
+      doModule oldModule = do
         Just key <- Map.lookup oldModule <$> use moduleKey
         Just oldInfo <- Map.lookup key <$> use modulesOrig
-        mp' <- foldDeclsM (\d _ _ _ r -> pure $
-                               let m :: S.ModuleName
-                                   m = newModule oldModule d in
-                               if oldModule /= m
-                               then (Map.insert (oldModule, d) m r :: Map (S.ModuleName, A.Decl SrcSpanInfo) S.ModuleName)
-                               else r)
-                            (\_ r -> pure r)
-                            oldInfo mp
-        return mp'
+        newModule <- use moveFunction
+        foldDeclsM (\d _ _ _ _ -> do
+                      let m = newModule oldModule d
+                      when (oldModule /= m)
+                           (do declMap %= Map.insert (oldModule, d) m
+                               -- originMap %= Map.insertWith Set.union destinationModuleName (singleton originInfo)
+                               -- declMap %= Map.insertWith (flip (<>)) (newModule (name_ originInfo) d) [(d, pref <> s <> suff)]
+                           ))
+                   (\_ _ -> pure ())
+                   oldInfo ()
 
 buildSymbolMap :: forall m. ModuVerse m => m ()
 buildSymbolMap = do

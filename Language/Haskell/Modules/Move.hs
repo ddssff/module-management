@@ -35,7 +35,7 @@ moveDeclsBy :: forall m. (ModuVerse m) =>
             -> m ()
 moveDeclsBy newModule = do
   buildSymbolMap
-  buildDeclMap newModule
+  buildDeclMap
   -- Insert information found in modulesOrig into modulesNew
   Map.toList <$> use modulesOrig >>= mapM_ copyModule
   -- Get the list of existing module names
