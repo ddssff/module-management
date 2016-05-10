@@ -188,76 +188,73 @@ newHeader inInfo thisName =
         pure (Foldable.fold (foldHeader echo2 echo (\ _n pref _ suff r -> r |> pref <> prettyPrint thisName <> suff) echo inInfo mempty))
 
 newExports :: ModuVerse m => ModuleInfo -> S.ModuleName -> m String
-newExports inInfo thisName =
-    use moveFunction >>= \toModule ->
-    pure $
+newExports inInfo thisName = do
+  mp <- moduleDeclMap inInfo
+  -- Build export specs of the symbols created by each declaration.
+  newExports' <- (nub . concat . Prelude.map (exports . fst)) <$> modDecls inInfo thisName
+  pure $
         -- If the module has an export list use its outline
         maybe "\n    ( " (\ _ -> Foldable.fold $ foldExports (<|) ignore ignore2 inInfo mempty) (moduleExports inInfo) <>
 
-        case Map.lookup thisName (moduleDeclMap toModule inInfo) of
+        case Map.lookup thisName mp of
            Nothing ->
-               doSeps (Foldable.fold (foldExports ignore2
+               let pairs =
+                       Foldable.fold (foldExports ignore2
                                        (\ e pref s suff r ->
                                             if setAny isReExported (declClasses inInfo (Left e))
                                             then r |> [(pref, s <> suff)]
                                             else r)
-                                       (\ s r -> r |> [("", s)]) inInfo mempty))
+                                       (\ s r -> r |> [("", s)]) inInfo mempty) in
+               case pairs of
+                 [] -> ""
+                 -- Re-construct a separated list
+                 ((_, hd) : tl) -> hd <> concatMap (\ (a, b) -> a <> b) tl
            Just _ ->
-              intercalate sep (Prelude.map (prettyPrintWithMode defaultMode) (newExports' toModule)) <> "\n" <>
+              intercalate (exportSep "\n    , " inInfo)
+                          (Prelude.map (prettyPrintWithMode defaultMode) newExports') <> "\n" <>
               maybe "    ) where\n" (\ _ -> Foldable.fold $ foldExports ignore2 ignore (<|) inInfo mempty) (moduleExports inInfo)
-          where
-            -- Build export specs of the symbols created by each declaration.
-            newExports' :: (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName) -> [S.ExportSpec]
-            newExports' toModule = nub $ concat $ Prelude.map (exports . fst) (modDecls toModule inInfo thisName)
 
-            -- Re-construct a separated list
-            doSeps :: [(String, String)] -> String
-            doSeps [] = ""
-            doSeps ((_, hd) : tl) = hd <> concatMap (\ (a, b) -> a <> b) tl
-            doSeps _ = error "doSeps"
-
-            sep = exportSep "\n    , " inInfo
-
-newImports :: ModuVerse m => ModuleInfo -> S.ModuleName -> m String
+newImports :: forall m. ModuVerse m => ModuleInfo -> S.ModuleName -> m String
 newImports inInfo thisName = do
-  ni <- newImports''
+  mp <- moduleDeclMap inInfo
+  ni <- case Map.lookup thisName mp of
+          Nothing -> pure ""
+          Just _ -> do
+            ii <- instanceImports thisName
+            ni' <- newImports'
+            pure $ unlines $ List.map (prettyPrintWithMode defaultMode) $ ni' <> ii
   case (oldImportText, ni) of
     ([], "") -> pure "\n"
-    ([], s) -> pure s
-    ((pref, s, suff) : more, i) -> pure (pref <> i <> s <> suff ++ concatMap (\ (pref', s', suff') -> pref' <> s' <> suff') more)
+    ([], newImportText) -> pure newImportText
+    ((pref, s, suff) : more, newImportText) ->
+        pure (pref <> newImportText <> s <> suff ++ concatMap (\ (pref', s', suff') -> pref' <> s' <> suff') more)
     _ -> error "newImports"
     where
             oldImportText :: [(String, String, String)]
             oldImportText = foldImports (\ _ pref s suff r -> r ++ [(pref, s, suff)]) inInfo []
-            newImports'' :: ModuVerse m => m String
-            newImports'' =
-              use moveFunction >>= \toModule ->
-              case Map.lookup thisName (moduleDeclMap toModule inInfo) of
-                Nothing -> pure ""
-                Just _ -> unlines . List.map (prettyPrintWithMode defaultMode) <$> ((<>) <$> pure (newImports' toModule) <*> instanceImports thisName)
             -- Import all the referenced symbols that are declared in
             -- the original module and referenced in the new module.
-            newImports' :: (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName) -> [S.ImportDecl]
-            newImports' toModule =
-                elems $
-                mapWithKey toImportDecl $
-                Map.delete thisName $
-                Map.filter imported (moduleDeclMap toModule inInfo)
-                where
-                  imported :: [(A.Decl SrcSpanInfo, String)] -> Bool
-                  imported pairs =
+            newImports' :: m [S.ImportDecl]
+            newImports' = (elems . mapWithKey toImportDecl . Map.delete thisName) <$> imported
+            imported :: ModuVerse m => m (Map S.ModuleName [(A.Decl SrcSpanInfo, String)])
+            imported = do
+              mp <- moduleDeclMap inInfo
+              ds <- modDecls inInfo thisName
+              pure $ Map.filter (imported' ds) mp
+            imported' :: [(A.Decl SrcSpanInfo, String)] -> [(A.Decl SrcSpanInfo, String)] -> Bool
+            imported' ds pairs =
                       let declared' :: [S.Name]
                           declared' = concat (Prelude.map (symbolsDeclaredBy . fst) pairs <> Prelude.map (members . fst) pairs) in
-                      not (Set.null (Set.intersection (Set.fromList declared') (referenced toModule inInfo thisName)))
+                      not (Set.null (Set.intersection (Set.fromList declared') (referenced ds)))
 
 -- | Build the text of the declaration section of the new module
 newDecls :: ModuVerse m => ModuleInfo -> S.ModuleName -> m String
-newDecls inInfo thisName =
-    use moveFunction >>= \toModule ->
-    pure $ concatMap snd (modDecls toModule inInfo thisName)
+newDecls inInfo thisName = concatMap snd <$> modDecls inInfo thisName
 
-modDecls :: (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName) -> ModuleInfo -> S.ModuleName -> [(A.Decl SrcSpanInfo, String)]
-modDecls toModule inInfo thisName = fromMaybe [] (Map.lookup thisName (moduleDeclMap toModule inInfo))
+-- | The declarations that appear in the original module along with
+-- the rendered text.
+modDecls :: ModuVerse m => ModuleInfo -> S.ModuleName -> m [(A.Decl SrcSpanInfo, String)]
+modDecls inInfo thisName = (fromMaybe [] . Map.lookup thisName) <$> moduleDeclMap inInfo
 
 moduleExports :: ModuleInfo -> Maybe (A.ExportSpecList SrcSpanInfo)
 moduleExports (ModuleInfo (A.Module _ Nothing _ _ _) _ _ _ _) = Nothing
@@ -282,16 +279,18 @@ updateImports oldInfo inInfo inName thisName outNames = do
 
 -- In this module, we need to import any module that declares a symbol
 -- referenced here.
-referenced :: (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName) -> ModuleInfo -> S.ModuleName -> Set S.Name
-referenced toModule inInfo thisName = Set.map sName (gFind (modDecls toModule inInfo thisName) :: Set (A.Name SrcSpanInfo))
+referenced :: [(A.Decl SrcSpanInfo, String)] -> Set S.Name
+referenced ds = Set.map sName (gFind ds :: Set (A.Name SrcSpanInfo))
 
 -- Build a map from module name to the list of declarations that
 -- will be in that module.  All of these declarations used to be
 -- in moduleName.  Result is a list so we can preserve the order.
-moduleDeclMap :: (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName) -> ModuleInfo -> Map S.ModuleName [(A.Decl SrcSpanInfo, String)]
-moduleDeclMap toModule inInfo =
-    foldDecls (\ d pref s suff r ->
-                   insertWith (flip (<>)) (toModule (name_ inInfo) d) [(d, pref <> s <> suff)] r) ignore2 inInfo Map.empty
+moduleDeclMap :: ModuVerse m => ModuleInfo -> m (Map S.ModuleName [(A.Decl SrcSpanInfo, String)])
+moduleDeclMap inInfo = do
+  toModule <- use moveFunction
+  let mp = foldDecls (\d pref s suff mp' ->
+                          insertWith (flip (<>)) (toModule (name_ inInfo) d) [(d, pref <> s <> suff)] mp') ignore2 inInfo Map.empty
+  pure mp
 
 updateImportDecl :: ModuVerse m => ModuleInfo -> S.ModuleName -> S.ModuleName -> String -> A.ImportDecl SrcSpanInfo -> m String
 updateImportDecl inInfo inName thisName s i =
@@ -329,7 +328,7 @@ findDecl modName x = do
   case decls of
     [decl] -> pure $ Just decl
     [] -> pure Nothing
-    decls -> error ("Multiple declarations found for symbols " ++ show syms ++ " in " ++ prettyPrint modName ++ ": " ++ show (List.map prettyPrint decls))
+    _ -> error ("Multiple declarations found for symbols " ++ show syms ++ " in " ++ prettyPrint modName ++ ": " ++ show (List.map prettyPrint decls))
 
 moduleNames :: ModuVerse m => ModuleInfo -> m (Set S.ModuleName)
 moduleNames inInfo = pure mempty
