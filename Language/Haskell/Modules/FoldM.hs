@@ -22,7 +22,11 @@ import Data.Char (isSpace)
 import Data.List (tails)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, (|>))
+#if MIN_VERSION_haskell_src_exts(1,18,0)
+import qualified Language.Haskell.Exts.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
+#else
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
+#endif
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 --import qualified Language.Haskell.Exts.Syntax as S (ModuleName)

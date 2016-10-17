@@ -31,6 +31,7 @@ module Language.Haskell.Modules.ModuVerse
     , parseModule
     , parseModuleMaybe
     , loadModule
+    , loadModuleMaybe
     , unloadModule
     , buildSymbolMap
     , buildDestinationMap
@@ -42,7 +43,7 @@ import Control.Monad as List (foldM, when)
 import Control.Monad.Trans.Control as IO (MonadBaseControl)
 import Control.Monad.State (MonadState, StateT(runStateT))
 import Control.Monad.Trans (liftIO, MonadIO)
-import Data.List as List (foldl')
+import Data.List as List (foldl', groupBy, intercalate, map)
 import Data.Map as Map (adjust, empty, insertWith, Map, toList)
 import Data.Monoid ((<>))
 import Data.Set as Set (delete, empty, insert, Set, singleton, toList, union)
@@ -57,16 +58,21 @@ import System.Directory (removeFile)
 import Control.Exception.Lifted as IO (catch, throw)
 import Control.Lens (use, (%=), (.=))
 import Data.Map as Map (delete, insert, keys, lookup)
+#if MIN_VERSION_haskell_src_exts(1,18,0)
+import qualified Language.Haskell.Exts as A (Decl, ImportSpecList(..), Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
+#else
 import qualified Language.Haskell.Exts.Annotated as A (Decl, Module(..), ModuleHead(..), ModuleName(..), parseFileWithComments)
+#endif
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.Extension (Extension(..), KnownExtension(..))
 import qualified Language.Haskell.Exts.Parser as Exts (defaultParseMode, fromParseResult, ParseMode(extensions, parseFilename, fixities), ParseResult)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo)
 import Language.Haskell.Exts.Syntax as S (ModuleName(..), Name)
 import Language.Haskell.Modules.FoldM (foldDeclsM, ModuleInfo(..))
-import Language.Haskell.Modules.SourceDirs (modulePathBase, ModKey(..), Path(..), modKey, SourceDirs(..))
+import Language.Haskell.Modules.SourceDirs (modulePathBase, ModKey(..), Path(..), SourceDirs(..))
 import Language.Haskell.Modules.Symbols (symbolsDeclaredBy)
 --import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
+import System.FilePath ((</>), splitFileName, dropTrailingPathSeparator, splitDirectories, joinPath)
 import System.IO.Error (isDoesNotExistError, isUserError)
 
 data CleanMode = DoClean | NoClean deriving (Eq, Ord, Show)
@@ -99,7 +105,7 @@ data Params
       -- instances it contains, but usually it is not.  Note that this
       -- option does not affect imports that started empty and end
       -- empty.
-      , _extraImports :: Map S.ModuleName [S.ImportDecl]
+      , _extraImports :: Map (S.ModuleName ()) [S.ImportDecl ()]
       -- ^ Deciding whether a module needs to be imported can be
       -- difficult when instances are involved, this is a cheat to force
       -- keys of the map to import the corresponding elements.
@@ -110,7 +116,7 @@ data Params
       , _moduVerse :: Map ModKey ModuleInfo
       -- ^ The info about the modules as they were loaded from disk,
       -- associated with the key used to find the module.
-      , _moduleKeys :: Map S.ModuleName (Set ModKey)
+      , _moduleKeys :: Map (S.ModuleName ()) (Set ModKey)
       -- ^ Map from module names back to the path
 {-
       , _modulesOrig :: Map ModKey ModuleInfo
@@ -118,14 +124,14 @@ data Params
       -- associated with the key used to find the module.
 -}
 {-
-      , _modulesNew :: Map S.ModuleName ModuleInfo
+      , _modulesNew :: Map (S.ModuleName ()) ModuleInfo
       -- ^ The modified modules.  When we are modifying modules we
       -- refer to them by module name, which for these computations
       -- must be unique.  the key that was originally used to obtain
       -- the module is stored in ModuleInfo so we can later go back
 -}
       -- and see what changes occurred.
-      , _symbolMap :: Map (ModKey, S.Name) (A.Decl SrcSpanInfo)
+      , _symbolMap :: Map (ModKey, S.Name ()) (A.Decl SrcSpanInfo)
       -- ^ Look up a symbol's declaration in a particular module.
       , _destinationMap :: Map (ModKey, A.Decl SrcSpanInfo) ModKey
       -- ^ Look up where a declaration will be moved to
@@ -160,7 +166,7 @@ instance ModuVerse m => SourceDirs m where
 -- instance of 'ModuVerse'.
 runModuVerseT :: (MonadIO m, MonadBaseControl IO m) => StateT Params m a -> m a
 runModuVerseT action =
-    withTempDirectory "." "hmm" $ \ scratch ->
+    withTempDirectory True "." "hmm" $ \ scratch ->
     do (result, params) <- runStateT action (Params {_scratchDir = scratch,
                                                      _dryRun = False,
                                                      _verbosity = 1,
@@ -190,24 +196,24 @@ markForDelete x = junk %= Set.insert x
 
 -- | When we write module @m@, insert an extra line that imports the
 -- instances (only) from module @i@.
-extraImport :: ModuVerse m => S.ModuleName -> S.ModuleName -> m ()
+extraImport :: ModuVerse m => S.ModuleName () -> S.ModuleName () -> m ()
 extraImport m i =
     extraImports %= Map.insertWith (<>) m [im]
-    where im = ImportDecl { importLoc = SrcLoc "<unknown>.hs" 1 1
+    where im = ImportDecl { importAnn = ()
                           , importModule = i
                           , importQualified = False
                           , importSrc = False
                           , importSafe = False
                           , importPkg = Nothing
                           , importAs = Nothing
-                          , importSpecs = Just (False, []) }
+                          , importSpecs = Just (A.ImportSpecList () False []) }
 
 nameToExtension :: KnownExtension -> Extension
 nameToExtension x = EnableExtension x
 
-moduleName :: ModuleInfo -> S.ModuleName
+moduleName :: ModuleInfo -> S.ModuleName ()
 moduleName (ModuleInfo (A.Module _ mh _ _ _) _ _ _ _) =
-    S.ModuleName $ maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh
+    S.ModuleName () $ maybe "Main" (\ (A.ModuleHead _ (A.ModuleName _ s) _ _) -> s) mh
 moduleName (ModuleInfo m _ _ _ _) = error $ "Unsupported Module: " ++ show m
 
 -- | From hsx2hs, but removing Arrows because it makes test case fold3c and others fail.
@@ -221,12 +227,12 @@ hseExtensions = map nameToExtension
     , ExplicitNamespaces
     ]
 
-putModule :: ModuVerse m => S.ModuleName -> m ()
-putModule name = do
-  key <- modKey (modulePathBase "hs" name)
-  info <- parseModule key
+putModule :: ModuVerse m => ModKey -> m ()
+putModule key = do
+  -- key <- modKey (modulePathBase "hs" name)
+  info <- loadModule key
   moduVerse %= Map.insert key info
-  moduleKeys %= Map.insertWith union name (singleton key)
+  moduleKeys %= Map.insertWith union (_modName key) (singleton key)
 {-
   modulesOrig %= Map.insert key info
 -}
@@ -238,19 +244,21 @@ putModuleAnew key = do
   -- key <- modKey (modulePathBase "hs" name)
   info <- loadModule key
   moduVerse %= Map.insert key info
-  moduleKeys %= Map.insertWith union (unModName key) (singleton key)
+  moduleKeys %= Map.insertWith union (_modName key) (singleton key)
 {-
   modulesOrig %= Map.insert key info
   modulesNew %= Map.delete name
 -}
 
-findModule :: ModuVerse m => S.ModuleName -> m (Maybe ModuleInfo)
-findModule name = modKeyMaybe (modulePathBase "hs" name) >>= parseModuleMaybe
+findModule :: ModuVerse m => S.ModuleName () -> m (Maybe ModuleInfo)
+findModule name = do
+  mkey <- modKeyMaybe (modulePathBase "hs" name)
+  maybe (pure Nothing) loadModuleMaybe mkey
 
 {-
 -- | Given a symbol name and the module from which it can be imported,
 -- return the Decl that creates it.
-findSymbolDecl :: ModuVerse m => S.ModuleName -> S.Name -> m (Maybe (A.Decl SrcSpanInfo))
+findSymbolDecl :: ModuVerse m => S.ModuleName () -> S.Name () -> m (Maybe (A.Decl SrcSpanInfo))
 findSymbolDecl modu name =
     do Just info <- Map.lookup modu <$> use modulesNew
        let s = foldDecls (\d _ _ _ r -> Set.insert d r) (\_ r -> r) info mempty
@@ -259,7 +267,7 @@ findSymbolDecl modu name =
          Just (d, s') | null s' -> return (Just d)
          Just _ -> error ("Multiple declarations of " ++ show name ++ " in " ++ show modu)
 
-delName :: ModuVerse m => S.ModuleName -> m ()
+delName :: ModuVerse m => S.ModuleName () -> m ()
 delName name = do
   moduleInfo %= Map.delete name
   modulesOrig .= Map.empty
@@ -274,12 +282,58 @@ getExtensions = use extensions
 modifyExtensions :: ModuVerse m => ([Extension] -> [Extension]) -> m ()
 modifyExtensions f = extensions %= f
 
+{-
 parseModule :: (ModuVerse m, MonadVerbosity m) => ModKey -> m ModuleInfo
 parseModule key = parseModuleMaybe (Just key) >>= maybe (error $ "parseModule - not found: " ++ show key) return
 
 parseModuleMaybe :: (ModuVerse m, MonadVerbosity m) => Maybe ModKey -> m (Maybe ModuleInfo)
 parseModuleMaybe Nothing = return Nothing
 parseModuleMaybe (Just key) =
+    (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e || isUserError e then return Nothing else throw e)
+    where
+      look = Map.lookup key <$> use moduVerse
+      load (Just x) = return (Just x)
+      load Nothing = Just <$> loadModule key
+-}
+
+parseModuleMaybe :: ModuVerse m => FilePath -> m (Maybe ModuleInfo)
+parseModuleMaybe path =
+    (Just <$> parseModule path) `IO.catch` (\(e :: IOError) -> if isDoesNotExistError e || isUserError e then return Nothing else throw e)
+
+parseModule :: (ModuVerse m, MonadVerbosity m) => FilePath -> m ModuleInfo
+parseModule path = do
+  text <- liftIO $ readFile path
+  (parsed, comments) <- parseFileWithComments path >>= return . Exts.fromParseResult
+  let key = case parsed of
+              (A.Module _ Nothing _ _ _) ->
+                  let (dir, file) = splitFileName path in
+                  ModKey (dropTrailingPathSeparator dir) (S.ModuleName () "Main")
+              (A.Module _ (Just (A.ModuleHead _ (A.ModuleName _ name) _ _)) _ _ _) ->
+                  let dirs = splitDirectories path
+                      name' = filter (/= ".") (groupBy (\a b -> (a /= '.') && (b /= '.')) name)
+                      (dirs', name'') = splitAt (length dirs - length name') dirs
+                  in ModKey (joinPath dirs') (S.ModuleName () (intercalate "." name''))
+  moduVerse %= Map.insert key (ModuleInfo parsed text comments key (_modName key))
+  moduleKeys %= Map.insertWith union (_modName key) (singleton key)
+  return (ModuleInfo parsed text comments key (_modName key))
+
+loadModule :: (ModuVerse m, MonadVerbosity m) => ModKey -> m ModuleInfo
+loadModule key@(ModKey top name) = do
+  maybeInfo <- (Map.lookup key <$> use moduVerse)
+  maybe (parseModule (top </> asFilePath name)) pure maybeInfo
+    -- parseModuleMaybe (Just key) >>= maybe (error $ "parseModule - not found: " ++ show key) return
+
+loadModuleMaybe :: ModuVerse m => ModKey -> m (Maybe ModuleInfo)
+loadModuleMaybe key =
+    (Just <$> loadModule key) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e || isUserError e then return Nothing else throw e)
+
+asFilePath :: S.ModuleName () -> FilePath
+asFilePath (S.ModuleName () name) =
+    List.map (\c -> if c == '.' then '/' else c) name ++ ".hs"
+
+{-
+parseModuleMaybe :: (ModuVerse m, MonadVerbosity m) => FilePath -> m (Maybe ModuleInfo)
+parseModuleMaybe path =
     (look >>= load) `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e || isUserError e then return Nothing else throw e)
     where
       look = Map.lookup key <$> use moduVerse
@@ -296,6 +350,7 @@ loadModule key@(ModKey _ name) =
        -- modulesOrig %= Map.insert key (ModuleInfo parsed text comments key name)
        moduleKeys %= Map.insertWith union name (singleton key)
        return (ModuleInfo parsed text comments key name)
+-}
 
 unloadModule :: (ModuVerse m, MonadVerbosity m) => ModKey -> m ()
 unloadModule key@(ModKey _ name) = do

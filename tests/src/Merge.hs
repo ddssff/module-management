@@ -19,7 +19,7 @@ test1 =
          _result <- runModuVerseT $ noisily $ noisily $ noisily $
            do cleanMode .= DoClean
               sourceDirs .= ["tmp"]
-              mapM_ (putModule . S.ModuleName) repoModules
+              mapM_ (putModule . ModKey "." . S.ModuleName) repoModules
               mergeModules
                      [ModKey "." (S.ModuleName "Debian.Repo.AptCache"), ModKey "." (S.ModuleName "Debian.Repo.AptImage")]
                      (ModKey "." (S.ModuleName "Debian.Repo.Cache"))
@@ -32,7 +32,7 @@ test2 =
       do _ <- rsync "tests/data/debian" "tmp"
          _result <- runModuVerseT $
            do sourceDirs .= ["tmp"]
-              mapM_ (putModule . S.ModuleName) repoModules
+              mapM_ (putModule . ModKey "." . S.ModuleName) repoModules
               mergeModules
                      [ModKey "." (S.ModuleName "Debian.Repo.Types.Slice"),
                       ModKey "." (S.ModuleName "Debian.Repo.Types.Repo"),
@@ -47,7 +47,7 @@ test3 =
       do _ <- rsync "tests/data/debian" "tmp"
          _result <- withCurrentDirectory "tmp" $
                    runModuVerseT $
-           do mapM_ (putModule . S.ModuleName) repoModules
+           do mapM_ (putModule . ModKey "." . S.ModuleName) repoModules
               mergeModules
                      [ModKey "." (S.ModuleName "Debian.Repo.Types.Slice"),
                       ModKey "." (S.ModuleName "Debian.Repo.Types.Repo"),
@@ -61,7 +61,7 @@ test4 =
     TestCase $
       do _ <- rsync "tests/data/merge4" "tmp"
          _ <- withCurrentDirectory "tmp" $ runModuVerseT $
-              do mapM_ (putModule . S.ModuleName) ["In1", "In2", "M1"]
+              do mapM_ (putModule . ModKey "." . S.ModuleName) ["In1", "In2", "M1"]
                  mergeModules [ModKey "." (S.ModuleName "In1"), ModKey "." (S.ModuleName "In2")] (ModKey "." (S.ModuleName "Out"))
          (code, out, err) <- diff "tests/data/merge4-expected" "tmp"
          assertEqual "mergeModules4" (ExitSuccess, "", "") (code, out, err)
@@ -71,7 +71,7 @@ test5 =
     TestCase $
       do _ <- rsync "tests/data/merge5" "tmp"
          _ <- withCurrentDirectory "tmp" $ runModuVerseT $ noisily $ noisily $ noisily $
-              do List.mapM_ (putModule . S.ModuleName)
+              do List.mapM_ (putModule . ModKey "." . S.ModuleName)
                             ["Apt.AptIO", "Apt.AptIOT", "Apt.AptState",
                              "Apt.InitState", "Apt.Instances", "Apt.MonadApt"]
                  mergeModules [ModKey "." (S.ModuleName "Apt.AptIO"),

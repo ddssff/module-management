@@ -32,10 +32,11 @@ import Language.Haskell.Modules.Common
 import qualified Data.Set as S
 
 
-toMN = Language.Haskell.Modules.ModuleName . intercalate "." . components
+toMN = Language.Haskell.Modules.ModuleName () . intercalate "." . components
 
-fromMN (ModKey {unModName = Language.Haskell.Modules.ModuleName x}) =  fromString x
+fromMN (ModKey {_modName = Language.Haskell.Modules.ModuleName () x}) =  fromString x
 
+getModules :: GenericPackageDescription -> [Language.Haskell.Modules.ModuleName ()]
 getModules pkgDesc = map toMN $ toListOf tinplate pkgDesc
 getSrcDirs pkgDesc = hsSourceDirs =<< toListOf tinplate pkgDesc
 

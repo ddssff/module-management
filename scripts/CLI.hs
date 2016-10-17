@@ -22,7 +22,7 @@ import Distribution.PackageDescription (GenericPackageDescription)
 import Distribution.Package (InstalledPackageId(..))
 import qualified Distribution.Verbosity
 import GHC.Generics (Generic)
-import qualified Language.Haskell.Exts.Annotated as A (Decl)
+import qualified Language.Haskell.Exts as A (Decl)
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import Language.Haskell.Exts.Syntax (Name(Ident, Symbol))
 import qualified Language.Haskell.Exts.Syntax as S
@@ -159,7 +159,7 @@ compl conf (xs,ys) | cmd: _ <- words (reverse xs),
             | takesModuleNames cmd -> do
                 ns <- Set.fromList . map name_ . elems <$> use moduVerse
                 let complAllModules = map (simpleCompletion . moduleNameToStr) (Set.toList ns)
-                    nsLower = Set.map (ModuleName . map toLower . moduleNameToStr) ns
+                    nsLower = Set.map (ModuleName () . map toLower . moduleNameToStr) ns
                     transform
                         | caseSensitiveCompletion conf = id
                         | nsLower == ns = map toLower
@@ -170,7 +170,7 @@ compl conf (xs,ys) | cmd: _ <- words (reverse xs),
                                         (moduleNameToStr `map` Set.toList ns) of
                             -- this first case isn't really needed: it should do the same as the
                             -- next case but possibly be more efficient
-                            _ | ModuleName cw `Set.member` ns -> (rest, [simpleCompletion cw])
+                            _ | ModuleName () cw `Set.member` ns -> (rest, [simpleCompletion cw])
                             [modName] -> (rest, [simpleCompletion modName])
                             _ -> (rest, complAllModules)
                     _ -> (xs, complAllModules)
@@ -178,8 +178,8 @@ compl conf (xs,ys) | cmd: _ <- words (reverse xs),
         _ -> noCompletion (xs,ys)
 compl _ x = noCompletion x
 
-moduleNameToStr :: ModuleName -> String
-moduleNameToStr (ModuleName x) = x
+moduleNameToStr :: ModuleName () -> String
+moduleNameToStr (ModuleName () x) = x
 
 takesModuleNames :: String -> Bool
 takesModuleNames x = x `elem` ["merge"]
@@ -332,8 +332,8 @@ cabalRead [f] = throwIO . Callback "cabalRead" $ \next -> do
 
 cabalRead _ = liftIO $ putStrLn "Usage: cabalRead <file.cabal>"
 
-unModuleName :: ModuleName -> String
-unModuleName (ModuleName x) = x
+unModuleName :: ModuleName () -> String
+unModuleName (ModuleName () x) = x
 
 verse :: forall m. ModuVerse m => [String] -> m ()
 verse [] =
@@ -350,10 +350,10 @@ verse args =
       find s =
           do ms <- liftIO (findHsModules [s])
              case ms of
-               [] -> return [ModuleName s]
+               [] -> return [ModKey "." (ModuleName () s)]
                _ -> return ms
 
-showVerse :: Set ModuleName -> String
+showVerse :: Set (ModuleName ())-> String
 showVerse modules = "[ " ++ intercalate "\n  , " (map unModuleName (toList modules)) ++ " ]"
 
 dir :: ModuVerse m => [FilePath] -> m ()
@@ -380,11 +380,11 @@ split _ = liftIO $ putStrLn "Usage: split <modulepath>"
 splitBy :: [String] -> CmdM ()
 splitBy [regex, newModule, oldModule] = do
   r <- liftCT (do cleanMode .= DoClean
-                  keys <- (fmap Set.toList . Map.lookup (ModuleName oldModule)) <$> use moduleKeys
+                  keys <- (fmap Set.toList . Map.lookup (ModuleName () oldModule)) <$> use moduleKeys
                   case keys of
                     Nothing -> error $ "Module not found: " ++ show oldModule
                     Just [] -> error $ "Module not found: " ++ show oldModule
-                    Just [key] -> parseModule key >>= splitModuleBy pred
+                    Just [key] -> loadModule key >>= splitModuleBy pred
                     Just keys -> error $ "Module not found: " ++ show oldModule)
   lift (modify (Cabal.update r))
   return ()
@@ -394,11 +394,11 @@ splitBy [regex, newModule, oldModule] = do
           -- declarations not associated with symbols stay in
           -- oldModules (e.g. instances.)  Decarations of matching
           -- symbols go to newModule
-          let match1 sym = matchRegex (mkRegex regex) (case sym of Ident s -> s; Symbol s -> s)
+          let match1 sym = matchRegex (mkRegex regex) (case sym of Ident () s -> s; Symbol () s -> s)
               match = foldDeclared (\sym r -> r || isJust (match1 sym)) False decl
-              modname = ModuleName (if match then newModule else oldModule) in
+              modname = ModuleName () (if match then newModule else oldModule) in
           {- trace ("Symbol " ++ show name ++ " -> " ++ show modname ++ ", matchRegex (mkRegex " ++ show regex ++ ") -> " ++ show match)-}
-          key {unModName = modname}
+          key {_modName = modname}
 
 splitBy _ = liftIO $ putStrLn "Usage: splitBy <regexp> <newmodule> <oldmodule>"
 
@@ -407,6 +407,6 @@ merge args =
     case splitAt (length args - 1) args of
       (inputs, [output]) -> do
         r <- liftCT $ do cleanMode .= DoClean
-                         mergeModules (map (\x -> ModKey "." (ModuleName x)) inputs) (ModKey "." (ModuleName output))
+                         mergeModules (map (\x -> ModKey "." (ModuleName () x)) inputs) (ModKey "." (ModuleName () output))
         liftS (modify (Cabal.update r))
       _ -> liftIO $ putStrLn "Usage: merge <inputmodulename1> <inputmodulename2> ... <outputmodulename>"

@@ -9,10 +9,15 @@ module Language.Haskell.Modules.Symbols
     , imports
     ) where
 
+#if MIN_VERSION_haskell_src_exts(1,18,0)
+import qualified Language.Haskell.Exts.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), ExportSpec(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name, Pat(..), PatField(..), QName(..), QualConDecl(..), RPat(..))
+import qualified Language.Haskell.Exts.Syntax as A (InstRule(..))
+#else
 import Language.Haskell.Exts.Annotated.Simplify (sName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ClassDecl(..), ConDecl(..), Decl(..), DeclHead(..), ExportSpec(..), FieldDecl(..), GadtDecl(..), ImportSpec(..), InstHead(..), Match(..), Name, Pat(..), PatField(..), QName(..), QualConDecl(..), RPat(..))
-import qualified Language.Haskell.Exts.Syntax as S (CName(..), ExportSpec(..), ImportSpec(..), Name(..), QName(..))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (InstRule(..))
+#endif
+import qualified Language.Haskell.Exts.Syntax as S (CName(..), ExportSpec(..), ImportSpec(..), Name(..), QName(..), EWildcard(NoWildcard))
 
 -- | Do a fold over the names that are declared in a declaration (not
 -- every name that appears, just the ones that the declaration is
@@ -20,12 +25,12 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as A (InstRule(..))
 -- argument takes a Maybe because some declarations don't cause a
 -- symbol to become bound - instances, for example.
 class FoldDeclared a where
-    foldDeclared :: forall r. (S.Name -> r -> r) -> r -> a -> r
+    foldDeclared :: forall r. (S.Name () -> r -> r) -> r -> a -> r
 
 instance FoldDeclared (A.Decl a) where
     foldDeclared f r (A.TypeDecl _ x _t) = foldDeclared f r x  -- type x = ...
-    foldDeclared f r (A.TypeFamDecl _ x _k) = foldDeclared f r x -- data family x = ...
-    foldDeclared f r (A.ClosedTypeFamDecl _ x _k _ts) = foldDeclared f r x -- data family x = ...
+    foldDeclared f r (A.TypeFamDecl _ x _ _) = foldDeclared f r x -- data family x = ...
+    foldDeclared f r (A.ClosedTypeFamDecl _ x _ _ _) = foldDeclared f r x -- data family x = ...
     foldDeclared f r (A.DataDecl _ _ _ x _ _) = foldDeclared f r x -- data/newtype _ x = ...
     foldDeclared f r (A.GDataDecl _ _ _ x _ _ _) = foldDeclared f r x
     foldDeclared f r (A.DataFamDecl _ _ x _) = foldDeclared f r x
@@ -65,8 +70,8 @@ instance FoldDeclared (A.DeclHead a) where
 instance FoldDeclared (A.ClassDecl a) where
     foldDeclared f r (A.ClsDecl _ x) = foldDeclared f r x       -- ordinary declaration
     foldDeclared f r (A.ClsDataFam _ _ x _) = foldDeclared f r x        -- declaration of an associated data type
-    foldDeclared f r (A.ClsTyFam _ x _) = foldDeclared f r x    -- declaration of an associated type synonym
-    foldDeclared _ r (A.ClsTyDef _ _ _) = r -- default choice for an associated type synonym
+    foldDeclared f r (A.ClsTyFam _ x _ _) = foldDeclared f r x    -- declaration of an associated type synonym
+    foldDeclared _ r (A.ClsTyDef _ _) = r -- default choice for an associated type synonym
     foldDeclared f r (A.ClsDefSig _ x _) = foldDeclared f r x -- default signature
 instance FoldDeclared (A.InstHead a) where
     foldDeclared f r (A.IHCon _ x) = foldDeclared f r x
@@ -123,7 +128,7 @@ instance FoldDeclared (A.RPat a) where
     foldDeclared f r (A.RPPat _ x) = foldDeclared f r x -- an ordinary pattern
 
 instance FoldDeclared (A.Name l) where
-    foldDeclared f r x = f (sName x) r
+    foldDeclared f r x = f (fmap (const ()) x) r
 
 -- Something imported can be exported
 instance FoldDeclared (A.ImportSpec l) where
@@ -136,41 +141,43 @@ instance FoldDeclared (A.ImportSpec l) where
 instance FoldDeclared (A.ExportSpec l) where
     foldDeclared f r (A.EVar _ name) = foldDeclared f r name
     foldDeclared f r (A.EAbs _ _ name) = foldDeclared f r name
+#if !MIN_VERSION_haskell_src_exts(1,18,0)
     foldDeclared f r (A.EThingAll _ name) = foldDeclared f r name
-    foldDeclared f r (A.EThingWith _ name _) = foldDeclared f r name
+#endif
+    foldDeclared f r (A.EThingWith _ _ name _) = foldDeclared f r name
     foldDeclared _ r (A.EModuleContents _ _) = r -- This probably won't work correctly
 
 -- Return the set of symbols appearing in a construct.  Some
 -- constructs, such as instance declarations, declare no symbols, in
 -- which case Nothing is returned.  Some declare more than one.
-symbolsDeclaredBy :: FoldDeclared a => a -> [S.Name]
+symbolsDeclaredBy :: FoldDeclared a => a -> [S.Name ()]
 symbolsDeclaredBy = reverse . foldDeclared (:) mempty
 
-members :: FoldMembers a => a -> [S.Name]
+members :: FoldMembers a => a -> [S.Name ()]
 members = foldMembers (:) mempty
 
-exports :: (FoldDeclared a, FoldMembers a) => a -> [S.ExportSpec]
+exports :: (FoldDeclared a, FoldMembers a) => a -> [S.ExportSpec ()]
 exports x = case (symbolsDeclaredBy x, members x) of
-              ([n], []) -> [S.EVar (S.UnQual n)]
-              ([n], ms) -> [S.EThingWith (S.UnQual n) (Prelude.map S.VarName ms)]
+              ([n], []) -> [S.EVar () (S.UnQual () n)]
+              ([n], ms) -> [S.EThingWith () (S.NoWildcard ()) (S.UnQual () n) (Prelude.map (S.VarName ()) ms)]
               ([], []) -> []
               ([], _) -> error "exports: members with no top level name"
-              (ns, []) -> Prelude.map (S.EVar . S.UnQual) ns
+              (ns, []) -> Prelude.map (S.EVar () . S.UnQual ()) ns
               y -> error $ "exports: multiple top level names and member names: " ++ show y
 
-imports :: (FoldDeclared a, FoldMembers a) => a -> [S.ImportSpec]
+imports :: (FoldDeclared a, FoldMembers a) => a -> [S.ImportSpec ()]
 imports x = case (symbolsDeclaredBy x, members x) of
-              ([n], []) -> [S.IVar n]
-              ([n], ms) -> [S.IThingWith n (Prelude.map S.VarName ms)]
+              ([n], []) -> [S.IVar () n]
+              ([n], ms) -> [S.IThingWith () n (Prelude.map (S.VarName ()) ms)]
               ([], []) -> []
               ([], _ms) -> error "exports: members with no top level name"
-              (ns, []) -> Prelude.map S.IVar ns
+              (ns, []) -> Prelude.map (S.IVar ()) ns
               y -> error $ "imports: multiple top level names and member names: " ++ show y
 
 -- | Fold over the declared members - e.g. the method names of a class
 -- declaration, the constructors of a data declaration.
 class FoldMembers a where
-    foldMembers :: forall r. (S.Name -> r -> r) -> r -> a -> r
+    foldMembers :: forall r. (S.Name () -> r -> r) -> r -> a -> r
 
 instance FoldMembers (A.Decl a) where
     foldMembers f r (A.ClassDecl _ _ _ _ mxs) = maybe r (foldl (foldDeclared f) r) mxs  -- class context => x | fundeps where decls

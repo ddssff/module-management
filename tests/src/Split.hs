@@ -8,7 +8,7 @@ import qualified Language.Haskell.Exts.Annotated.Syntax as A -- (Decl)
 import Language.Haskell.Exts.Annotated.Simplify
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName(..), Name(Ident))
-import Language.Haskell.Modules.ModuVerse (CleanMode(DoClean), cleanMode)
+import Language.Haskell.Modules.ModuVerse (CleanMode(DoClean), cleanMode, parseModule)
 import Language.Haskell.Modules (ModKey(..), noisily, putHsSourceDirs, putModule, runModuVerseT, splitModule, splitModuleBy, withCurrentDirectory, findHsModules, extraImport)
 import Language.Haskell.Modules.Symbols (foldDeclared)
 import Language.Haskell.Modules.Util.Test (diff, repoModules, rsync)
@@ -34,8 +34,9 @@ split1 =
          _ <- runModuVerseT $ noisily $ noisily $
            do cleanMode .= DoClean
               putHsSourceDirs [tmp]
-              mapM_ putModule [S.ModuleName "Split1"]
-              splitModule f (tmp </> "Split1.hs")
+              info <- parseModule (tmp </> "Split1.hs")
+              -- putModule (ModKey tmp (S.ModuleName "Split1"))
+              splitModuleBy f info
          (code, out, err) <- diff "tests/data/split1-expected" tmp
          assertString (indent "  " $
                        (if code == ExitSuccess then "" else "Unexpected exit code: " ++ show code ++ "\n") ++
@@ -94,7 +95,7 @@ split4b =
     do _ <- rsync "tests/data/split4" tmp
        _ <- withCurrentDirectory tmp $
          runModuVerseT $ noisily $ noisily $
-           putModule (S.ModuleName "Split4") >>
+           putModule (ModKey tmp (S.ModuleName "Split4")) >>
            splitModule f "Split4.hs"
        result <- diff "tests/data/split4b-expected" tmp
        assertEqual "split4b" (ExitSuccess, "", "") result
@@ -110,7 +111,7 @@ split4c =
     do _ <- rsync "tests/data/split4" tmp
        _ <- withCurrentDirectory tmp $
          runModuVerseT $ noisily $ noisily $
-           putModule (S.ModuleName "Split4") >>
+           putModule (ModKey tmp (S.ModuleName "Split4")) >>
            splitModule f "Split4.hs"
        result <- diff "tests/data/split4c-expected" tmp
        assertEqual "split4c" (ExitSuccess, "", "") result
@@ -126,7 +127,7 @@ split5 =
     do _ <- rsync "tests/data/split5" tmp
        _ <- withCurrentDirectory tmp $
          runModuVerseT $ noisily $ noisily $
-           List.mapM_ (putModule . S.ModuleName) ["A", "B", "C", "D", "E"] >>
+           List.mapM_ (putModule . ModKey tmp . S.ModuleName) ["A", "B", "C", "D", "E"] >>
            splitModuleDecls DoClean "B.hs"
        result <- diff "tests/data/split5-expected" tmp
        assertEqual "split5" (ExitSuccess, "", "") result
@@ -153,7 +154,7 @@ split7 =
     TestLabel "split7" $ TestCase $
     do _ <- rsync "tests/data/fold3b" tmp
        _ <- withCurrentDirectory tmp $ runModuVerseT $
-            do putModule (S.ModuleName "Main")
+            do putModule (ModKey "." (S.ModuleName "Main"))
                extraImport (S.ModuleName "Main.GetPasteById") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.GetRecentPastes") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.InitialCtrlVState") (S.ModuleName "Main.Instances")
@@ -195,7 +196,7 @@ split7b =
     TestLabel "split7b" $ TestCase $
     do _ <- rsync "tests/data/fold3b" tmp
        _ <- withCurrentDirectory tmp $ runModuVerseT $
-            do putModule (S.ModuleName "Main")
+            do putModule (ModKey "." (S.ModuleName "Main"))
                extraImport (S.ModuleName "Main.GetPasteById") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.GetRecentPastes") (S.ModuleName "Main.Instances")
                extraImport (S.ModuleName "Main.InitialCtrlVState") (S.ModuleName "Main.Instances")

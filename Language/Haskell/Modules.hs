@@ -102,7 +102,6 @@ module Language.Haskell.Modules
     , ModKey(..)
     , SourceDirs(getHsSourceDirs, putHsSourceDirs)
     , findHsModules
-    , findHsFiles
     , withCurrentDirectory
     , CleanMode(DoClean, NoClean)
     , RelPath(unRelPath)
@@ -120,4 +119,4 @@ import Language.Haskell.Modules.ModuVerse {-(CleanT, extraImport, modifyDryRun, 
 import Language.Haskell.Modules.SourceDirs (modulePathBase, ModKey(..), SourceDirs(getHsSourceDirs, putHsSourceDirs), RelPath(..))
 import Language.Haskell.Modules.Split (splitModule, splitModuleBy)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
-import Language.Haskell.Modules.Util.Test (findHsFiles, findHsModules) -- (findHsFiles, findHsModules)
+import Language.Haskell.Modules.Util.Test (findHsModules) -- (findHsFiles, findHsModules)

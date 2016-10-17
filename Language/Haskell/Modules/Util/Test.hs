@@ -5,15 +5,16 @@ module Language.Haskell.Modules.Util.Test
     , diff'
     , rsync
     , findHsModules
-    , findHsFiles
     ) where
 
-import Control.Monad (foldM)
-import Data.List as List (filter, isPrefixOf, isSuffixOf, map)
+import Data.List as List (filter, isPrefixOf, map)
 import Language.Haskell.Exts.Syntax (ModuleName(..))
-import System.Directory (doesDirectoryExist, doesFileExist, getDirectoryContents)
+import Language.Haskell.Modules.Common (withCurrentDirectory)
+import Language.Haskell.Modules.SourceDirs (ModKey(..))
+import System.Directory (getCurrentDirectory, setCurrentDirectory)
 import System.Exit (ExitCode)
-import System.FilePath ((</>))
+import System.FilePath (joinPath, splitPath)
+import System.FilePath.Find ((==?), (&&?), always, extension, fileType, FileType(RegularFile), find)
 import System.Process (readProcess, readProcessWithExitCode)
 
 repoModules :: [String]
@@ -117,28 +118,20 @@ rsync :: FilePath -> FilePath -> IO ()
 rsync a b = readProcess "rsync" ["-aHxS", "--delete", a ++ "/", b] "" >> return ()
 
 -- | Find the paths of all the files below the directory @top@.
-findHsFiles :: [FilePath] -> IO [FilePath]
-findHsFiles tops =
-    foldM doPath [] tops
-    where
-      doPath r path =
-          do dir <- doesDirectoryExist path
-             reg <- doesFileExist path
-             case () of
-               _ | dir -> doDirectory r path
-               _ | reg && isSuffixOf ".hs" path -> return (path : r)
-               _ -> return r
-      doDirectory r path =
-          getDirectoryContents path >>= foldM doPath r . List.map (path </>) . filter (\ x -> x /= "." && x /= "..")
-
 -- | Convenience function for building the moduVerse, searches for
 -- modules in a directory hierarchy.  FIXME: This should be in
 -- ModuVerse and use the value of sourceDirs to remove prefixes from
 -- the module paths.  And then it should look at the module text to
 -- see what the module name really is.
-findHsModules :: [FilePath] -> IO [ModuleName]
-findHsModules tops =
-    findHsFiles tops >>= return . List.map asModuleName
+findHsModules :: [FilePath] -> IO [ModKey]
+findHsModules tops = do
+  concat <$> mapM doTop tops
     where
-      asModuleName path =
-          ModuleName (List.map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))
+      doTop top = do
+        files <- withCurrentDirectory top (find always (extension ==? ".hs" &&? fileType ==? RegularFile) ".")
+        pure $ map (ModKey top . asModuleName . joinPath . filter (/= ".") . splitPath) files
+
+asModuleName :: FilePath -> ModuleName ()
+asModuleName path =
+    -- Subtract 3 for the ".hs"
+    ModuleName () (List.map (\ c -> if c == '/' then '.' else c) (take (length path - 3) path))

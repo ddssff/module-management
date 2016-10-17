@@ -16,7 +16,11 @@ import Control.Monad.State (get, put, runState, State)
 import Data.List (groupBy, partition, sort)
 import Data.Set (Set, toList)
 import Data.Tree (Tree(Node), unfoldTree)
+#if MIN_VERSION_haskell_src_exts(1,18,0)
+import qualified Language.Haskell.Exts.Syntax as A (Decl(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ModuleHead(..), ModuleName(..), ModulePragma(..), WarningText(..))
+#else
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(..), ExportSpec(..), ExportSpecList(..), ImportDecl(ImportDecl), ModuleHead(..), ModuleName(..), ModulePragma(..), WarningText(..))
+#endif
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import Prelude hiding (rem)
 
@@ -85,8 +89,10 @@ instance HasSpanInfo ExportSpecList where
 instance HasSpanInfo ExportSpec where
     spanInfo (A.EVar x _) = x
     spanInfo (A.EAbs x _ _) = x
+#if !MIN_VERSION_haskell_src_exts(1,18,0)
     spanInfo (A.EThingAll x _) = x
-    spanInfo (A.EThingWith x _ _) = x
+#endif
+    spanInfo (A.EThingWith x _ _ _) = x
     spanInfo (A.EModuleContents x _) = x
 
 instance HasSpanInfo ImportDecl where
@@ -94,7 +100,7 @@ instance HasSpanInfo ImportDecl where
 
 instance HasSpanInfo Decl where
     spanInfo (A.TypeDecl l _ _) = l
-    spanInfo (A.TypeFamDecl l _ _) = l
+    spanInfo (A.TypeFamDecl l _ _ _) = l
     spanInfo (A.DataDecl l _ _ _ _ _) = l
     spanInfo (A.GDataDecl l _ _ _ _ _ _) = l
     spanInfo (A.DataFamDecl l _ _ _) = l
@@ -121,7 +127,7 @@ instance HasSpanInfo Decl where
     spanInfo (A.SpecInlineSig l _ _ _ _) = l
     spanInfo (A.InstSig l _) = l
     spanInfo (A.AnnPragma l _) = l
-    spanInfo (A.ClosedTypeFamDecl l _ _ _) = l
+    spanInfo (A.ClosedTypeFamDecl l _ _ _ _) = l
     spanInfo (A.MinimalPragma l _) = l
     spanInfo (A.PatSynSig l _ _ _ _ _) = l
     spanInfo (A.PatSyn l _ _ _) = l

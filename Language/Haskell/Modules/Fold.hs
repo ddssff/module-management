@@ -29,7 +29,11 @@ import Data.List (tails)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, (|>))
 --import Debug.Trace (trace)
+#if MIN_VERSION_haskell_src_exts(1,18,0)
+import qualified Language.Haskell.Exts.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
+#else
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
+#endif
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
@@ -204,7 +208,7 @@ data ModuleInfo
       , modtext_ :: String
       , comments_ :: [Comment]
       , key_ :: ModKey
-      , name_ :: S.ModuleName }
+      , name_ :: S.ModuleName () }
     deriving (Eq, Ord, Show)
 
 data St2 r

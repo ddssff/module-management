@@ -15,16 +15,20 @@ import Data.Maybe (fromMaybe, isJust, mapMaybe)
 import Data.Monoid ((<>))
 import Data.Sequence as Seq ((<|), null, Seq, (|>))
 import Data.Set as Set (fromList, toList, union)
+#if MIN_VERSION_haskell_src_exts(1,18,0)
+import qualified Language.Haskell.Exts.Syntax as A (ImportDecl(ImportDecl), Module(Module), ModuleHead(ModuleHead))
+#else
 import Language.Haskell.Exts.Annotated.Simplify (sDecl, sImportDecl, sModuleName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (ImportDecl(ImportDecl), Module(Module), ModuleHead(ModuleHead))
+#endif
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import Language.Haskell.Exts.SrcLoc (SrcInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, importModule), ModuleName(..))
 import Language.Haskell.Modules.Common (doResult, fixExport, ModuleResult(..), reportResult)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse ({-moduleKey, modulesNew, modulesOrig,-} moduVerse, ModuVerse, parseModule, parseModuleMaybe)
-import Language.Haskell.Modules.SourceDirs (ModKey(unModName), modKey, modKeyMaybe)
+import Language.Haskell.Modules.ModuVerse ({-moduleKey, modulesNew, modulesOrig,-} loadModule, loadModuleMaybe, moduVerse, ModuVerse, parseModule, parseModuleMaybe)
+import Language.Haskell.Modules.SourceDirs (ModKey(_modName), modKey, modKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
 import Text.PrettyPrint.HughesPJClass (prettyShow)
 
@@ -57,10 +61,10 @@ doModule inNames@(_ : _) outName thisName =
     do -- The new module will be based on the first input module,
        -- though its name will be changed to outModule.
        inInfo@(firstInfo : _) <-
-           List.mapM (\ key -> modKey key >>= parseModule) inNames
+           List.mapM (\ key -> modKey key >>= loadModule) inNames
              `IO.catch` (\ (_ :: IOError) -> error $ "mergeModules - failure reading input modules: " ++ show inNames)
-       outInfo <- modKeyMaybe ({-modulePathBase "hs"-} outName) >>= parseModuleMaybe
-       thisInfo <- modKeyMaybe ({-modulePathBase "hs"-} thisName) >>= parseModuleMaybe
+       outInfo <- modKeyMaybe ({-modulePathBase "hs"-} outName) >>= maybe (pure Nothing) loadModuleMaybe
+       thisInfo <- modKeyMaybe ({-modulePathBase "hs"-} thisName) >>= maybe (pure Nothing) loadModuleMaybe
        let baseInfo@(ModuleInfo {module_ = A.Module _ _ _ _ _}) = fromMaybe firstInfo thisInfo
        when (isJust outInfo && notElem outName inNames) (error "mergeModules - if output module exist it must also be one of the input modules")
        case (thisName /= outName, List.find (\ x -> key_ x == thisName) inInfo) of 
@@ -114,11 +118,11 @@ moduleImports :: SrcInfo loc =>
                  [ModKey] -> ModKey -> ModKey
               -> A.ImportDecl loc -> String -> String -> String -> Seq String -> Seq String
 moduleImports inKeys outKey thisKey x pref s suff r =
-    case sImportDecl x of
+    case fmap (const ()) x of
       (S.ImportDecl {S.importModule = name})
-          | notElem name (map unModName inKeys) -> r |> pref <> s <> suff
+          | notElem name (map _modName inKeys) -> r |> pref <> s <> suff
           | thisKey == outKey -> r
-      x' -> r |> pref <> prettyPrint (x' {S.importModule = unModName outKey}) <> suff
+      x' -> r |> pref <> prettyPrint (x' {S.importModule = _modName outKey}) <> suff
 
 -- | Grab the declarations out of the old modules, fix any
 -- qualified symbol references, prettyprint and return.
@@ -133,27 +137,27 @@ moduleImports inKeys outKey thisKey x pref s suff r =
 moduleDecls :: [ModKey] -> ModKey -> ModKey -> ModuleInfo -> String
 moduleDecls inKeys outKey thisKey info@(ModuleInfo (A.Module _ _ _ imports _) _ _ _ _) =
     -- Get the import list for this module
-    let inNames = map unModName inKeys ++ if thisKey == outKey then mapMaybe qualifiedImportName imports else [] in
+    let inNames = map _modName inKeys ++ if thisKey == outKey then mapMaybe qualifiedImportName imports else [] in
     fold (foldDecls (\ d pref s suff r ->
-                         let d' = sDecl d
-                             d'' = fixReferences inNames (unModName outKey) d' in
+                         let d' = fmap (const ()) d
+                             d'' = fixReferences inNames (_modName outKey) d' in
                          r |> pref <> (if d'' /= d' then prettyPrint d'' else s) <> suff)
                     echo2 info mempty)
     where
       -- Looking at an import, augment the map with the "as" name of a
       -- qualified import.  module and that module's info.
-      qualifiedImportName :: A.ImportDecl l -> Maybe S.ModuleName
+      qualifiedImportName :: A.ImportDecl l -> Maybe (S.ModuleName ())
       qualifiedImportName (A.ImportDecl _ m _ _ _ _ (Just a) _specs) =
-          case elem (sModuleName m) (map unModName inKeys) of
-            True -> Just (sModuleName a)
+          case elem (fmap (const ()) m) (map _modName inKeys) of
+            True -> Just (fmap (const ()) a)
             _ -> Nothing
       qualifiedImportName _ = Nothing
 moduleDecls _ _ _ (ModuleInfo m _ _ _ _) = error $ "Unsupported module type: " ++ show m
 
 -- | Change any ModuleName in 'old' to 'new'.
-fixReferences :: (Data a, Typeable a) => [S.ModuleName] -> S.ModuleName -> a -> a
+fixReferences :: (Data a, Typeable a) => [S.ModuleName ()] -> S.ModuleName () -> a -> a
 fixReferences oldNames new x =
     everywhere (mkT moveModuleName) x
     where
-      moveModuleName :: S.ModuleName -> S.ModuleName
-      moveModuleName name@(S.ModuleName _) = if elem name oldNames then new else name
+      moveModuleName :: S.ModuleName () -> S.ModuleName ()
+      moveModuleName name@(S.ModuleName () _) = if elem name oldNames then new else name

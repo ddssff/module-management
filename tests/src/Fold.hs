@@ -28,8 +28,8 @@ tests = TestLabel "Clean" (TestList [{-test1, test1b,-} test3a, fold3b, fold3c, 
 test3 :: Test
 test3 =
     TestLabel "test3" $ TestCase $ withCurrentDirectory "tests/data" $
-    do let path = AHsDir "Equal.hs"
-       mi <- runModuVerseT $ modKey path >>= parseModule
+    do let path = "Equal.hs"
+       mi <- runModuVerseT $ parseModule path
        let (output, original) = test mi
        assertEqual "echo" original output
     where
@@ -39,8 +39,8 @@ test3 =
 test3a :: Test
 test3a =
     TestLabel "test3a" $ TestCase $ withCurrentDirectory "tests/data" $
-    do let path = AHsDir "imports7/CLI.hs"
-       mi <- runModuVerseT $ modKey path >>= parseModule
+    do let path = "imports7/CLI.hs"
+       mi <- runModuVerseT $ parseModule path
        let syms = test mi
        assertEqual "Equal.hs symbols" expected syms
     where
@@ -116,8 +116,8 @@ test3a =
 fold3b :: Test
 fold3b =
     TestLabel "fold3b" $ TestCase $ withCurrentDirectory "tests/data" $
-    do let path = AHsDir "fold3b/Main.hs"
-       mi <- runModuVerseT $ modKey path >>= parseModule
+    do let path = "fold3b/Main.hs"
+       mi <- runModuVerseT $ parseModule path
        let (output, original) = test mi
        assertEqual "echo" original output
     where
@@ -127,8 +127,8 @@ fold3b =
 fold3c :: Test
 fold3c =
     TestLabel "fold3c" $ TestCase $
-    do let path = AHsDir "tests/data/fold9.hs"
-       mi <- runModuVerseT $ modKey path >>= parseModule
+    do let path = "tests/data/fold9.hs"
+       mi <- runModuVerseT $ parseModule path
        let (output, original) = test mi
        assertEqual "echo" original output
     where
@@ -138,8 +138,8 @@ fold3c =
 test5 :: Test
 test5 =
     TestLabel "fold5" $ TestCase $
-    do let path = AHsDir "tests/data/fold5.hs" -- "tests/data/logic/Data/Logic/Classes/Literal.hs"
-       mi <- runModuVerseT $ modKey path >>= parseModule
+    do let path = "tests/data/fold5.hs" -- "tests/data/logic/Data/Logic/Classes/Literal.hs"
+       mi <- runModuVerseT $ parseModule path
        -- let actual = map f (adjustSpans text comments (spans m))
        -- assertEqual "spans" original actual
        let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) mi []
@@ -152,8 +152,8 @@ test5 =
 test5b :: Test
 test5b =
     TestLabel "test5b" $ TestCase $
-    do let path = AHsDir "tests/data/logic/Data/Logic/Classes/Literal.hs"
-       mi <- runModuVerseT $ modKey path >>= parseModule
+    do let path = "tests/data/logic/Data/Logic/Classes/Literal.hs"
+       mi <- runModuVerseT $ parseModule path
        let actual = foldDecls (\ _ a b c r -> r ++ [(a, b, c)]) (\ s r -> r ++ [("", s, "")]) mi []
        assertEqual "spans" expected actual
     where
@@ -212,7 +212,7 @@ test4 = TestCase (assertEqual "test4" (SrcLoc "<unknown>.hs" 2 24 < SrcLoc "<unk
 test7 :: Test
 test7 =
     TestCase $
-    do mi <- runModuVerseT $ modKey (AHsDir "tests/data/Fold7.hs") >>= parseModule
+    do mi <- runModuVerseT $ parseModule "tests/data/Fold7.hs"
        let actual = foldModule (\ s r -> r |> (s, "", ""))
                                (\ _ b s a r -> r |> (b, s, a))
                                (\ _ b s a r -> r |> (b, s, a))

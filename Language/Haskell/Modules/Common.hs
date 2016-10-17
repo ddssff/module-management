@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns, CPP, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.Common
     ( groupBy'
@@ -9,6 +9,7 @@ module Language.Haskell.Modules.Common
     , fixExport
     ) where
 
+import Debug.Trace
 import Control.Exception.Lifted as IO (bracket, catch, throw)
 import Control.Lens ((%=))
 --import Control.Monad (when)
@@ -18,8 +19,12 @@ import Data.List (groupBy, sortBy)
 import Data.Map as Map (delete)
 import Data.Monoid ((<>))
 import Data.Sequence as Seq (Seq, (|>))
+#if MIN_VERSION_haskell_src_exts(1,18,0)
+import qualified Language.Haskell.Exts as A (ExportSpec)
+#else
 import qualified Language.Haskell.Exts.Annotated as A (ExportSpec)
 import Language.Haskell.Exts.Annotated.Simplify (sExportSpec)
+#endif
 import Language.Haskell.Exts.Pretty (prettyPrint)
 import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents))
 import Language.Haskell.Modules.ModuVerse (ModuVerse, putModuleAnew, unloadModule, moduVerse {-modulesOrig, moduleKey, modulesNew-})
@@ -78,7 +83,7 @@ doResult x@(Unchanged _) =
        return x
 doResult (ToBeRemoved key) =
     do -- qLnPutStr ("removing: " ++ prettyPrint name)
-       let path = unModKey key
+       let path = _modKey key
        unloadModule key
        -- I think this event handler is redundant.
        removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
@@ -87,7 +92,7 @@ doResult (ToBeRemoved key) =
 
 doResult (ToBeModified key text) =
     do -- qLnPutStr ("modifying: " ++ prettyPrint name)
-       let path = unModKey key
+       let path = _modKey key
        -- qLnPutStr ("modifying " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
@@ -95,7 +100,7 @@ doResult (ToBeModified key text) =
        return $ JustModified key
 
 doResult (ToBeCreated key text) =
-    do -- qLnPutStr ("creating: " ++ prettyPrint name)
+    do trace ("creating: " ++ show key) (return ())
        Just (path, _name) <- findFileMaybe key
        -- when (name /= name') (qLnPutStr ("Module name mismatch: " ++ show name ++ " vs. " ++ show name'))
        -- qLnPutStr ("creating " ++ show path)
@@ -113,12 +118,12 @@ doResult x@(JustRemoved {}) = return x
 fixExport :: [ModKey] -> ModKey -> ModKey
           -> A.ExportSpec l -> String -> String -> String -> Seq String -> Seq String
 fixExport inKeys outKey thisKey e pref s suff r =
-    case sExportSpec e of
-      S.EModuleContents name
+    case fmap (const ()) e of
+      S.EModuleContents () name
           -- when building the output module, omit re-exports of input modules
-          | thisKey == outKey && elem name (map unModName inKeys) -> r
+          | thisKey == outKey && elem name (map _modName inKeys) -> r
           -- when building other modules, update re-exports of input
           -- modules to be a re-export of the output module.
-          | elem name (map unModName inKeys) -> r |> pref <> prettyPrint (S.EModuleContents (unModName outKey)) <> suff
+          | elem name (map _modName inKeys) -> r |> pref <> prettyPrint (S.EModuleContents () (_modName outKey)) <> suff
           -- Anything else is unchanged
       _ -> r |> pref <> s <> suff

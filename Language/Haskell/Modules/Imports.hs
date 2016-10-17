@@ -16,18 +16,23 @@ import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid ((<>))
 import Data.Sequence ((|>))
 import Data.Set as Set (empty, fromList, map, member, Set, singleton, toList, union, unions)
+#if MIN_VERSION_haskell_src_exts(1,18,0)
+import qualified Language.Haskell.Exts.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleHead(..), ModuleName(..), QName(..), Type(..))
+import qualified Language.Haskell.Exts.Syntax as A (InstRule(..))
+#else
 import Language.Haskell.Exts.Annotated.Simplify as S (sImportDecl, sImportSpec, sModuleName, sName)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl(DerivDecl), ImportDecl(..), ImportSpec(..), ImportSpecList(ImportSpecList), InstHead(..), Module(..), ModuleHead(..), ModuleName(..), QName(..), Type(..))
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (InstRule(..))
+#endif
 import Language.Haskell.Exts.Extension (Extension(..))
 import Language.Haskell.Exts.Pretty (defaultMode, PPHsMode(layout), PPLayout(PPInLine), prettyPrintWithMode)
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
-import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
+import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importAnn, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (ModuleResult(..))
 import Language.Haskell.Modules.FoldM (foldDeclsM, foldExportsM, foldHeaderM, foldImportsM, ModuleInfo(..))
 import Language.Haskell.Modules.ModuVerse (cleanMode, getExtensions, loadModule, ModuVerse, parseModule,
                                            markForDelete, hsFlags, removeEmptyImports, scratchDir, CleanMode(..))
-import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, modKey, AHsDir(..), ModKey(..), ModKey(unModKey), SourceDirs(getHsSourceDirs, putHsSourceDirs))
+import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, modKey, AHsDir(..), ModKey(..), ModKey(_modKey), SourceDirs(getHsSourceDirs, putHsSourceDirs))
 import Language.Haskell.Modules.SrcLoc (srcLoc)
 import Language.Haskell.Modules.Symbols (symbolsDeclaredBy)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
@@ -82,7 +87,7 @@ cleanImports :: ModuVerse m => [FilePath] -> m [ModuleResult]
 cleanImports paths =
     do keys <- mapM (modKey . AHsDir) paths >>= return . fromList
        dumpImports keys
-       mapM (\ key -> parseModule key >>= checkImports) (toList keys)
+       mapM (\ key -> loadModule key >>= checkImports) (toList keys)
 
 -- | Do import cleaning in response to the values returned by the
 -- split and merge operations.  Module import lists are cleaned if the
@@ -132,7 +137,7 @@ dumpImports keys =
        let args' = args ++
                    ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs] ++
                    concatMap ppExtension exts ++
-                   Set.toList (Set.map unModKey keys)
+                   Set.toList (Set.map _modKey keys)
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
          ExitSuccess -> {-quietly (qLnPutStr (showCommandForUser cmd args' ++ " -> Ok")) >>-} return ()
@@ -160,7 +165,7 @@ checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _ _) =
        markForDelete importsPath
        (ModuleInfo newImports _ _ _ _) <-
            withDot $
-               (parseModule (ModKey importsPath (S.ModuleName name))
+               (loadModule (ModKey importsPath (S.ModuleName () name))
                   `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here ->
                                                           throw . userError $ here ++ ": " ++ show e)))
        updateSource info newImports extraImports
@@ -185,7 +190,7 @@ updateSource m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ key _) (A.Module _ 
        maybe ({-qLnPutStr ("cleanImports: no changes to " ++ show key) >>-} return (Unchanged key))
              (\ text' ->
                   -- qLnPutStr ("cleanImports: modifying " ++ show key) >>
-                  replaceFile tildeBackup (unModKey key) text' >>
+                  replaceFile tildeBackup (_modKey key) text' >>
                   return (JustModified key))
              newImports'
 updateSource _ _ _ = error "updateSource"
@@ -238,9 +243,9 @@ fixNewImports remove m oldImports imports =
           i {A.importSpecs = Just (A.ImportSpecList l f (Prelude.map (expandSpec i) specs))}
       expandSDTypes i = i
       expandSpec i s =
-          if not (A.importQualified i) && member (Nothing, sName n) sdTypes ||
-             maybe False (\ mn -> (member (Just (sModuleName mn), sName n) sdTypes)) (A.importAs i) ||
-             member (Just (sModuleName (A.importModule i)), sName n) sdTypes
+          if not (A.importQualified i) && member (Nothing, fmap (const ()) n) sdTypes ||
+             maybe False (\ mn -> (member (Just (fmap (const ()) mn), fmap (const ()) n) sdTypes)) (A.importAs i) ||
+             member (Just (fmap (const ()) (A.importModule i)), fmap (const ()) n) sdTypes
           then s'
           else s
           where
@@ -264,10 +269,10 @@ fixNewImports remove m oldImports imports =
             isEmptyImport _ = False
       importPred _ = True
 
-      sdTypes :: Set (Maybe S.ModuleName, S.Name)
+      sdTypes :: Set (Maybe (S.ModuleName ()), S.Name ())
       sdTypes = standaloneDerivingTypes m
 
-standaloneDerivingTypes :: ModuleInfo -> Set (Maybe S.ModuleName, S.Name)
+standaloneDerivingTypes :: ModuleInfo -> Set (Maybe (S.ModuleName ()), S.Name ())
 standaloneDerivingTypes (ModuleInfo (A.XmlPage _ _ _ _ _ _ _) _ _ _ _) = error "standaloneDerivingTypes A.XmlPage"
 standaloneDerivingTypes (ModuleInfo (A.XmlHybrid _ _ _ _ _ _ _ _ _) _ _ _ _) = error "standaloneDerivingTypes A.XmlHybrid"
 standaloneDerivingTypes (ModuleInfo (A.Module _ _ _ _ decls) _ _ _ _) =
@@ -275,7 +280,7 @@ standaloneDerivingTypes (ModuleInfo (A.Module _ _ _ _ decls) _ _ _ _) =
 
 -- | Collect the declared types of a standalone deriving declaration.
 class DerivDeclTypes a where
-    derivDeclTypes :: a -> Set (Maybe S.ModuleName, S.Name)
+    derivDeclTypes :: a -> Set (Maybe (S.ModuleName ()), S.Name ())
 
 instance DerivDeclTypes (A.Decl l) where
     derivDeclTypes (A.DerivDecl _ _ x) = derivDeclTypes x
@@ -298,9 +303,9 @@ instance DerivDeclTypes (A.Type l) where
     derivDeclTypes (A.TyList _ x) =  derivDeclTypes x -- list syntax, e.g. [a], as opposed to [] a
     derivDeclTypes (A.TyApp _ x y) = union (derivDeclTypes x) (derivDeclTypes y) -- application of a type constructor
     derivDeclTypes (A.TyVar _ _) = empty -- type variable
-    derivDeclTypes (A.TyCon _ (A.Qual _ m n)) = singleton (Just (sModuleName m), sName n) -- named type or type constructor
+    derivDeclTypes (A.TyCon _ (A.Qual _ m n)) = singleton (Just (fmap (const ()) m), fmap (const ()) n) -- named type or type constructor
        -- Unqualified names refer to imports without "qualified" or "as" values.
-    derivDeclTypes (A.TyCon _ (A.UnQual _ n)) = singleton (Nothing, sName n)
+    derivDeclTypes (A.TyCon _ (A.UnQual _ n)) = singleton (Nothing, fmap (const ()) n)
     derivDeclTypes (A.TyCon _ _) = empty
     derivDeclTypes (A.TyParen _ x) = derivDeclTypes x -- type surrounded by parentheses
     derivDeclTypes (A.TyInfix _ x _op y) = union (derivDeclTypes x) (derivDeclTypes y) -- infix type constructor
@@ -309,7 +314,7 @@ instance DerivDeclTypes (A.Type l) where
     derivDeclTypes (A.TyPromoted _ _) = empty
     derivDeclTypes (A.TyEquals _ _ _) = empty -- a ~ b, not clear how this related to standalone deriving
     derivDeclTypes (A.TySplice _ _) = empty
-    derivDeclTypes (A.TyBang _ _ x) = derivDeclTypes x
+    derivDeclTypes (A.TyBang _ _ _ x) = derivDeclTypes x
     derivDeclTypes (A.TyWildCard _ _) = empty
 
 -- | Compare the two import declarations ignoring the things that are
@@ -324,18 +329,18 @@ importMergable a b =
             EQ -> specOrdering
             moduleNameOrdering -> moduleNameOrdering
     where
-      a' = sImportDecl a
-      b' = sImportDecl b
+      a' = fmap (const ()) a
+      b' = fmap (const ()) b
       -- Return a version of an ImportDecl with an empty spec list and no
       -- source locations.  This will distinguish "import Foo as F" from
       -- "import Foo", but will let us group imports that can be merged.
       -- Don't merge hiding imports with regular imports.
       SrcLoc path _ _ = srcLoc a
-      noSpecs :: S.ImportDecl -> S.ImportDecl
-      noSpecs x = x { S.importLoc = SrcLoc path 1 1, -- can we just use srcLoc a?
+      noSpecs :: S.ImportDecl () -> S.ImportDecl ()
+      noSpecs x = x { S.importAnn = (),
                       S.importSpecs = case S.importSpecs x of
-                                        Just (True, _) -> Just (True, []) -- hiding
-                                        Just (False, _) -> Nothing
+                                        Just (A.ImportSpecList () True _) -> Just (A.ImportSpecList () True []) -- hiding
+                                        Just (A.ImportSpecList () False _) -> Nothing
                                         Nothing -> Nothing }
 
 -- | Be careful not to try to compare objects with embeded SrcSpanInfo.
@@ -347,7 +352,7 @@ compareSpecs :: A.ImportSpec SrcSpanInfo -> A.ImportSpec SrcSpanInfo -> Ordering
 compareSpecs a b =
     case compare (Set.map (Prelude.map toLower . nameString) $ Set.fromList $ symbolsDeclaredBy a)
                  (Set.map (Prelude.map toLower . nameString) $ Set.fromList $ symbolsDeclaredBy b) of
-      EQ -> compare (sImportSpec a) (sImportSpec b)
+      EQ -> compare (fmap (const ()) a) (fmap (const ()) b)
       x -> x
 
 -- equalSpecs :: A.ImportSpec SrcSpanInfo -> A.ImportSpec SrcSpanInfo -> Bool
@@ -384,6 +389,6 @@ mergeSpecs xs = xs
 -- dropPrefix :: Eq a => [a] -> [a] -> [a]
 -- dropPrefix pre x = if isPrefixOf pre x then drop (length x) x else x
 
-nameString :: S.Name -> String
-nameString (S.Ident s) = s
-nameString (S.Symbol s) = s
+nameString :: S.Name () -> String
+nameString (S.Ident () s) = s
+nameString (S.Symbol () s) = s

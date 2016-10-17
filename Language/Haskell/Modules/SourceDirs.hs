@@ -1,7 +1,7 @@
 -- | Code for dealing with the ways ghc finds files based on module
 -- name and its -i argument (aka the cabal hs-sources-list.)
 
-{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, TypeSynonymInstances #-}
+{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, PackageImports, ScopedTypeVariables, StandaloneDeriving, TemplateHaskell, TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.SourceDirs
     ( SourceDirs(..)
@@ -13,6 +13,7 @@ module Language.Haskell.Modules.SourceDirs
     , AHsDir(..)
     , modulePath
     , modulePathBase
+    , modKeyFromTop
     , Path(..)
     , modKey
     ) where
@@ -47,25 +48,6 @@ withDirs dirs action = withModifiedDirs (const dirs) action
 withModifiedDirs :: SourceDirs m => ([FilePath] -> [FilePath]) -> m a -> m a
 withModifiedDirs f action = bracket (getHsSourceDirs >>= \save -> putHsSourceDirs (f save) >> return save) putHsSourceDirs (const action)
 
--- | A FilePath that can be assumed to be unique.  It is possible for
--- more than one module of the same name to be in the moduverse, in
--- particular there may be several Main modules that we want to work
--- on simultaneously.
-data ModKey =
-    ModKey
-    { unModKey :: FilePath
-      -- ^ The directory to which this module's path is relative.
-      -- I.e., the element of Hs-Source-Dirs that makes this module
-      -- visible.
-    , unModName :: S.ModuleName -- ^ The module's name
-    } deriving (Eq, Ord, Show)
-
-instance Pretty ModKey where
-    pPrint x = text (prettyPrint (unModName x) ++ case unModKey x of
-                                                    "." -> ""
-                                                    "" -> ""
-                                                    _ -> "(in " ++ unModKey x ++ ")")
-
 -- | A FilePath that is relative to the SourceDir list.
 newtype RelPath = RelPath {unRelPath :: FilePath} deriving (Eq, Ord, Show)
 
@@ -75,7 +57,7 @@ newtype AHsDir = AHsDir {unAHsDir :: FilePath} deriving (Eq, Ord, Show)
 
 -- | Search the path directory list, preferring an already existing file, but
 -- if there is none construct one using the first element of the directory list.
-modulePath :: SourceDirs m => String -> S.ModuleName -> m (AHsDir, S.ModuleName)
+modulePath :: SourceDirs m => String -> S.ModuleName () -> m (AHsDir, S.ModuleName ())
 modulePath ext name =
     findFile path `IO.catch` (\ (_ :: IOError) -> makePath)
     where
@@ -92,8 +74,8 @@ modulePath ext name =
 -- @"System/Control/Monad.hs"@, while @modulePathBase "imports"
 -- (ModuleName "System.Control.Monad")@ returns
 -- @"System.Control.Monad.imports"@.
-modulePathBase :: String -> S.ModuleName -> RelPath
-modulePathBase ext (S.ModuleName name) =
+modulePathBase :: String -> S.ModuleName () -> RelPath
+modulePathBase ext (S.ModuleName () name) =
     RelPath (base <.> ext)
     where base = case ext of
                    "hs" -> map f name
@@ -103,9 +85,35 @@ modulePathBase ext (S.ModuleName name) =
           f '.' = '/'
           f c = c
 
+-- | A FilePath that can be assumed to be unique.  It is possible for
+-- more than one module of the same name to be in the moduverse, in
+-- particular there may be several Main modules that we want to work
+-- on simultaneously.
+data ModKey =
+    ModKey
+    { _modKey :: FilePath
+      -- ^ The directory to which this module's path is relative.
+      -- I.e., the element of Hs-Source-Dirs that makes this module
+      -- visible.
+    , _modName :: S.ModuleName () -- ^ The module's name
+    } deriving (Eq, Ord, Show)
+
+instance Pretty ModKey where
+    pPrint x = text (prettyPrint (_modName x) ++ case _modKey x of
+                                                    "." -> ""
+                                                    "" -> ""
+                                                    _ -> "(in " ++ _modKey x ++ ")")
+
+modKeyFromTop :: MonadIO m => FilePath -> S.ModuleName () -> m ModKey
+modKeyFromTop path name =
+    liftIO (canonicalizePath path) >>= \path' -> pure $ ModKey path' name
+
+modKeyFromPath :: (SourceDirs m, Path p, Show p) => p -> m ModKey
+modKeyFromPath path = findFile path >>= \(aPath, modName) -> liftIO (canonicalizePath (unAHsDir aPath)) >>= \path' -> return (ModKey path' modName)
+
 -- | Something we can use to find a file containing a module.
 class Path a where
-    findFileMaybe :: SourceDirs m => a -> m (Maybe (AHsDir, S.ModuleName))
+    findFileMaybe :: SourceDirs m => a -> m (Maybe (AHsDir, S.ModuleName ()))
     modKeyMaybe :: SourceDirs m => a -> m (Maybe ModKey)
 
 instance Path RelPath where
@@ -121,10 +129,10 @@ instance Path RelPath where
                  if exists then return (Just (AHsDir x, pathToModule path)) else f dirs
           f [] = return Nothing
     modKeyMaybe path =
-        findFileMaybe path >>= maybe (return Nothing) (\ (AHsDir path', modName) -> liftIO (canonicalizePath path') >>= \path'' -> return (Just (ModKey path'' modName)))
+        findFileMaybe path >>= maybe (return Nothing) (\ (AHsDir path', modName) -> Just <$> modKeyFromTop path' modName)
 
 instance Path ModKey where
-    findFileMaybe (ModKey x modName) = return (Just (AHsDir x, modName))
+    findFileMaybe k = return (Just (AHsDir (_modKey k), _modName k))
     modKeyMaybe x = return (Just x)
 
 instance Path AHsDir where
@@ -134,7 +142,7 @@ instance Path AHsDir where
       let x' = filter (/= ".") (splitDirectories x)
       if exists then getHsSourceDirs >>= f x' else return Nothing
         where
-          f :: SourceDirs m => [FilePath] -> [FilePath] -> m (Maybe (AHsDir, S.ModuleName))
+          f :: SourceDirs m => [FilePath] -> [FilePath] -> m (Maybe (AHsDir, S.ModuleName ()))
           f x' (dir : dirs) = do
             let dir' = filter (/= ".") (splitDirectories dir)
             case stripPrefix dir' x' of
@@ -146,7 +154,7 @@ instance Path AHsDir where
            maybe (return Nothing) (\(AHsDir y, modName) -> liftIO (canonicalizePath y) >>= \path' -> return (Just (ModKey path' modName))) mpath
 
 -- | Find a source file using $PWD and the Hs-Source-Dirs directory list.
-findFile :: (SourceDirs m, Path p, Show p) => p -> m (AHsDir, S.ModuleName)
+findFile :: (SourceDirs m, Path p, Show p) => p -> m (AHsDir, S.ModuleName ())
 findFile path =
     findFileMaybe path >>=
     maybe (do here <- liftIO getCurrentDirectory
@@ -159,9 +167,9 @@ modKey path = findFile path >>= \(aPath, modName) -> liftIO (canonicalizePath (u
 
 -- Convert a path assumed to be relative to an element of
 -- hs-source-dirs into a module name.
-pathToModule :: FilePath -> S.ModuleName
+pathToModule :: FilePath -> S.ModuleName ()
 pathToModule =
-    (\(dirs, name) -> S.ModuleName (intercalate "." (dirs ++ [dropExtension name]))) . fromJust . unsnoc . filter (/= ".") . splitDirectories
+    (\(dirs, name) -> S.ModuleName () (intercalate "." (dirs ++ [dropExtension name]))) . fromJust . unsnoc . filter (/= ".") . splitDirectories
 
 -- swapped uncons
 unsnoc :: [a] -> Maybe ([a], a)
