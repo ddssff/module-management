@@ -1,3 +1,10 @@
+haskell-module-management (0.23) unstable; urgency=low
+
+  * Some work from May that I never checked in
+  * Port to haskell-src-exts-1.18 (imports still need cleanup)
+
+ -- David Fox <dsf@foxthompson.net>  Mon, 17 Oct 2016 05:11:49 -0700
+
 haskell-module-management (0.21) unstable; urgency=low
 
   * Rename runCleanT -> runImportsT
