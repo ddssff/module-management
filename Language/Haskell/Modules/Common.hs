@@ -21,9 +21,9 @@ import Data.Sequence as Seq (Seq, (|>))
 import qualified Language.Haskell.Exts.Annotated as A (ExportSpec)
 import Language.Haskell.Exts.Annotated.Simplify (sExportSpec)
 import Language.Haskell.Exts.Pretty (prettyPrint)
-import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents), ModuleName(..))
-import Language.Haskell.Modules.ModuVerse (ModuVerse, putModuleAnew, unloadModule, modulesOrig, moduleKey, modulesNew)
-import Language.Haskell.Modules.SourceDirs (modulePath, PathKey(..), APath(..))
+import qualified Language.Haskell.Exts.Syntax as S (ExportSpec(EModuleContents))
+import Language.Haskell.Modules.ModuVerse (ModuVerse, putModuleAnew, unloadModule, moduVerse {-modulesOrig, moduleKey, modulesNew-})
+import Language.Haskell.Modules.SourceDirs (ModKey(..), Path(findFileMaybe), AHsDir(..))
 import Language.Haskell.Modules.Util.DryIO (createDirectoryIfMissing, MonadDryRun(..), removeFileIfPresent, replaceFile, tildeBackup)
 import Language.Haskell.Modules.Util.QIO (MonadVerbosity(..) {-, qLnPutStr, quietly-})
 import Prelude hiding (writeFile, writeFile)
@@ -50,77 +50,75 @@ withCurrentDirectory path action =
             (const action)
 
 data ModuleResult
-    = Unchanged S.ModuleName PathKey
-    | ToBeRemoved S.ModuleName PathKey
-    | JustRemoved S.ModuleName PathKey
-    | ToBeModified S.ModuleName PathKey String
-    | JustModified S.ModuleName PathKey
-    | ToBeCreated S.ModuleName String
-    | JustCreated S.ModuleName PathKey
+    = Unchanged ModKey
+    | ToBeRemoved ModKey
+    | JustRemoved ModKey
+    | ToBeModified ModKey String
+    | JustModified ModKey
+    | ToBeCreated ModKey String
+    | JustCreated ModKey
     deriving (Show, Eq, Ord)
 
 reportResult :: ModuleResult -> String
-reportResult (Unchanged _ key) = "unchanged " ++ show key
-reportResult (JustModified _ key) = "modified " ++ show key
-reportResult (JustCreated _ key) = "created " ++ show key
-reportResult (JustRemoved _ key) = "removed " ++ show key
-reportResult (ToBeModified _ key _) = "to be modified " ++ show key
-reportResult (ToBeCreated name _) = "to be created " ++ show name
-reportResult (ToBeRemoved _ key) = "to be removed: " ++ show key
+reportResult (Unchanged key) = "unchanged " ++ show key
+reportResult (JustModified key) = "modified " ++ show key
+reportResult (JustCreated key) = "created " ++ show key
+reportResult (JustRemoved key) = "removed " ++ show key
+reportResult (ToBeModified key _) = "to be modified " ++ show key
+reportResult (ToBeCreated key _) = "to be created " ++ show key
+reportResult (ToBeRemoved key) = "to be removed: " ++ show key
 
 -- | It is tempting to put import cleaning into these operations, but
 -- that needs to be done after all of these operations are completed
 -- so that all the compiles required for import cleaning succeed.  On
 -- the other hand, we might be able to maintain the moduVerse here.
 doResult :: (ModuVerse m, MonadDryRun m, MonadVerbosity m) => ModuleResult -> m ModuleResult
-doResult x@(Unchanged _name _) =
+doResult x@(Unchanged _) =
     do -- quietly (qLnPutStr ("unchanged: " ++ prettyPrint name))
        return x
-doResult (ToBeRemoved name key) =
+doResult (ToBeRemoved key) =
     do -- qLnPutStr ("removing: " ++ prettyPrint name)
-       let path = unPathKey key
+       let path = unModKey key
        unloadModule key
        -- I think this event handler is redundant.
        removeFileIfPresent path `IO.catch` (\ (e :: IOError) -> if isDoesNotExistError e then return () else throw e)
-       modulesOrig %= Map.delete key
-       moduleKey %= Map.delete name
-       modulesNew %= Map.delete name
-       return $ JustRemoved name key
+       moduVerse %= Map.delete key
+       return $ JustRemoved key
 
-doResult (ToBeModified name key text) =
+doResult (ToBeModified key text) =
     do -- qLnPutStr ("modifying: " ++ prettyPrint name)
-       let path = unPathKey key
+       let path = unModKey key
        -- qLnPutStr ("modifying " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " new text: " ++ show text)
        replaceFile tildeBackup path text
-       _key <- putModuleAnew name
-       return $ JustModified name key
+       _key <- putModuleAnew key
+       return $ JustModified key
 
-doResult (ToBeCreated name text) =
+doResult (ToBeCreated key text) =
     do -- qLnPutStr ("creating: " ++ prettyPrint name)
-       (path, _name') <- modulePath "hs" name
+       Just (path, _name) <- findFileMaybe key
        -- when (name /= name') (qLnPutStr ("Module name mismatch: " ++ show name ++ " vs. " ++ show name'))
        -- qLnPutStr ("creating " ++ show path)
        -- (quietly . quietly . quietly . qPutStr $ " containing " ++ show text)
-       createDirectoryIfMissing True (takeDirectory . dropExtension . unAPath $ path)
-       replaceFile tildeBackup (unAPath path) text
-       key <- putModuleAnew name
-       return $ JustCreated name key
+       createDirectoryIfMissing True (takeDirectory . dropExtension . unAHsDir $ path)
+       replaceFile tildeBackup (unAHsDir path) text
+       putModuleAnew key
+       return $ JustCreated key
 doResult x@(JustCreated {}) = return x
 doResult x@(JustModified {}) = return x
 doResult x@(JustRemoved {}) = return x
 
 -- | Update an export spec.  The only thing we might need to change is
 -- re-exports, of the form "module Foo".
-fixExport :: [S.ModuleName] -> S.ModuleName -> S.ModuleName
+fixExport :: [ModKey] -> ModKey -> ModKey
           -> A.ExportSpec l -> String -> String -> String -> Seq String -> Seq String
-fixExport inNames outName thisName e pref s suff r =
+fixExport inKeys outKey thisKey e pref s suff r =
     case sExportSpec e of
       S.EModuleContents name
           -- when building the output module, omit re-exports of input modules
-          | thisName == outName && elem name inNames -> r
+          | thisKey == outKey && elem name (map unModName inKeys) -> r
           -- when building other modules, update re-exports of input
           -- modules to be a re-export of the output module.
-          | elem name inNames -> r |> pref <> prettyPrint (S.EModuleContents outName) <> suff
+          | elem name (map unModName inKeys) -> r |> pref <> prettyPrint (S.EModuleContents (unModName outKey)) <> suff
           -- Anything else is unchanged
       _ -> r |> pref <> s <> suff

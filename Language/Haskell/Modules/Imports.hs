@@ -25,9 +25,9 @@ import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpanInfo)
 import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(importLoc, importModule, importSpecs), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Common (ModuleResult(..))
 import Language.Haskell.Modules.FoldM (foldDeclsM, foldExportsM, foldHeaderM, foldImportsM, ModuleInfo(..))
-import Language.Haskell.Modules.ModuVerse (cleanMode, findModule, getExtensions, loadModule, moduleName, ModuVerse, parseModule,
+import Language.Haskell.Modules.ModuVerse (cleanMode, getExtensions, loadModule, ModuVerse, parseModule,
                                            markForDelete, hsFlags, removeEmptyImports, scratchDir, CleanMode(..))
-import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, pathKey, APath(..), PathKey(..), PathKey(unPathKey), SourceDirs(getHsSourceDirs, putHsSourceDirs))
+import Language.Haskell.Modules.SourceDirs (modifyHsSourceDirs, modKey, AHsDir(..), ModKey(..), ModKey(unModKey), SourceDirs(getHsSourceDirs, putHsSourceDirs))
 import Language.Haskell.Modules.SrcLoc (srcLoc)
 import Language.Haskell.Modules.Symbols (symbolsDeclaredBy)
 import Language.Haskell.Modules.Util.DryIO (replaceFile, tildeBackup)
@@ -80,7 +80,7 @@ cleanBuildImports lbi =
 --    * Imported constructors and field accessors are alphabetized
 cleanImports :: ModuVerse m => [FilePath] -> m [ModuleResult]
 cleanImports paths =
-    do keys <- mapM (pathKey . APath) paths >>= return . fromList
+    do keys <- mapM (modKey . AHsDir) paths >>= return . fromList
        dumpImports keys
        mapM (\ key -> parseModule key >>= checkImports) (toList keys)
 
@@ -96,22 +96,22 @@ cleanResults results = do
     where
       dump =
           mapM (\ x -> case x of
-                         JustRemoved _ _ -> return Nothing
-                         Unchanged _ _ -> return Nothing
-                         JustModified _ key -> return (Just key)
-                         JustCreated name _ -> findModule name >>= return . fmap key_
+                         JustRemoved _ -> return Nothing
+                         Unchanged _ -> return Nothing
+                         JustModified key -> return (Just key)
+                         JustCreated key -> {-findModule key >>= return . fmap key_-} pure (Just key)
                          _ -> error $ "cleanResults - unexpected ModuleResult " ++ show x) results >>=
           dumpImports . fromList . catMaybes
       clean =
           mapM (\ x -> case x of
-                         JustRemoved _ _ -> return x
-                         Unchanged _ _ -> return x
-                         JustModified _name key -> doModule key
-                         JustCreated _name key -> doModule key >>= return . toCreated
+                         JustRemoved _ -> return x
+                         Unchanged _ -> return x
+                         JustModified key -> doModule key
+                         JustCreated key -> doModule key >>= return . toCreated
                          _ -> error $ "cleanResults - unexpected ModuleResult " ++ show x) results
       -- The cleaning may have turned a Created result into Modified,
       -- turn it back into Created.
-      toCreated (JustModified name key) = JustCreated name key
+      toCreated (JustModified key) = JustCreated key
       toCreated x@(JustCreated {}) = x
       toCreated _ = error "toCreated"
       -- Update the cached version of the now modified module and then
@@ -121,7 +121,7 @@ cleanResults results = do
              checkImports info
 
 -- | Run ghc with -ddump-minimal-imports and capture the resulting .imports file.
-dumpImports :: ModuVerse m => Set PathKey -> m ()
+dumpImports :: ModuVerse m => Set ModKey -> m ()
 dumpImports keys =
     do scratch <- use scratchDir
        liftIO $ createDirectoryIfMissing True scratch
@@ -132,7 +132,7 @@ dumpImports keys =
        let args' = args ++
                    ["--make", "-c", "-ddump-minimal-imports", "-outputdir", scratch, "-i" ++ intercalate ":" dirs] ++
                    concatMap ppExtension exts ++
-                   Set.toList (Set.map unPathKey keys)
+                   Set.toList (Set.map unModKey keys)
        (code, _out, err) <- liftIO $ readProcessWithExitCode cmd args' ""
        case code of
          ExitSuccess -> {-quietly (qLnPutStr (showCommandForUser cmd args' ++ " -> Ok")) >>-} return ()
@@ -160,7 +160,7 @@ checkImports info@(ModuleInfo (A.Module _ mh _ imports _) _ _ _ _) =
        markForDelete importsPath
        (ModuleInfo newImports _ _ _ _) <-
            withDot $
-               (parseModule (PathKey importsPath (S.ModuleName name))
+               (parseModule (ModKey importsPath (S.ModuleName name))
                   `IO.catch` (\ (e :: IOError) -> liftIO (getCurrentDirectory >>= \ here ->
                                                           throw . userError $ here ++ ": " ++ show e)))
        updateSource info newImports extraImports
@@ -182,11 +182,11 @@ updateSource :: ModuVerse m => ModuleInfo -> A.Module SrcSpanInfo -> [A.ImportDe
 updateSource m@(ModuleInfo (A.Module _ _ _ oldImports _) _ _ key _) (A.Module _ _ _ newImports _) extraImports =
     do remove <- use removeEmptyImports
        newImports' <- replaceImports (fixNewImports remove m oldImports (newImports ++ extraImports)) m
-       maybe ({-qLnPutStr ("cleanImports: no changes to " ++ show key) >>-} return (Unchanged (moduleName m) key))
+       maybe ({-qLnPutStr ("cleanImports: no changes to " ++ show key) >>-} return (Unchanged key))
              (\ text' ->
                   -- qLnPutStr ("cleanImports: modifying " ++ show key) >>
-                  replaceFile tildeBackup (unPathKey key) text' >>
-                  return (JustModified (moduleName m) key))
+                  replaceFile tildeBackup (unModKey key) text' >>
+                  return (JustModified key))
              newImports'
 updateSource _ _ _ = error "updateSource"
 

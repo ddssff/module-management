@@ -22,7 +22,8 @@ import GHC.Generics.Lens
 import Distribution.ModuleName
 
 
-import qualified Language.Haskell.Modules
+import Language.Haskell.Modules hiding (ModuleName)
+import qualified Language.Haskell.Modules (ModuleName(ModuleName))
 import Data.List
 import Data.Maybe
 
@@ -33,7 +34,7 @@ import qualified Data.Set as S
 
 toMN = Language.Haskell.Modules.ModuleName . intercalate "." . components
 
-fromMN (Language.Haskell.Modules.ModuleName x) =  fromString x
+fromMN (ModKey {unModName = Language.Haskell.Modules.ModuleName x}) =  fromString x
 
 getModules pkgDesc = map toMN $ toListOf tinplate pkgDesc
 getSrcDirs pkgDesc = hsSourceDirs =<< toListOf tinplate pkgDesc
@@ -58,14 +59,14 @@ update moduleResults pkgDesc = pkgDesc & over tinplate (\x -> fn x (S.fromList x
 
 removals rs = S.fromList $ mapMaybe remove rs
     where
-    remove (ToBeRemoved m _) = Just (fromMN m)
-    remove (JustRemoved m _) = Just (fromMN m)
+    remove (ToBeRemoved k) = Just (fromMN k)
+    remove (JustRemoved k) = Just (fromMN k)
     remove _ = Nothing
 
 additions rs = S.fromList $ mapMaybe add rs
     where
-    add (ToBeCreated m _) = Just (fromMN m)
-    add (JustCreated m _) = Just (fromMN m)
+    add (ToBeCreated k _) = Just (fromMN k)
+    add (JustCreated k) = Just (fromMN k)
     add _ = Nothing
 
 

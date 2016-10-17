@@ -15,7 +15,7 @@ import Data.Data
 import Data.Foldable(traverse_)
 import Data.List
 import Data.Map as Map (elems, keys, lookup)
-import Data.Maybe (isJust, maybeToList)
+import Data.Maybe (fromMaybe, isJust, maybeToList)
 import qualified Data.Set as Set (fromList, member, toList, map)
 import Data.Set.Extra as Set (Set, toList)
 import Distribution.PackageDescription (GenericPackageDescription)
@@ -30,8 +30,7 @@ import Language.Haskell.Modules (cleanImports, findHsModules, mergeModules, Modu
                                  noisily, putHsSourceDirs, putModule, runModuVerseT, splitModuleBy)
 import Language.Haskell.Modules.Fold (ModuleInfo(..))
 import Language.Haskell.Modules.ModuVerse -- (CleanMode(DoClean), moduleInfo, moduleName, Params, sourceDirs)
-import Language.Haskell.Modules.SourceDirs (getHsSourceDirs)
-import Language.Haskell.Modules.Split (T(A))
+import Language.Haskell.Modules.SourceDirs (getHsSourceDirs, ModKey(..))
 import Language.Haskell.Modules.Symbols (FoldDeclared(foldDeclared))
 import Language.Haskell.Modules.Util.QIO (modifyVerbosity)
 import Language.Haskell.TH.Syntax as TH (nameBase)
@@ -158,7 +157,7 @@ compl conf (xs,ys) | cmd: _ <- words (reverse xs),
 
         [x] | cmd `notElem` commandNames -> return ("", [simpleCompletion x])
             | takesModuleNames cmd -> do
-                ns <- Set.fromList . map name_ . elems <$> use modulesOrig
+                ns <- Set.fromList . map name_ . elems <$> use moduVerse
                 let complAllModules = map (simpleCompletion . moduleNameToStr) (Set.toList ns)
                     nsLower = Set.map (ModuleName . map toLower . moduleNameToStr) ns
                     transform
@@ -338,14 +337,14 @@ unModuleName (ModuleName x) = x
 
 verse :: forall m. ModuVerse m => [String] -> m ()
 verse [] =
-    do modules <- Set.fromList . map name_ . elems <$> use modulesOrig
+    do modules <- Set.fromList . map name_ . elems <$> use moduVerse
        liftIO $ putStrLn ("Usage: verse <pathormodule1> <pathormodule2> ...\n" ++
                                   "Add the module or all the modules below a directory to the moduVerse\n" ++
                                   "Currently:\n  " ++ showVerse modules)
 verse args =
     do new <- concat <$> mapM (liftIO . find) args
        List.mapM_ putModule new
-       modules <- Set.fromList . map name_ . elems <$> use modulesOrig
+       modules <- Set.fromList . map name_ . elems <$> use moduVerse
        liftIO (putStrLn $ "moduVerse updated:\n  " ++ showVerse modules)
     where
       find s =
@@ -372,7 +371,7 @@ clean args = cleanImports args >> return ()
 {-
 split :: [String] -> CmdM ()
 split [arg] = do
-    r <- liftCT (splitModuleDecls arg)
+    r <- liftCT (splitModuleDecls DoClean arg)
     lift (modify (Cabal.update r))
     return ()
 split _ = liftIO $ putStrLn "Usage: split <modulepath>"
@@ -380,14 +379,18 @@ split _ = liftIO $ putStrLn "Usage: split <modulepath>"
 
 splitBy :: [String] -> CmdM ()
 splitBy [regex, newModule, oldModule] = do
-  r <- liftCT (Map.lookup (ModuleName oldModule) <$> use modulesNew >>=
-               maybe (error $ "Module not found: " ++ show oldModule)
-                     (\oldModuleInfo -> splitModuleBy pred oldModuleInfo))
+  r <- liftCT (do cleanMode .= DoClean
+                  keys <- (fmap Set.toList . Map.lookup (ModuleName oldModule)) <$> use moduleKeys
+                  case keys of
+                    Nothing -> error $ "Module not found: " ++ show oldModule
+                    Just [] -> error $ "Module not found: " ++ show oldModule
+                    Just [key] -> parseModule key >>= splitModuleBy pred
+                    Just keys -> error $ "Module not found: " ++ show oldModule)
   lift (modify (Cabal.update r))
   return ()
     where
-      pred :: S.ModuleName -> T -> ModuleName
-      pred _ (A decl) =
+      pred :: ModKey -> A.Decl SrcSpanInfo -> ModKey
+      pred key decl =
           -- declarations not associated with symbols stay in
           -- oldModules (e.g. instances.)  Decarations of matching
           -- symbols go to newModule
@@ -395,7 +398,7 @@ splitBy [regex, newModule, oldModule] = do
               match = foldDeclared (\sym r -> r || isJust (match1 sym)) False decl
               modname = ModuleName (if match then newModule else oldModule) in
           {- trace ("Symbol " ++ show name ++ " -> " ++ show modname ++ ", matchRegex (mkRegex " ++ show regex ++ ") -> " ++ show match)-}
-          modname
+          key {unModName = modname}
 
 splitBy _ = liftIO $ putStrLn "Usage: splitBy <regexp> <newmodule> <oldmodule>"
 
@@ -403,6 +406,7 @@ merge :: [String] -> CmdM ()
 merge args =
     case splitAt (length args - 1) args of
       (inputs, [output]) -> do
-            r <- liftCT $ mergeModules (map ModuleName inputs) (ModuleName output)
-            liftS (modify (Cabal.update r))
+        r <- liftCT $ do cleanMode .= DoClean
+                         mergeModules (map (\x -> ModKey "." (ModuleName x)) inputs) (ModKey "." (ModuleName output))
+        liftS (modify (Cabal.update r))
       _ -> liftIO $ putStrLn "Usage: merge <inputmodulename1> <inputmodulename2> ... <outputmodulename>"

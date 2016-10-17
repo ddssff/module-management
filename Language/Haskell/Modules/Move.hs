@@ -2,9 +2,9 @@
 {-# LANGUAGE CPP, FlexibleInstances, OverloadedLists, RankNTypes, ScopedTypeVariables, TupleSections #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 module Language.Haskell.Modules.Move
-    ( moveDeclsBy
+    ( {-moveDeclsBy-}
     ) where
-
+{-
 import Debug.Trace
 import Control.Lens -- (at, use, (%=))
 import Control.Monad ({-foldM,-} when)
@@ -16,9 +16,8 @@ import qualified Language.Haskell.Exts.Annotated as A
 import Language.Haskell.Exts.SrcLoc (SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S -- (ExportSpec(..), ImportDecl(..), Module(..), ModuleName(..), Name(..))
 import Language.Haskell.Modules.Fold (foldDecls, ModuleInfo(..))
-import Language.Haskell.Modules.ModuVerse (buildSymbolMap, buildDestinationMap,
-                                           modulesNew, modulesOrig, ModuVerse)
-import Language.Haskell.Modules.SourceDirs (PathKey)
+import Language.Haskell.Modules.ModuVerse (buildSymbolMap, buildDestinationMap, moduVerse, ModuVerse)
+import Language.Haskell.Modules.SourceDirs (ModKey)
 --import Language.Haskell.Modules.Split (newModule)
 import Language.Haskell.Modules.Symbols (FoldDeclared, foldDeclared, symbolsDeclaredBy)
 import Prelude hiding (writeFile)
@@ -55,7 +54,7 @@ moveDeclsBy newModule = do
   mapM_ (uncurry $ doModule newModule) . Map.toList =<< use modulesOrig
   writeChanges
     where
-      copyModule :: (PathKey, ModuleInfo) -> m ()
+      copyModule :: (ModKey, ModuleInfo) -> m ()
       copyModule (_key, info@(ModuleInfo _ _ _ _ name)) = do
         modulesNew %= Map.insert (trace ("copyModule " ++ show name) name) info
 
@@ -76,7 +75,7 @@ instance SetModuleName (A.Module l) where
 -- and exports everywhere may change.
 doModule :: forall m. (ModuVerse m) =>
             (S.ModuleName -> A.Decl SrcSpanInfo -> S.ModuleName)
-         -> PathKey
+         -> ModKey
          -> ModuleInfo
          -> m ()
 doModule newModule _oldKey (ModuleInfo {module_ = A.Module _ _ _ _ decls, name_ = oldName}) =
@@ -243,4 +242,5 @@ doModule newModule info = do
                    mempty
   case () of
     _ | member thisModule newModuleMap
+-}
 -}

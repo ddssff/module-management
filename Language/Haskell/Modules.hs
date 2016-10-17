@@ -99,6 +99,7 @@ module Language.Haskell.Modules
     , Name(Ident, Symbol)
     -- * Helper functions
     , modulePathBase
+    , ModKey(..)
     , SourceDirs(getHsSourceDirs, putHsSourceDirs)
     , findHsModules
     , findHsFiles
@@ -106,7 +107,7 @@ module Language.Haskell.Modules
     , CleanMode(DoClean, NoClean)
     , RelPath(unRelPath)
     -- * Move
-    , moveDeclsBy
+    -- , moveDeclsBy
     ) where
 
 import Language.Haskell.Exts (ModuleName(..), Name(..))
@@ -115,8 +116,8 @@ import Language.Haskell.Modules.Imports (cleanImports)
 import Language.Haskell.Modules.Merge (mergeModules)
 import Language.Haskell.Modules.ModuVerse {-(CleanT, extraImport, modifyDryRun, modifyHsFlags, modifyRemoveEmptyImports, ModuVerse, runModuVerseT,
                                            findModule, modifyExtensions, putModule)-}
-import Language.Haskell.Modules.Move (moveDeclsBy)
-import Language.Haskell.Modules.SourceDirs (modulePathBase, SourceDirs(getHsSourceDirs, putHsSourceDirs), RelPath(..))
+-- import Language.Haskell.Modules.Move (moveDeclsBy)
+import Language.Haskell.Modules.SourceDirs (modulePathBase, ModKey(..), SourceDirs(getHsSourceDirs, putHsSourceDirs), RelPath(..))
 import Language.Haskell.Modules.Split (splitModule, splitModuleBy)
 import Language.Haskell.Modules.Util.QIO (noisily, quietly)
 import Language.Haskell.Modules.Util.Test (findHsFiles, findHsModules) -- (findHsFiles, findHsModules)

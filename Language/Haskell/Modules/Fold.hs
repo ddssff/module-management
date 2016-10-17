@@ -21,23 +21,23 @@ module Language.Haskell.Modules.Fold
     , ignore2
     ) where
 
-import Control.Lens ((%=), (.=), _3, makeLenses, use, view)
+import Control.Lens ((%=), (.=), makeLenses, use, view)
 import Control.Monad (when)
 import Control.Monad.State (get, runState, State)
 import Data.Char (isSpace)
 import Data.List (tails)
 import Data.Monoid ((<>))
 import Data.Sequence (Seq, (|>))
-import Debug.Trace (trace)
+--import Debug.Trace (trace)
 import qualified Language.Haskell.Exts.Annotated.Syntax as A (Decl, ExportSpec, ExportSpec(..), ExportSpecList(ExportSpecList), ImportDecl, Module(..), ModuleHead(..), ModuleName, ModulePragma, WarningText)
 import Language.Haskell.Exts.Comments (Comment(..))
 import Language.Haskell.Exts.SrcLoc (SrcLoc(..), SrcSpan(..), SrcSpanInfo(..))
 import qualified Language.Haskell.Exts.Syntax as S (ModuleName)
 -- import Language.Haskell.Modules.ModuVerse (ModuleInfo(ModuleInfo))
-import Language.Haskell.Modules.SourceDirs (PathKey)
+import Language.Haskell.Modules.SourceDirs (ModKey)
 import Language.Haskell.Modules.SrcLoc (endLoc, HasSpanInfo(..), increaseSrcLoc, srcLoc, srcPairText)
 import qualified Text.PrettyPrint as Pretty (text)
-import Text.PrettyPrint.HughesPJClass (Pretty(pPrint), prettyShow)
+import Text.PrettyPrint.HughesPJClass (Pretty(pPrint){-, prettyShow-})
 import Prelude hiding (tail)
 
 {-
@@ -142,8 +142,8 @@ adjustSpans text0 comments sps0@(x : _) =
                             -- We reached the end of ss1, so the segment from b to e is
                             -- trailing comments and space, some of which may belong in
                             -- the following span.
-                            do t <- use text
-                               let (p, s) = srcPairText e' e t
+                            do -- t <- use text
+                               -- let (p, s) = srcPairText e' e t
                                -- trace ("p=" ++ show p ++ ", s=" ++ show s) (pure ())
                                sps .= ssis
                                sps' <- f
@@ -203,7 +203,7 @@ data ModuleInfo
       { module_ :: A.Module SrcSpanInfo
       , modtext_ :: String
       , comments_ :: [Comment]
-      , key_ :: PathKey
+      , key_ :: ModKey
       , name_ :: S.ModuleName }
     deriving (Eq, Ord, Show)
 

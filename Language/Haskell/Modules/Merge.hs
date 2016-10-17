@@ -23,20 +23,21 @@ import qualified Language.Haskell.Exts.Syntax as S (ImportDecl(ImportDecl, impor
 import Language.Haskell.Modules.Common (doResult, fixExport, ModuleResult(..), reportResult)
 import Language.Haskell.Modules.Fold (echo, echo2, foldDecls, foldExports, foldHeader, foldImports, ignore, ignore2, ModuleInfo(..))
 import Language.Haskell.Modules.Imports (cleanResults)
-import Language.Haskell.Modules.ModuVerse (moduleKey, {-modulesNew, modulesOrig,-} moduleName, ModuVerse, parseModule, parseModuleMaybe)
-import Language.Haskell.Modules.SourceDirs (modulePathBase, pathKey, pathKeyMaybe)
+import Language.Haskell.Modules.ModuVerse ({-moduleKey, modulesNew, modulesOrig,-} moduVerse, ModuVerse, parseModule, parseModuleMaybe)
+import Language.Haskell.Modules.SourceDirs (ModKey(unModName), modKey, modKeyMaybe)
 import Language.Haskell.Modules.Util.QIO (qLnPutStr, quietly)
+import Text.PrettyPrint.HughesPJClass (prettyShow)
 
 -- | Merge the declarations from several modules into a single new
 -- one, updating the imports of the modules in the moduVerse to
 -- reflect the change.  It *is* permissable to use one of the input
 -- modules as the output module.  Note that circular imports can be
 -- created by this operation.
-mergeModules :: ModuVerse m => [S.ModuleName] -> S.ModuleName -> m [ModuleResult]
+mergeModules :: ModuVerse m => [ModKey] -> ModKey -> m [ModuleResult]
 mergeModules inNames outName =
-    do qLnPutStr ("mergeModules: [" ++ intercalate ", " (map prettyPrint inNames) ++ "] -> " ++ prettyPrint outName)
+    do qLnPutStr ("mergeModules: [" ++ intercalate ", " (map prettyShow inNames) ++ "] -> " ++ prettyShow outName)
        quietly $
-         do univ <- (Set.fromList . keys) <$> use moduleKey
+         do univ <- (Set.fromList . keys) <$> use moduVerse
             let allNames = toList $ union univ (Set.fromList (outName : inNames))
             results <- List.mapM (doModule inNames outName) allNames
             results' <- List.mapM doResult results
@@ -48,27 +49,27 @@ mergeModules inNames outName =
 -- that case choose the first input modules to convert into the output
 -- module.
 doModule :: ModuVerse m =>
-            [S.ModuleName]  -- The names of the merge input modules
-         -> S.ModuleName    -- The name of the merge destination module
-         -> S.ModuleName    -- The module we will work on
+            [ModKey]  -- The names of the merge input modules
+         -> ModKey    -- The name of the merge destination module
+         -> ModKey    -- The module we will work on
          -> m ModuleResult
 doModule inNames@(_ : _) outName thisName =
     do -- The new module will be based on the first input module,
        -- though its name will be changed to outModule.
        inInfo@(firstInfo : _) <-
-           List.mapM (\ name -> pathKey (modulePathBase "hs" name) >>= parseModule) inNames
+           List.mapM (\ key -> modKey key >>= parseModule) inNames
              `IO.catch` (\ (_ :: IOError) -> error $ "mergeModules - failure reading input modules: " ++ show inNames)
-       outInfo <- pathKeyMaybe (modulePathBase "hs" outName) >>= parseModuleMaybe
-       thisInfo <- pathKeyMaybe (modulePathBase "hs" thisName) >>= parseModuleMaybe
+       outInfo <- modKeyMaybe ({-modulePathBase "hs"-} outName) >>= parseModuleMaybe
+       thisInfo <- modKeyMaybe ({-modulePathBase "hs"-} thisName) >>= parseModuleMaybe
        let baseInfo@(ModuleInfo {module_ = A.Module _ _ _ _ _}) = fromMaybe firstInfo thisInfo
        when (isJust outInfo && notElem outName inNames) (error "mergeModules - if output module exist it must also be one of the input modules")
-       case (thisName /= outName, List.find (\ x -> moduleName x == thisName) inInfo) of 
+       case (thisName /= outName, List.find (\ x -> key_ x == thisName) inInfo) of 
          (True, Just info) ->
-             return (ToBeRemoved thisName (key_ info))
+             return (ToBeRemoved (key_ info))
          _ ->
            let header =
                    fold (foldHeader echo2 echo (if thisName == outName
-                                                then \ _ pref _ suff r -> r |> pref <> prettyPrint outName <> suff
+                                                then \ _ pref _ suff r -> r |> pref <> prettyShow outName <> suff
                                                 else echo)
                                                echo baseInfo mempty)
                exports =
@@ -103,21 +104,21 @@ doModule inNames@(_ : _) outName thisName =
                text' = header <> exports <> imports <> decls in
            return $ case thisInfo of
                       Just (ModuleInfo {modtext_ = text, key_ = key}) ->
-                          if text' /= text then ToBeModified thisName key text' else Unchanged thisName key
+                          if text' /= text then ToBeModified key text' else Unchanged key
                       Nothing ->
                           ToBeCreated thisName text'
            -- return $ if text' /= text then Modified thisName (key_ thisInfo) text' else Unchanged thisName (key_ thisInfo)
 doModule [] _ _ = error "doModule: no inputs"
 
 moduleImports :: SrcInfo loc =>
-                 [S.ModuleName] -> S.ModuleName -> S.ModuleName
+                 [ModKey] -> ModKey -> ModKey
               -> A.ImportDecl loc -> String -> String -> String -> Seq String -> Seq String
-moduleImports inNames outName thisName x pref s suff r =
+moduleImports inKeys outKey thisKey x pref s suff r =
     case sImportDecl x of
       (S.ImportDecl {S.importModule = name})
-          | notElem name inNames -> r |> pref <> s <> suff
-          | thisName == outName -> r
-      x' -> r |> pref <> prettyPrint (x' {S.importModule = outName}) <> suff
+          | notElem name (map unModName inKeys) -> r |> pref <> s <> suff
+          | thisKey == outKey -> r
+      x' -> r |> pref <> prettyPrint (x' {S.importModule = unModName outKey}) <> suff
 
 -- | Grab the declarations out of the old modules, fix any
 -- qualified symbol references, prettyprint and return.
@@ -129,13 +130,13 @@ moduleImports inNames outName thisName x pref s suff r =
 -- In terms of what is going on right here, if m imports any of the
 -- modules in oldmap with an "as" qualifier, identifiers using the
 -- module name in the "as" qualifier must use new instead.
-moduleDecls :: [S.ModuleName] -> S.ModuleName -> S.ModuleName -> ModuleInfo -> String
-moduleDecls inNames outName thisName info@(ModuleInfo (A.Module _ _ _ imports _) _ _ _ _) =
+moduleDecls :: [ModKey] -> ModKey -> ModKey -> ModuleInfo -> String
+moduleDecls inKeys outKey thisKey info@(ModuleInfo (A.Module _ _ _ imports _) _ _ _ _) =
     -- Get the import list for this module
-    let inNames' = inNames ++ if thisName == outName then mapMaybe qualifiedImportName imports else [] in
+    let inNames = map unModName inKeys ++ if thisKey == outKey then mapMaybe qualifiedImportName imports else [] in
     fold (foldDecls (\ d pref s suff r ->
                          let d' = sDecl d
-                             d'' = fixReferences inNames' outName d' in
+                             d'' = fixReferences inNames (unModName outKey) d' in
                          r |> pref <> (if d'' /= d' then prettyPrint d'' else s) <> suff)
                     echo2 info mempty)
     where
@@ -143,7 +144,7 @@ moduleDecls inNames outName thisName info@(ModuleInfo (A.Module _ _ _ imports _)
       -- qualified import.  module and that module's info.
       qualifiedImportName :: A.ImportDecl l -> Maybe S.ModuleName
       qualifiedImportName (A.ImportDecl _ m _ _ _ _ (Just a) _specs) =
-          case elem (sModuleName m) inNames of
+          case elem (sModuleName m) (map unModName inKeys) of
             True -> Just (sModuleName a)
             _ -> Nothing
       qualifiedImportName _ = Nothing
