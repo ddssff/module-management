@@ -1,3 +1,5 @@
+This package has a successor: https://github.com/ddssff/refact-global-hse
+
 Fork of <http://hackage.haskell.org/package/module-management>
 improving hmm & knowledge of more fixities (Data.Lens). Dependency
 on template-haskell is definitely not to be taken seriously.
